@@ -267,8 +267,9 @@ object ChunkMeshGenerator {
             return getBlock(x, y, z)
         }
 
-        // Out of vertical bounds - return null to render face
-        if (y < 0 || y > 255) return null
+        // Out of vertical bounds - return Air (not null) since we don't render top/bottom boundaries
+        if (y < 0) return BlockType.Air
+        if (y > 255) return BlockType.Air
 
         // Convert to world coordinates
         val worldX = position.toWorldX() + x
