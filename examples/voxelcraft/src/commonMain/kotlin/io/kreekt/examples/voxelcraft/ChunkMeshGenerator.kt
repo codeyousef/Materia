@@ -163,21 +163,22 @@ object ChunkMeshGenerator {
     /**
      * Check if face should be rendered (culling hidden faces)
      * 
-     * Fixed: Properly handle chunk boundaries - assume solid neighbor when unknown
+     * Fixed: Render faces at chunk boundaries when neighbor chunk not loaded
      */
     private fun shouldRenderFace(block: BlockType, neighbor: BlockType?, neighborPos: IntArray): Boolean {
         if (block == BlockType.Air) return false
         
-        // If neighbor is null, check if it's a valid chunk boundary
+        // If neighbor is null (chunk boundary or out of bounds)
         if (neighbor == null) {
             // At bottom of world (Y < 0) - don't render face (void/bedrock)
             if (neighborPos[1] < 0) return false
             // At top of world (Y > 255) - render face (open to sky)
             if (neighborPos[1] > 255) return true
-            // At horizontal chunk boundary - assume solid neighbor (don't render to prevent see-through)
-            return false
+            // At horizontal chunk boundary - render face (neighbor chunk not loaded or at world edge)
+            return true
         }
         
+        // Neighbor exists - only cull if it's opaque
         if (neighbor == BlockType.Air) return true
         if (neighbor.isTransparent) return true
         return false
