@@ -1,6 +1,7 @@
 package io.kreekt.animation
 
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

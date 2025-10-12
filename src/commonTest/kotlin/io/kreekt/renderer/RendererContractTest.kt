@@ -1,6 +1,7 @@
 package io.kreekt.renderer
 
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -17,8 +18,8 @@ class RendererContractTest {
         // This test validates the contract is defined
 
         // Verify RendererResult types exist
-        val successType = "RendererResult.Success"
-        val errorType = "RendererResult.Error"
+        val successType = "Rendererio.kreekt.core.Result.Success"
+        val errorType = "Rendererio.kreekt.core.Result.Error"
 
         assertNotNull(successType)
         assertNotNull(errorType)

@@ -13,6 +13,7 @@
 
 package io.kreekt.renderer
 
+import io.kreekt.core.Result
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -20,20 +21,14 @@ class ErrorHandlingTest {
 
     @Test
     fun `RendererFactory throws exception when no graphics support`() = runTest {
-        // Simulate platform with no graphics support
         val invalidSurface = createInvalidSurface()
 
         val result = RendererFactory.create(invalidSurface)
+        val exception = result.requireInitializationException()
 
-        assertTrue(
-            result.isFailure,
-            "Should fail with invalid surface"
-        )
-
-        val exception = result.exceptionOrNull()
-        assertTrue(
-            exception is RendererInitializationException,
-            "Must throw RendererInitializationException (FR-022), got: ${exception?.javaClass?.simpleName}"
+        assertIs<RendererInitializationException>(
+            exception,
+            "Must throw RendererInitializationException (FR-022), got: ${exception::class.simpleName}"
         )
     }
 
@@ -42,11 +37,9 @@ class ErrorHandlingTest {
         val invalidSurface = createInvalidSurface()
 
         val result = RendererFactory.create(invalidSurface)
-        val exception = result.exceptionOrNull()
+        val exception = result.requireInitializationException()
 
-        assertNotNull(exception, "Exception must not be null")
-
-        val message = exception.message ?: ""
+        val message = exception.message.orEmpty()
         val hasGraphicsKeyword = message.contains("graphics", ignoreCase = true)
         val hasSupportKeyword = message.contains("support", ignoreCase = true)
         val hasDriverKeyword = message.contains("driver", ignoreCase = true)
@@ -63,11 +56,9 @@ class ErrorHandlingTest {
         val invalidSurface = createInvalidSurface()
 
         val result = RendererFactory.create(invalidSurface)
-        val exception = result.exceptionOrNull()
+        val exception = result.requireInitializationException()
 
-        assertNotNull(exception, "Exception must not be null")
-
-        val message = exception.message ?: ""
+        val message = exception.message.orEmpty()
         assertTrue(
             message.length > 50,
             "Error message must be detailed (>50 characters, FR-022). Got ${message.length} chars: $message"
@@ -79,9 +70,10 @@ class ErrorHandlingTest {
         val invalidSurface = createInvalidSurface()
 
         val result = RendererFactory.create(invalidSurface)
-        val exception = result.exceptionOrNull()
+        val error = result.errorOrNull()
 
-        if (exception is RendererInitializationException.NoGraphicsSupportException) {
+        if (error?.exception is RendererInitializationException.NoGraphicsSupportException) {
+            val exception = error.exception as RendererInitializationException.NoGraphicsSupportException
             assertNotNull(exception.platform, "Platform must be specified")
             assertNotNull(exception.availableBackends, "Available backends must be listed")
             assertNotNull(exception.requiredFeatures, "Required features must be listed")
@@ -93,11 +85,9 @@ class ErrorHandlingTest {
         val invalidSurface = createInvalidSurface()
 
         val result = RendererFactory.create(invalidSurface)
-        val exception = result.exceptionOrNull()
+        val exception = result.requireInitializationException()
 
-        assertNotNull(exception, "Exception must not be null")
-
-        val message = exception.message ?: ""
+        val message = exception.message.orEmpty()
         val hasTroubleshooting = message.contains("update", ignoreCase = true) ||
                 message.contains("install", ignoreCase = true) ||
                 message.contains("check", ignoreCase = true) ||
@@ -119,14 +109,10 @@ class ErrorHandlingTest {
         val result = RendererFactory.create(surface)
 
         // If it fails, must be with a proper exception
-        if (result.isFailure) {
-            val exception = result.exceptionOrNull()
-            assertTrue(
-                exception is RendererInitializationException,
-                "Capability mismatches must throw RendererInitializationException (FR-024)"
-            )
+        if (result.isError) {
+            val exception = result.requireInitializationException()
+            val message = exception.message.orEmpty()
 
-            val message = exception?.message ?: ""
             assertTrue(
                 message.contains("capability", ignoreCase = true) ||
                         message.contains("support", ignoreCase = true) ||
@@ -174,5 +160,12 @@ class ErrorHandlingTest {
     }
 }
 
-// Test helper (expect/actual in platform source sets)
-expect fun createInvalidSurface(): RenderSurface
+private fun Result<*>.errorOrNull(): Result.Error? = this as? Result.Error
+
+private fun Result<*>.requireInitializationException(): RendererInitializationException =
+    (this as? Result.Error)?.requireInitializationException()
+        ?: fail("Expected Result.Error, but got success")
+
+private fun Result.Error.requireInitializationException(): RendererInitializationException =
+    (exception as? RendererInitializationException)
+        ?: fail("Must throw RendererInitializationException (FR-022), got: ${exception?.let { it::class.simpleName } ?: "null"} (message: $message)")

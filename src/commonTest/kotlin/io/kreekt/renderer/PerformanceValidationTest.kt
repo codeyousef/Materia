@@ -12,8 +12,9 @@
 
 package io.kreekt.renderer
 
+import io.kreekt.core.scene.Scene
+import io.kreekt.core.scene.Mesh
 import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.scene.Scene
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -43,7 +44,7 @@ class PerformanceValidationTest {
         val elapsed = currentTimeMillis() - startTime
 
         val averageFps = 60000.0 / elapsed
-        val stats = renderer.getStats()
+        val stats = renderer.stats
 
         // Assert 30 FPS minimum (FR-019: 30 FPS minimum acceptable)
         assertTrue(
@@ -87,7 +88,7 @@ class PerformanceValidationTest {
             val frameStart = currentTimeMillis()
             renderer.render(scene, camera)
             val frameEnd = currentTimeMillis()
-            frameTimes.add(frameEnd - frameStart)
+            frameTimes.add((frameEnd - frameStart).toDouble())
         }
 
         val avgFrameTime = frameTimes.average()
@@ -123,11 +124,11 @@ class PerformanceValidationTest {
 
         // Render and check stats
         renderer.render(scene, camera)
-        val stats = renderer.getStats()
+        val stats = renderer.stats
 
         assertTrue(stats.fps > 0, "FPS must be tracked")
         assertTrue(stats.frameTime > 0, "Frame time must be tracked")
-        assertTrue(stats.timestamp > 0, "Timestamp must be set")
+        assertTrue(stats.timestamp > 0.0, "Timestamp must be set")
 
         // Stats should be reasonable
         assertTrue(stats.fps <= 1000, "FPS should be realistic (≤1000)")
@@ -176,8 +177,3 @@ class PerformanceValidationTest {
         renderer.dispose()
     }
 }
-
-// Test helpers (expect/actual in platform source sets)
-expect fun createTestCube(): io.kreekt.scene.Mesh
-expect fun currentTimeMillis(): Long
-expect fun formatDouble(value: Double, decimals: Int): String

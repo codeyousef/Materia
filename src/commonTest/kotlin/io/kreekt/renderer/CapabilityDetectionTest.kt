@@ -229,7 +229,7 @@ class CapabilityDetectionTest {
             renderer.dispose()
         } else {
             // If creation failed, must be due to capability mismatch
-            val exception = result.exceptionOrNull()
+            val exception = result.getOrNull()
             assertTrue(
                 exception is RendererInitializationException,
                 "Capability failures must throw RendererInitializationException"

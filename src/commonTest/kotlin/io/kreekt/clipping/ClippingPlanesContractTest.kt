@@ -7,6 +7,7 @@ import io.kreekt.geometry.BufferGeometry
 import io.kreekt.geometry.primitives.BoxGeometry
 import io.kreekt.material.MeshBasicMaterial
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

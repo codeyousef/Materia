@@ -1,6 +1,7 @@
 package io.kreekt.curve
 
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertTrue
 
 /**

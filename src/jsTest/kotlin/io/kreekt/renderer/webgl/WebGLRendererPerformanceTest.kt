@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.js.Date
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertTrue
 
 /**
@@ -94,12 +95,12 @@ class WebGLRendererPerformanceTest {
         renderer.render(scene, camera)
 
         // Get statistics
-        val stats = renderer.getStats()
+        val stats = renderer.stats
 
         // Validate stats structure
         assertTrue(stats.triangles >= 0, "Triangle count should be non-negative")
-        assertTrue(stats.calls >= 0, "Draw calls should be non-negative")
+        assertTrue(stats.drawCalls >= 0, "Draw calls should be non-negative")
 
-        console.log("✅ Renderer statistics valid: ${stats.triangles} triangles, ${stats.calls} calls")
+        console.log("✅ Renderer statistics valid: ${stats.triangles} triangles, ${stats.drawCalls} calls")
     }
 }

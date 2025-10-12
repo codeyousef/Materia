@@ -14,6 +14,7 @@ package io.kreekt.camera
 import io.kreekt.core.math.Vector4
 import io.kreekt.core.scene.Scene
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 

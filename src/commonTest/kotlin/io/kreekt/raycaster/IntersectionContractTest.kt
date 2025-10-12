@@ -19,6 +19,7 @@ import io.kreekt.core.scene.Mesh
 import io.kreekt.geometry.primitives.BoxGeometry
 import io.kreekt.material.MeshBasicMaterial
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

@@ -5,6 +5,7 @@ import io.kreekt.animation.KeyframeTrack
 import io.kreekt.geometry.BufferAttribute
 import io.kreekt.geometry.BufferGeometry
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

@@ -9,6 +9,7 @@ import io.kreekt.light.HemisphereLight
 import io.kreekt.light.PointLight
 import io.kreekt.light.SpotLight
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

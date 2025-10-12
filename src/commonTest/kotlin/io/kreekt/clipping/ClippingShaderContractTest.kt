@@ -3,6 +3,7 @@ package io.kreekt.clipping
 import io.kreekt.core.math.Vector3
 import io.kreekt.core.math.Plane
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertTrue
 
 /**

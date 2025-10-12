@@ -14,6 +14,7 @@
 package io.kreekt.renderer
 
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -89,10 +90,3 @@ class BackendDetectionTest {
         )
     }
 }
-
-// Platform detection helper (expect/actual pattern)
-expect enum class Platform {
-    JS, JVM, NATIVE
-}
-
-expect fun getPlatform(): Platform

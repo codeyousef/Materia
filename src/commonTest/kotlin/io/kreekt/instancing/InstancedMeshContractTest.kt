@@ -22,6 +22,7 @@ import io.kreekt.geometry.BufferGeometry
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.Material
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

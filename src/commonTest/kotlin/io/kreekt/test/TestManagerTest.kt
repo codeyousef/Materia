@@ -2,6 +2,7 @@ package io.kreekt.test
 
 import io.kreekt.compilation.Platform
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 

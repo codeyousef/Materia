@@ -12,8 +12,9 @@
 
 package io.kreekt.renderer
 
+import io.kreekt.core.scene.Scene
+import io.kreekt.core.scene.Mesh
 import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.scene.Scene
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -31,10 +32,10 @@ class VisualConsistencyTest {
 
         // Render same scene twice
         renderer.render(scene, camera)
-        val stats1 = renderer.getStats()
+        val stats1 = renderer.stats
 
         renderer.render(scene, camera)
-        val stats2 = renderer.getStats()
+        val stats2 = renderer.stats
 
         // Triangle count should be identical for same scene
         assertEquals(
@@ -58,10 +59,10 @@ class VisualConsistencyTest {
 
         // Render same scene twice
         renderer.render(scene, camera)
-        val stats1 = renderer.getStats()
+        val stats1 = renderer.stats
 
         renderer.render(scene, camera)
-        val stats2 = renderer.getStats()
+        val stats2 = renderer.stats
 
         // Draw calls should be identical
         assertEquals(
@@ -82,7 +83,7 @@ class VisualConsistencyTest {
 
         // Render empty scene
         renderer.render(scene, camera)
-        val stats = renderer.getStats()
+        val stats = renderer.stats
 
         assertEquals(
             0,
@@ -102,14 +103,14 @@ class VisualConsistencyTest {
 
         // Render empty scene
         renderer.render(scene, camera)
-        val statsEmpty = renderer.getStats()
+        val statsEmpty = renderer.stats
 
         // Add a cube (12 triangles typically)
         val cube = createTestCube()
         scene.add(cube)
 
         renderer.render(scene, camera)
-        val statsWithCube = renderer.getStats()
+        val statsWithCube = renderer.stats
 
         assertTrue(
             statsWithCube.triangles > statsEmpty.triangles,
@@ -118,7 +119,7 @@ class VisualConsistencyTest {
 
         // Triangle count should be deterministic
         renderer.render(scene, camera)
-        val statsAgain = renderer.getStats()
+        val statsAgain = renderer.stats
 
         assertEquals(
             statsWithCube.triangles,
@@ -142,13 +143,13 @@ class VisualConsistencyTest {
         val camera1 = PerspectiveCamera(75.0f, 800f / 600f, 0.1f, 1000.0f)
         camera1.position.set(0.0f, 0.0f, 5.0f)
         renderer.render(scene, camera1)
-        val stats1 = renderer.getStats()
+        val stats1 = renderer.stats
 
         // Render from position 2
         val camera2 = PerspectiveCamera(75.0f, 800f / 600f, 0.1f, 1000.0f)
         camera2.position.set(10.0f, 10.0f, 10.0f)
         renderer.render(scene, camera2)
-        val stats2 = renderer.getStats()
+        val stats2 = renderer.stats
 
         // Triangle count should be same (before frustum culling)
         // Note: This tests that the scene graph itself is consistent
@@ -172,7 +173,7 @@ class VisualConsistencyTest {
         scene.add(cube)
 
         renderer.render(scene, camera)
-        val stats = renderer.getStats()
+        val stats = renderer.stats
 
         // Backend might affect FPS, but geometry count must be consistent
         assertTrue(

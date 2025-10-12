@@ -11,6 +11,7 @@ import kotlinx.browser.document
 import kotlinx.coroutines.test.runTest
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertTrue
 
 /**
@@ -85,7 +86,7 @@ class WebGLRendererGeometryTest {
 
         assertTrue(renderSuccessful, "Indexed geometry should render without errors")
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertTrue(stats.triangles == 12, "Expected 12 triangles from indexed cube, got ${stats.triangles}")
 
         console.log("✅ Indexed geometry test passed: 12 triangles rendered")
@@ -137,7 +138,7 @@ class WebGLRendererGeometryTest {
 
         assertTrue(renderSuccessful, "Non-indexed geometry should render without errors")
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertTrue(stats.triangles == 2, "Expected 2 triangles from non-indexed quad, got ${stats.triangles}")
 
         console.log("✅ Non-indexed geometry test passed: 2 triangles rendered")
@@ -167,7 +168,7 @@ class WebGLRendererGeometryTest {
 
         assertTrue(renderSuccessful, "Empty scene should render without errors")
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertTrue(stats.triangles == 0, "Expected 0 triangles from empty scene, got ${stats.triangles}")
 
         console.log("✅ Empty scene test passed: 0 triangles rendered")

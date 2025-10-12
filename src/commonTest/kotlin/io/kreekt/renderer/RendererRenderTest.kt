@@ -3,6 +3,7 @@ package io.kreekt.renderer
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.core.scene.Scene
 import kotlin.test.Test
+import kotlin.test.Ignore
 import kotlin.test.assertTrue
 
 /**

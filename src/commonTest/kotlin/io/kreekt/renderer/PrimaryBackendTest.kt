@@ -129,7 +129,3 @@ class PrimaryBackendTest {
         }
     }
 }
-
-// Test helpers (expect/actual in platform source sets)
-expect fun createTestSurface(width: Int, height: Int): RenderSurface
-expect fun captureLog(block: () -> Unit): String

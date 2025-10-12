@@ -7,13 +7,13 @@
 
 package io.kreekt.renderer.fixtures
 
+import io.kreekt.geometry.primitives.BoxGeometry
+import io.kreekt.geometry.primitives.SphereGeometry
+import io.kreekt.core.scene.Scene
+import io.kreekt.core.scene.Mesh
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.core.math.Color
 import io.kreekt.core.math.Vector3
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BoxGeometry
-import io.kreekt.geometry.SphereGeometry
 import io.kreekt.material.MeshBasicMaterial
 
 /**

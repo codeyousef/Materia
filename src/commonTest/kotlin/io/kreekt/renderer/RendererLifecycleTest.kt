@@ -12,8 +12,8 @@
 
 package io.kreekt.renderer
 
+import io.kreekt.core.scene.Scene
 import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.scene.Scene
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -64,9 +64,11 @@ class RendererLifecycleTest {
         renderer = RendererFactory.create(surface).getOrThrow()
 
         // Should not throw
-        assertDoesNotThrow {
+        // assertDoesNotThrow removed - not in kotlin.test
+
+        
             renderer.render(scene, camera)
-        }
+        
     }
 
     @Test
@@ -76,7 +78,7 @@ class RendererLifecycleTest {
         // Render one frame
         renderer.render(scene, camera)
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertNotNull(stats, "Stats must not be null after render")
         assertTrue(stats.fps >= 0, "FPS must be non-negative")
         assertTrue(stats.frameTime >= 0, "Frame time must be non-negative")
@@ -90,7 +92,7 @@ class RendererLifecycleTest {
 
         renderer.render(scene, camera)
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertNotNull(stats, "Stats must not be null")
 
         // Stats should have valid values
@@ -106,14 +108,18 @@ class RendererLifecycleTest {
         renderer = RendererFactory.create(surface).getOrThrow()
 
         // Should not throw
-        assertDoesNotThrow {
+        // assertDoesNotThrow removed - not in kotlin.test
+
+        
             renderer.resize(1024, 768)
-        }
+        
 
         // Next render should work
-        assertDoesNotThrow {
+        // assertDoesNotThrow removed - not in kotlin.test
+
+        
             renderer.render(scene, camera)
-        }
+        
     }
 
     @Test
@@ -121,9 +127,11 @@ class RendererLifecycleTest {
         renderer = RendererFactory.create(surface).getOrThrow()
 
         // Should not throw
-        assertDoesNotThrow {
+        // assertDoesNotThrow removed - not in kotlin.test
+
+        
             renderer.dispose()
-        }
+        
 
         // Subsequent operations should fail
         assertFails("Operations after dispose should fail") {
@@ -137,12 +145,14 @@ class RendererLifecycleTest {
 
         // Render 10 frames
         repeat(10) {
-            assertDoesNotThrow {
+            // assertDoesNotThrow removed - not in kotlin.test
+
+            
                 renderer.render(scene, camera)
-            }
+            
         }
 
-        val stats = renderer.getStats()
+        val stats = renderer.stats
         assertTrue(
             stats.fps > 0,
             "FPS should be positive after multiple frames"
