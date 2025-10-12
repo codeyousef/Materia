@@ -102,7 +102,7 @@ object ChunkMeshGenerator {
                     val neighbor = chunk.getNeighborBlock(neighborPos[0], neighborPos[1], neighborPos[2])
 
                     // Should we render this face?
-                    if (shouldRenderFace(block, neighbor, neighborPos)) {
+                    if (shouldRenderFace(block, neighbor)) {
                         mask[u][v] = MaskEntry(block, true)
                     }
                 }
@@ -163,25 +163,20 @@ object ChunkMeshGenerator {
     /**
      * Check if face should be rendered (culling hidden faces)
      * 
-     * Fixed: Render faces at chunk boundaries when neighbor chunk not loaded
+     * Render face if:
+     * - Block is solid (not Air)
+     * - Neighbor is Air or transparent
+     * - Neighbor is null (chunk boundary - always render to avoid holes)
      */
-    private fun shouldRenderFace(block: BlockType, neighbor: BlockType?, neighborPos: IntArray): Boolean {
+    private fun shouldRenderFace(block: BlockType, neighbor: BlockType?): Boolean {
+        // Don't render faces for Air blocks
         if (block == BlockType.Air) return false
         
-        // If neighbor is null (chunk boundary or out of bounds)
-        if (neighbor == null) {
-            // At bottom of world (Y < 0) - don't render face (void/bedrock)
-            if (neighborPos[1] < 0) return false
-            // At top of world (Y > 255) - render face (open to sky)
-            if (neighborPos[1] > 255) return true
-            // At horizontal chunk boundary - render face (neighbor chunk not loaded or at world edge)
-            return true
-        }
+        // If neighbor is null (out of bounds or unloaded chunk), render the face
+        if (neighbor == null) return true
         
-        // Neighbor exists - only cull if it's opaque
-        if (neighbor == BlockType.Air) return true
-        if (neighbor.isTransparent) return true
-        return false
+        // Render if neighbor is Air or transparent
+        return neighbor == BlockType.Air || neighbor.isTransparent
     }
 
     /**
@@ -264,6 +259,7 @@ object ChunkMeshGenerator {
 
     /**
      * Get neighboring block (may be in adjacent chunk)
+     * Returns null if neighbor is out of world bounds or chunk not loaded
      */
     private fun Chunk.getNeighborBlock(x: Int, y: Int, z: Int): BlockType? {
         // If within chunk bounds, get block directly
@@ -271,13 +267,15 @@ object ChunkMeshGenerator {
             return getBlock(x, y, z)
         }
 
+        // Out of vertical bounds - return null to render face
+        if (y < 0 || y > 255) return null
+
         // Convert to world coordinates
         val worldX = position.toWorldX() + x
-        val worldY = y
         val worldZ = position.toWorldZ() + z
 
-        // Get from world (may be in adjacent chunk)
-        return world.getBlock(worldX, worldY, worldZ)
+        // Get from world (may be in adjacent chunk or null if not loaded)
+        return world.getBlock(worldX, y, worldZ)
     }
 }
 
