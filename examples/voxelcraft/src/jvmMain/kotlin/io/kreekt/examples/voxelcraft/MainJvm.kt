@@ -1,4 +1,4 @@
-package io.kreekt.examples.voxelcraft
+﻿package io.kreekt.examples.voxelcraft
 
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.renderer.Renderer
@@ -33,19 +33,19 @@ class VoxelCraftJVM {
     }
 
     private fun init() {
-        Logger.info("🎮 VoxelCraft JVM Starting...")
-        Logger.info("OS: ${System.getProperty("os.name")} ${System.getProperty("os.version")}")
-        Logger.info("Java: ${System.getProperty("java.version")}")
+        logInfo("ðŸŽ® VoxelCraft JVM Starting...")
+        logInfo("OS: ${System.getProperty("os.name")} ${System.getProperty("os.version")}")
+        logInfo("Java: ${System.getProperty("java.version")}")
 
         // T028: Check Vulkan availability (Feature 019)
-        Logger.info("🔧 Detecting graphics backends...")
+        logInfo("ðŸ”§ Detecting graphics backends...")
         val availableBackends = try {
             RendererFactory.detectAvailableBackends()
         } catch (e: Throwable) {
-            Logger.warn("Failed to detect backends: ${e.message}")
+            logWarn("Failed to detect backends: ${e.message}")
             emptyList()
         }
-        Logger.info("📊 Available backends: ${availableBackends.joinToString(", ")}")
+        logInfo("ðŸ“Š Available backends: ${availableBackends.joinToString(", ")}")
 
         // Setup error callback
         GLFWErrorCallback.createPrint(System.err).set()
@@ -57,7 +57,7 @@ class VoxelCraftJVM {
 
         // T023: Check if Vulkan is supported
         val vulkanSupported = GLFWVulkan.glfwVulkanSupported()
-        Logger.info("🌋 Vulkan supported: $vulkanSupported")
+        logInfo("ðŸŒ‹ Vulkan supported: $vulkanSupported")
 
         if (!vulkanSupported) {
             glfwTerminate()
@@ -85,7 +85,7 @@ class VoxelCraftJVM {
         glfwShowWindow(window)
 
         // Initialize renderer using platform-agnostic SurfaceFactory
-        Logger.info("🔧 Initializing renderer...")
+        logInfo("ðŸ”§ Initializing renderer...")
 
         runBlocking {
             val surface = SurfaceFactory.create(window)
@@ -98,31 +98,31 @@ class VoxelCraftJVM {
                         val exception = result.exception as? RendererInitializationException
                         when (exception) {
                             is RendererInitializationException.NoGraphicsSupportException -> {
-                                Logger.error("❌ Graphics not supported: ${result.message}")
-                                Logger.error("   Platform: ${exception.platform}")
-                                Logger.error("   Available: ${exception.availableBackends}")
-                                Logger.error("   Required: ${exception.requiredFeatures}")
+                                logError("âŒ Graphics not supported: ${result.message}")
+                                logError("   Platform: ${exception.platform}")
+                                logError("   Available: ${exception.availableBackends}")
+                                logError("   Required: ${exception.requiredFeatures}")
                                 throw exception
                             }
 
                             else -> {
-                                Logger.error("❌ Renderer initialization failed: ${result.message}")
+                                logError("âŒ Renderer initialization failed: ${result.message}")
                                 throw exception ?: RuntimeException(result.message)
                             }
                         }
                     }
                 }
             } catch (e: Throwable) {
-                Logger.error("❌ Failed to create renderer: ${e.message}")
+                logError("âŒ Failed to create renderer: ${e.message}")
                 glfwDestroyWindow(window)
                 glfwTerminate()
                 throw e
             }
 
-            Logger.info("✅ Renderer initialized!")
-            Logger.info("  Backend: ${renderer.backend}")
-            Logger.info("  Device: ${renderer.capabilities.deviceName}")
-            Logger.info("  Driver: ${renderer.capabilities.driverVersion}")
+            logInfo("âœ… Renderer initialized!")
+            logInfo("  Backend: ${renderer.backend}")
+            logInfo("  Device: ${renderer.capabilities.deviceName}")
+            logInfo("  Driver: ${renderer.capabilities.driverVersion}")
         }
 
         // Initialize camera
@@ -134,7 +134,7 @@ class VoxelCraftJVM {
         )
 
         // Initialize world and generate terrain
-        Logger.info("🌍 Creating world...")
+        logInfo("ðŸŒ Creating world...")
         world = VoxelWorld(seed = 12345L, parentScope = gameScope)
         world.player.position.set(0.0f, 100.0f, 0.0f)
         world.player.isFlying = true
@@ -145,12 +145,12 @@ class VoxelCraftJVM {
                 world.generateTerrain { current, total ->
                     val percent = (current * 100) / total
                     if (percent % 10 == 0) {
-                        Logger.info("🌍 Generating terrain... $percent% ($current/$total chunks)")
+                        logInfo("ðŸŒ Generating terrain... $percent% ($current/$total chunks)")
                     }
                 }
             }
-            Logger.info("✅ Terrain generation complete in ${generationTime}ms")
-            Logger.info("📦 Chunks: ${world.chunkCount}")
+            logInfo("âœ… Terrain generation complete in ${generationTime}ms")
+            logInfo("ðŸ“¦ Chunks: ${world.chunkCount}")
         }
     }
 
@@ -163,7 +163,7 @@ class VoxelCraftJVM {
                     // Toggle flight mode with F key
                     if (key == GLFW_KEY_F) {
                         world.player.toggleFlight()
-                        Logger.info("🦅 Flight mode: ${if (world.player.isFlying) "ON" else "OFF"}")
+                        logInfo("ðŸ¦… Flight mode: ${if (world.player.isFlying) "ON" else "OFF"}")
                     }
                     // Close window with ESC
                     if (key == GLFW_KEY_ESCAPE) {
@@ -251,8 +251,8 @@ class VoxelCraftJVM {
         var lastTime = System.nanoTime()
         var frameCount = 0
 
-        Logger.info("🎮 Game loop starting...")
-        Logger.info("🎮 Controls: WASD=Move, Mouse=Look, F=Flight, Space/Shift=Up/Down, ESC=Quit")
+        logInfo("ðŸŽ® Game loop starting...")
+        logInfo("ðŸŽ® Controls: WASD=Move, Mouse=Look, F=Flight, Space/Shift=Up/Down, ESC=Quit")
 
         while (!glfwWindowShouldClose(window)) {
             val currentTime = System.nanoTime()
@@ -296,7 +296,7 @@ class VoxelCraftJVM {
             if (frameCount % 60 == 0) {
                 val fps = (1.0f / deltaTime).toInt()
                 val stats = renderer.stats
-                Logger.info("📊 FPS: $fps (${stats.fps.toInt()} renderer) | Player: (${world.player.position.x.toInt()}, ${world.player.position.y.toInt()}, ${world.player.position.z.toInt()}) | Chunks: ${world.chunkCount}")
+                logInfo("ðŸ“Š FPS: $fps (${stats.fps.toInt()} renderer) | Player: (${world.player.position.x.toInt()}, ${world.player.position.y.toInt()}, ${world.player.position.z.toInt()}) | Chunks: ${world.chunkCount}")
             }
 
             frameCount++
@@ -307,7 +307,7 @@ class VoxelCraftJVM {
     }
 
     private fun cleanup() {
-        Logger.info("🔚 Shutting down...")
+        logInfo("ðŸ”š Shutting down...")
 
         // Dispose renderer
         if (::renderer.isInitialized) {
@@ -327,7 +327,7 @@ class VoxelCraftJVM {
         glfwTerminate()
         glfwSetErrorCallback(null)?.free()
 
-        Logger.info("✅ Cleanup complete")
+        logInfo("âœ… Cleanup complete")
     }
 }
 
@@ -335,7 +335,8 @@ fun main() {
     try {
         VoxelCraftJVM().run()
     } catch (e: Exception) {
-        Logger.error("❌ Fatal error: ${e.message}", e)
+        logError("âŒ Fatal error: ${e.message}", e)
         throw e
     }
 }
+

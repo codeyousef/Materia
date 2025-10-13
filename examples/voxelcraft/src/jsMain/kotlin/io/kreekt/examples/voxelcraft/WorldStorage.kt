@@ -1,4 +1,4 @@
-package io.kreekt.examples.voxelcraft
+﻿package io.kreekt.examples.voxelcraft
 
 import kotlinx.browser.localStorage
 import kotlinx.serialization.json.Json
@@ -37,7 +37,7 @@ class WorldStorage {
             localStorage[STORAGE_KEY] = json
 
             val sizeBytes = json.length
-            Logger.info("💾 World saved: ${sizeBytes / 1024}KB")
+            logInfo("ðŸ’¾ World saved: ${sizeBytes / 1024}KB")
 
             SaveResult(
                 success = true,
@@ -53,7 +53,7 @@ class WorldStorage {
                 else -> "Save failed: ${e.message}"
             }
 
-            Logger.error("❌ Save error: $errorMsg")
+            logError("âŒ Save error: $errorMsg")
 
             SaveResult(
                 success = false,
@@ -76,11 +76,11 @@ class WorldStorage {
             val json = localStorage[STORAGE_KEY] ?: return null
             val worldState = Json.decodeFromString<WorldState>(json)
 
-            Logger.info("📂 World loaded: seed=${worldState.seed}")
+            logInfo("ðŸ“‚ World loaded: seed=${worldState.seed}")
 
             worldState
         } catch (e: Exception) {
-            Logger.error("⚠️ Load error: ${e.message}")
+            logError("âš ï¸ Load error: ${e.message}")
             null
         }
     }
@@ -92,7 +92,7 @@ class WorldStorage {
      */
     fun clear() {
         localStorage.removeItem(STORAGE_KEY)
-        Logger.info("🗑️ World save cleared")
+        logInfo("ðŸ—‘ï¸ World save cleared")
     }
 
     /**
@@ -138,3 +138,4 @@ data class StorageInfo(
     val availableBytes: Int,
     val percentUsed: Double
 )
+

@@ -102,7 +102,7 @@ class VoxelWorld(
         isGenerated = true
         isGeneratingTerrain = false
 
-        Logger.info("✅ Terrain generation complete! dirtyQueue=${dirtyQueue.size}, pendingMeshes=${pendingMeshes.size}")
+        logInfo("✅ Terrain generation complete! dirtyQueue=${dirtyQueue.size}, pendingMeshes=${pendingMeshes.size}")
     }
 
     internal fun onChunkDirty(chunk: Chunk) {
@@ -231,7 +231,7 @@ class VoxelWorld(
                                 regenerationCompletedCount++
                                 if (regenerationCompletedCount >= regenerationTargetCount) {
                                     isRegeneratingMeshes = false
-                                    Logger.info("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
+                                    logInfo("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
                                 }
                             }
                         }
@@ -299,7 +299,7 @@ class VoxelWorld(
      * T021: Now tracks progress so caller can wait for completion.
      */
     fun regenerateAllMeshes() {
-        Logger.info("🔄 Regenerating all chunk meshes for correct face culling...")
+        logInfo("🔄 Regenerating all chunk meshes for correct face culling...")
         
         isRegeneratingMeshes = true
         regenerationTargetCount = 0
@@ -312,7 +312,7 @@ class VoxelWorld(
             }
         }
         
-        Logger.info("✅ Marked $regenerationTargetCount chunks dirty for regeneration")
+        logInfo("✅ Marked $regenerationTargetCount chunks dirty for regeneration")
     }
 
     fun dispose() {
@@ -338,4 +338,5 @@ class VoxelWorld(
         private const val MAX_DIRTY_CHUNKS_PER_FRAME = 32  // Process many chunks per frame for fast initial load
     }
 }
+
 

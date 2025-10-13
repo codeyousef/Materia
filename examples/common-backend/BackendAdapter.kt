@@ -1,71 +1,108 @@
-package io.kreekt.examples.backend
+﻿package io.kreekt.examples.backend
 
-import io.kreekt.renderer.*
-import io.kreekt.renderer.backend.*
+import io.kreekt.renderer.BackendType
+import io.kreekt.renderer.RenderSurface
+import io.kreekt.renderer.Renderer
+import io.kreekt.renderer.RendererConfig
+import io.kreekt.renderer.RendererFactory
 import kotlinx.coroutines.delay
 
 /**
- * Simplified backend adapter for examples.
- * This provides a minimal implementation of the backend system to demonstrate
- * the usage pattern while the full implementation is being developed.
- */
-
-/**
- * Create a backend integration for examples.
+ * Minimal backend integration helper used by examples.
  *
- * This creates a simplified backend integration that demonstrates the usage pattern
- * of the new WebGPU/Vulkan backend system.
+ * The concrete backend detection and renderer creation live in the KreeKt core
+ * (see [RendererFactory]). This adapter keeps the examples focused on scenario
+ * logic by surfacing a tiny summary model and delegating the heavy lifting to
+ * the library.
  */
 suspend fun createExampleBackendIntegration(config: RendererConfig): ExampleBackendResult {
-    println("🔧 Backend Integration Example")
+    println("Backend Integration Example")
     println("  Configuration:")
-    println("    Antialias: ${config.antialias}")
-    println("    Power Preference: ${config.powerPreference}")
-    println("    Debug: ${config.debug}")
+    println("    Preferred backend : ${config.preferredBackend ?: "auto"}")
+    println("    Power preference  : ${config.powerPreference}")
+    println("    Validation        : ${config.enableValidation}")
+    println("    VSync             : ${config.vsync}")
+    println("    MSAA              : ${config.msaaSamples}x")
 
-    // Simulate backend detection
-    delay(100)
+    delay(100) // Telemetry simulation for the example narrative
 
-    val backendType = detectBackendType()
-    println("  Detected Backend: $backendType")
+    val availableBackends = RendererFactory.detectAvailableBackends()
+    println(
+        "  Available backends : ${
+            if (availableBackends.isEmpty()) "none" else availableBackends.joinToString()
+        }"
+    )
 
-    // Simulate initialization
-    delay(150)
+    val selectedBackend = selectBackend(config, availableBackends)
+        ?: error("No compatible backend detected on this platform.")
+
+    println("  Selected backend   : $selectedBackend")
+
+    delay(150) // Simulated initialization time for storytelling
 
     return ExampleBackendResult(
-        backendType = backendType,
+        backendType = selectedBackend,
+        availableBackends = availableBackends,
         initTimeMs = 250,
-        features = mapOf(
-            "COMPUTE" to "Native",
-            "RAY_TRACING" to if (backendType == "WebGPU") "Emulated" else "Native",
-            "XR_SURFACE" to "Missing"
-        )
+        features = featureSummaryFor(selectedBackend)
+    )
+}
+
+private fun selectBackend(
+    config: RendererConfig,
+    available: List<BackendType>
+): BackendType? {
+    val preferred = config.preferredBackend
+    if (preferred != null && preferred in available) {
+        return preferred
+    }
+    return available.firstOrNull()
+}
+
+private fun featureSummaryFor(backend: BackendType): Map<String, String> = when (backend) {
+    BackendType.WEBGPU -> mapOf(
+        "COMPUTE" to "Native",
+        "RAY_TRACING" to "Emulated",
+        "XR_SURFACE" to "Planned"
+    )
+
+    BackendType.VULKAN -> mapOf(
+        "COMPUTE" to "Native",
+        "RAY_TRACING" to "Native",
+        "XR_SURFACE" to "Native"
+    )
+
+    BackendType.WEBGL -> mapOf(
+        "COMPUTE" to "Emulated",
+        "RAY_TRACING" to "Missing",
+        "XR_SURFACE" to "Missing"
     )
 }
 
 /**
- * Detect which backend is available for the current platform.
- */
-expect fun detectBackendType(): String
-
-/**
- * Example backend result.
+ * Light-weight data class the examples can print or inspect.
  */
 data class ExampleBackendResult(
-    val backendType: String,
+    val backendType: BackendType,
+    val availableBackends: List<BackendType>,
     val initTimeMs: Long,
     val features: Map<String, String>
 )
 
 /**
- * Create a renderer from the example backend result.
+ * Create a renderer from the summarized backend decision.
  */
-fun createRendererFromExampleBackend(result: ExampleBackendResult): Renderer {
-    println("✅ Creating renderer with ${result.backendType} backend")
-    return DefaultRenderer(
-        RendererConfig(
-            antialias = true,
-            powerPreference = PowerPreference.HIGH_PERFORMANCE
-        )
-    )
+suspend fun createRendererFromExampleBackend(
+    surface: RenderSurface,
+    result: ExampleBackendResult,
+    config: RendererConfig = RendererConfig(preferredBackend = result.backendType)
+): Renderer {
+    println("Creating renderer with ${result.backendType} backend")
+    println("   Available backends : ${result.availableBackends.joinToString()}")
+    println("   Feature hints      : ${result.features}")
+
+    return RendererFactory
+        .create(surface, config)
+        .getOrThrow()
 }
+

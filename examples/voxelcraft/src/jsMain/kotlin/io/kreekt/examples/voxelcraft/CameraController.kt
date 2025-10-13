@@ -1,5 +1,6 @@
 package io.kreekt.examples.voxelcraft
 
+import io.kreekt.controls.PointerLock
 import kotlinx.browser.document
 import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.events.MouseEvent
@@ -29,7 +30,7 @@ class CameraController(
     private fun setupPointerLock() {
         // Request pointer lock on canvas click
         canvas.addEventListener("click", {
-            canvas.requestPointerLockSafe()
+            PointerLock.request(canvas)
         })
 
         // Listen for pointer lock changes
@@ -78,6 +79,6 @@ class CameraController(
      * Release pointer lock (for UI interactions)
      */
     fun releasePointerLock() {
-        document.asDynamic().exitPointerLock()
+        PointerLock.exit()
     }
 }
