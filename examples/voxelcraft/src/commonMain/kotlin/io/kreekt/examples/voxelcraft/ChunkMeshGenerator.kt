@@ -87,6 +87,10 @@ object ChunkMeshGenerator {
             FaceDirection.NORTH, FaceDirection.SOUTH -> Triple(15, 15, 255) // sweep Z, iterate X-Y
             FaceDirection.EAST, FaceDirection.WEST -> Triple(15, 15, 255)  // sweep X, iterate Z-Y
         }
+        val neighborOffset = when (direction) {
+            FaceDirection.UP, FaceDirection.SOUTH, FaceDirection.EAST -> 1
+            FaceDirection.DOWN, FaceDirection.NORTH, FaceDirection.WEST -> -1
+        }
 
         // Sweep through slices perpendicular to direction
         for (w in 0..wMax) {
@@ -96,7 +100,7 @@ object ChunkMeshGenerator {
             for (u in 0..uMax) {
                 for (v in 0..vMax) {
                     val pos = DirectionHelper.getPosition(direction, u, v, w)
-                    val neighborPos = DirectionHelper.getPosition(direction, u, v, w + 1)
+                    val neighborPos = DirectionHelper.getPosition(direction, u, v, w + neighborOffset)
 
                     val block = chunk.getBlockSafe(pos[0], pos[1], pos[2])
                     val neighbor = chunk.getNeighborBlock(neighborPos[0], neighborPos[1], neighborPos[2])

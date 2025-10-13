@@ -264,7 +264,7 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
         name = "MainCamera"  // T021: Add name for logging
     }
 
-    updateLoadingProgress("World ready!")
+    updateLoadingProgress("Renderer ready, finalizing world...")
 
     // Initialize block interaction
     val blockInteraction = BlockInteraction(world, world.player)
@@ -417,10 +417,7 @@ fun setupStartOnClick(world: VoxelWorld) {
         loading.setAttribute("class", "loading hidden")
         
         // Request pointer lock (requires user gesture)
-        canvas?.let { c ->
-            js("c.requestPointerLock = c.requestPointerLock || c.mozRequestPointerLock || c.webkitRequestPointerLock")
-            js("if (c.requestPointerLock) c.requestPointerLock()")
-        }
+        canvas?.requestPointerLockSafe()
     })
     
     // Also allow clicking directly on canvas
@@ -429,8 +426,7 @@ fun setupStartOnClick(world: VoxelWorld) {
         loading?.setAttribute("class", "loading hidden")
         
         // Request pointer lock
-        js("canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock || canvas.webkitRequestPointerLock")
-        js("if (canvas.requestPointerLock) canvas.requestPointerLock()")
+        canvas?.requestPointerLockSafe()
     })
 }
 

@@ -29,7 +29,7 @@ class CameraController(
     private fun setupPointerLock() {
         // Request pointer lock on canvas click
         canvas.addEventListener("click", {
-            canvas.asDynamic().requestPointerLock()
+            canvas.requestPointerLockSafe()
         })
 
         // Listen for pointer lock changes
@@ -68,7 +68,7 @@ class CameraController(
      * @param movementY Vertical mouse movement (pixels)
      */
     fun handleMouseMove(movementX: Double, movementY: Double) {
-        val deltaYaw = movementX * mouseSensitivity
+        val deltaYaw = -movementX * mouseSensitivity
         val deltaPitch = -movementY * mouseSensitivity  // Negate for standard FPS feel (mouse up = look up)
 
         player.rotate(deltaPitch, deltaYaw)
