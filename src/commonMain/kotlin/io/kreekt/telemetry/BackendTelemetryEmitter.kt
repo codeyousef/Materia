@@ -1,13 +1,11 @@
 package io.kreekt.telemetry
 
-import io.kreekt.datetime.currentTimeMillis
 import io.kreekt.datetime.currentTimeString
 import io.kreekt.renderer.backend.BackendId
 import io.kreekt.renderer.backend.DeviceCapabilityReport
 import io.kreekt.renderer.metrics.InitializationStats
 import io.kreekt.renderer.metrics.PerformanceAssessment
 import kotlinx.coroutines.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
 
@@ -17,10 +15,13 @@ import kotlin.random.Random
  */
 class BackendTelemetryEmitter(
     private val transmitter: TelemetryTransmitter = DefaultTelemetryTransmitter(),
-    private val json: Json = Json { prettyPrint = false }
+    private val json: Json = Json { prettyPrint = false },
+    scope: CoroutineScope? = null,
+    private val clock: () -> Long = { io.kreekt.datetime.currentTimeMillis() }
 ) {
+    private val scope: CoroutineScope = scope ?: CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val ownsScope: Boolean = scope == null
     private val eventQueue = mutableListOf<TelemetryEvent>()
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val maxRetries = 3
     private val transmissionTimeoutMs = 500L
 
@@ -155,7 +156,7 @@ class BackendTelemetryEmitter(
         val event = TelemetryEvent(
             payload = payload,
             retries = 0,
-            enqueuedAt = currentTimeMillis()
+            enqueuedAt = clock()
         )
 
         eventQueue.add(event)
@@ -170,29 +171,27 @@ class BackendTelemetryEmitter(
      * Transmit event with retry logic (up to 3 attempts).
      */
     private suspend fun transmitWithRetry(event: TelemetryEvent) {
-        var currentEvent = event
-
-        while (currentEvent.retries < maxRetries) {
+        while (event.retries < maxRetries) {
             try {
                 withTimeout(transmissionTimeoutMs) {
-                    transmitter.send(currentEvent.payload)
+                    transmitter.send(event.payload)
                 }
 
                 // Success - remove from queue
-                eventQueue.remove(currentEvent)
+                eventQueue.remove(event)
                 return
             } catch (e: Exception) {
-                currentEvent = currentEvent.copy(retries = currentEvent.retries + 1)
+                event.retries += 1
 
-                if (currentEvent.retries >= maxRetries) {
+                if (event.retries >= maxRetries) {
                     // Max retries exceeded - log failure and remove from queue
                     println("Telemetry transmission failed after $maxRetries attempts: ${e.message}")
-                    eventQueue.remove(currentEvent)
+                    eventQueue.remove(event)
                     return
                 }
 
                 // Wait before retry (exponential backoff)
-                delay(100L * (1 shl currentEvent.retries))
+                delay(100L * (1 shl event.retries))
             }
         }
     }
@@ -201,7 +200,7 @@ class BackendTelemetryEmitter(
      * Generate unique event ID.
      */
     private fun generateEventId(): String {
-        val timestamp = currentTimeMillis()
+        val timestamp = clock()
         val random = Random.nextInt(1000, 9999)
         return "evt-$timestamp-$random"
     }
@@ -234,9 +233,16 @@ class BackendTelemetryEmitter(
      * Shut down telemetry emitter and flush pending events.
      */
     fun shutdown() {
-        // Cancel the scope - pending coroutines will be cancelled
-        scope.cancel()
+        if (ownsScope) {
+            scope.cancel()
+        }
+        eventQueue.clear()
     }
+
+    /**
+     * Snapshot of pending telemetry events (primarily for tests).
+     */
+    fun pendingEvents(): List<TelemetryPayload> = eventQueue.map { it.payload }
 }
 
 /**
@@ -244,7 +250,7 @@ class BackendTelemetryEmitter(
  */
 private data class TelemetryEvent(
     val payload: TelemetryPayload,
-    val retries: Int,
+    var retries: Int,
     val enqueuedAt: Long
 )
 
