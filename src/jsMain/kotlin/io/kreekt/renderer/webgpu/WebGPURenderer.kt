@@ -4,7 +4,6 @@ import io.kreekt.camera.Camera
 import io.kreekt.camera.Viewport
 import io.kreekt.core.math.Color
 import io.kreekt.core.math.Matrix4
-import io.kreekt.core.math.Vector3
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.BufferGeometry
@@ -13,26 +12,8 @@ import io.kreekt.optimization.BoundingBox
 import io.kreekt.optimization.Frustum
 import io.kreekt.renderer.*
 import io.kreekt.renderer.webgpu.shaders.BasicShaders
-import kotlinx.coroutines.suspendCancellableCoroutine
 import org.w3c.dom.HTMLCanvasElement
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlin.js.Promise
-
-internal data class WebGPUFramebufferAttachments(
-    val colorView: GPUTextureView,
-    val depthView: GPUTextureView?
-)
-
-/**
- * Await a JavaScript Promise in a suspend function.
- */
-private suspend fun <T> Promise<T>.awaitPromise(): T = suspendCancellableCoroutine { cont ->
-    this.then(
-        onFulfilled = { value -> cont.resume(value) },
-        onRejected = { error -> cont.resumeWithException(error as? Throwable ?: Exception(error.toString())) }
-    )
-}
 
 /**
  * Main WebGPU renderer class implementing the Renderer interface.
@@ -79,7 +60,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     }
 
     // Geometry buffer cache (mesh.uuid -> buffers)
-    private val geometryBuffers = mutableMapOf<String, GeometryBuffers>()
+    private val geometryCache = GeometryBufferCache { device }
 
     // Pipeline cache map (for synchronous access)
     private val pipelineCacheMap = mutableMapOf<PipelineKey, WebGPUPipeline>()
@@ -394,7 +375,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val material = mesh.material as? MeshBasicMaterial ?: return
 
         // Get or create buffers for this geometry
-        val buffers = getOrCreateGeometryBuffers(geometry)
+        val buffers = geometryCache.getOrCreate(geometry, frameCount)
         if (buffers == null) {
             console.warn("Failed to create buffers for mesh")
             return
@@ -479,117 +460,6 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     /**
      * Get or create GPU buffers for a geometry.
      */
-    private fun getOrCreateGeometryBuffers(geometry: BufferGeometry): GeometryBuffers? {
-        val uuid = geometry.uuid
-
-        // Return cached buffers if available
-        geometryBuffers[uuid]?.let { return it }
-
-        // Create new buffers
-        try {
-            val positionAttr = geometry.getAttribute("position")
-            if (positionAttr == null) {
-                console.error("Position attribute is null for geometry ${geometry.uuid}")
-                return null
-            }
-
-            val normalAttr = geometry.getAttribute("normal")
-            val colorAttr = geometry.getAttribute("color")
-            val indexAttr = geometry.index
-
-            // Interleave vertex data: position(3) + normal(3) + color(3) = 9 floats per vertex
-            val vertexCount = positionAttr.count as Int
-            val vertexData = FloatArray(vertexCount * 9)
-
-            for (i in 0 until vertexCount) {
-                val offset = i * 9
-
-                // Position (required)
-                vertexData[offset + 0] = positionAttr.getX(i)
-                vertexData[offset + 1] = positionAttr.getY(i)
-                vertexData[offset + 2] = positionAttr.getZ(i)
-
-                // Normal (optional, default to up vector)
-                if (normalAttr != null) {
-                    vertexData[offset + 3] = normalAttr.getX(i)
-                    vertexData[offset + 4] = normalAttr.getY(i)
-                    vertexData[offset + 5] = normalAttr.getZ(i)
-                } else {
-                    vertexData[offset + 3] = 0f
-                    vertexData[offset + 4] = 1f
-                    vertexData[offset + 5] = 0f
-                }
-
-                // Color (optional, default to white)
-                if (colorAttr != null) {
-                    vertexData[offset + 6] = colorAttr.getX(i)
-                    vertexData[offset + 7] = colorAttr.getY(i)
-                    vertexData[offset + 8] = colorAttr.getZ(i)
-
-                    // T021: Diagnostic - log first vertex to verify values
-                    if (i == 0 && frameCount < 3) {
-                        console.log("T021 First vertex: pos=(${vertexData[offset]}, ${vertexData[offset+1]}, ${vertexData[offset+2]}), color=(${vertexData[offset + 6]}, ${vertexData[offset + 7]}, ${vertexData[offset + 8]})")
-                    }
-                } else {
-                    vertexData[offset + 6] = 1f
-                    vertexData[offset + 7] = 1f
-                    vertexData[offset + 8] = 1f
-                    console.warn("T021 No color attribute - using white default")
-                }
-            }
-
-            // Create vertex buffer
-            val vertexBuffer = WebGPUBuffer(
-                device!!,
-                BufferDescriptor(
-                    size = vertexData.size * 4, // 4 bytes per float
-                    usage = GPUBufferUsage.VERTEX or GPUBufferUsage.COPY_DST,
-                    label = "Vertex Buffer ${uuid}"
-                )
-            )
-            vertexBuffer.create()
-            vertexBuffer.upload(vertexData)
-
-            // Create index buffer if available
-            var indexBuffer: GPUBuffer? = null
-            var indexCount = 0
-            var indexFormat = "uint32"
-
-            if (indexAttr != null) {
-                indexCount = indexAttr.count as Int
-                val indexData = IntArray(indexCount) { i ->
-                    indexAttr.getX(i).toInt()
-                }
-
-                val idxBuffer = WebGPUBuffer(
-                    device!!,
-                    BufferDescriptor(
-                        size = indexData.size * 4, // 4 bytes per uint32
-                        usage = GPUBufferUsage.INDEX or GPUBufferUsage.COPY_DST,
-                        label = "Index Buffer ${uuid}"
-                    )
-                )
-                idxBuffer.create()
-                idxBuffer.uploadIndices(indexData)
-                indexBuffer = idxBuffer.getBuffer()
-            }
-
-            val buffers = GeometryBuffers(
-                vertexBuffer = vertexBuffer.getBuffer()!!,
-                indexBuffer = indexBuffer,
-                vertexCount = vertexCount,
-                indexCount = indexCount,
-                indexFormat = indexFormat
-            )
-
-            geometryBuffers[uuid] = buffers
-            return buffers
-        } catch (e: Exception) {
-            console.error("Failed to create geometry buffers: ${e.message}")
-            return null
-        }
-    }
-
     /**
      * Get or create render pipeline for a material.
      * T006: Fixed - No longer blocks render thread with busy-wait.
@@ -837,6 +707,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         depthTextureWidth = 0
         depthTextureHeight = 0
 
+        geometryCache.clear()
+
         // T021 PERFORMANCE: Clean up cached bind group and layouts
         cachedUniformBindGroup = null
         uniformBindGroupLayout = null
@@ -899,9 +771,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
      * This method demonstrates how to use the new BufferManager API
      * for simple vertex data (position + color, 6 floats per vertex).
      *
-     * The existing getOrCreateGeometryBuffers() uses a more complex format
-     * (position + normal + color, 9 floats per vertex) and will be migrated
-     * to use BufferManager in a future refactoring.
+     * GeometryBufferCache currently uses position + normal + color (9 floats per vertex)
+     * and will be migrated to use BufferManager in a future refactoring.
      *
      * @param vertices Interleaved vertex data [x, y, z, r, g, b, ...]
      * @return BufferHandle for the created vertex buffer
@@ -968,15 +839,4 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
     }
 }
-
-/**
- * Cached geometry buffers for rendering.
- */
-private data class GeometryBuffers(
-    val vertexBuffer: GPUBuffer,
-    val indexBuffer: GPUBuffer?,
-    val vertexCount: Int,
-    val indexCount: Int,
-    val indexFormat: String
-)
 
