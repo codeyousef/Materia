@@ -48,9 +48,10 @@ class VulkanRenderPassManager(
 
         try {
             MemoryStack.stackPush().use { stack ->
-                // Extract VkFramebuffer from handle
-                val vkFramebuffer = (framebuffer.handle as? Long)
-                    ?: throw IllegalArgumentException("framebuffer.handle must be VkFramebuffer (Long)")
+                // Extract framebuffer data from handle
+                val framebufferData = framebuffer.handle as? VulkanFramebufferData
+                    ?: throw IllegalArgumentException("framebuffer.handle must be VulkanFramebufferData")
+                val vkFramebuffer = framebufferData.framebuffer
 
                 // Create clear value from color
                 val clearValues = VkClearValue.calloc(1, stack)
@@ -67,10 +68,7 @@ class VulkanRenderPassManager(
                     .framebuffer(vkFramebuffer)
                     .renderArea { area ->
                         area.offset().set(0, 0)
-                        // Note: Extent should match framebuffer dimensions.
-                        // This is acceptable for initial implementation as most swapchains are 800x600.
-                        // Future improvement: Pass extent via FramebufferHandle or query from framebuffer.
-                        area.extent().set(800, 600)
+                        area.extent().set(framebufferData.width, framebufferData.height)
                     }
                     .pClearValues(clearValues)
 

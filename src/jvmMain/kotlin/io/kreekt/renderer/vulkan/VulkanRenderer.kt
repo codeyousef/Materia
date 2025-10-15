@@ -9,6 +9,7 @@
 package io.kreekt.renderer.vulkan
 
 import io.kreekt.camera.Camera
+import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Scene
 import io.kreekt.renderer.*
 import io.kreekt.renderer.feature020.*
@@ -51,6 +52,11 @@ class VulkanRenderer(
     private var bufferManager: VulkanBufferManager? = null
     private var renderPassManager: VulkanRenderPassManager? = null
     private var swapchainManager: VulkanSwapchain? = null
+    private var pipeline: VulkanPipeline? = null
+    private var triangleVertexBuffer: BufferHandle? = null
+    private var triangleIndexBuffer: BufferHandle? = null
+    private var swapchainFramebuffers: List<VulkanFramebufferData> = emptyList()
+    private var triangleIndexCount: Int = 0
 
     // Renderer state
     override var backend: BackendType = BackendType.VULKAN
@@ -164,7 +170,8 @@ class VulkanRenderer(
 
             // 7. Create render pass
             println("T033: Creating render pass...")
-            renderPass = createRenderPass(device!!)
+            val imageFormat = swapchainManager!!.getImageFormat()
+            renderPass = createRenderPass(device!!, imageFormat)
             if (renderPass == VK_NULL_HANDLE) {
                 return io.kreekt.core.Result.Error(
                     "Failed to create render pass",
@@ -194,6 +201,30 @@ class VulkanRenderer(
             println("T033: Initializing RenderPassManager...")
             renderPassManager = VulkanRenderPassManager(device!!, commandBuffer!!, renderPass)
             println("T033: RenderPassManager initialized successfully")
+
+            println("T033: Creating swapchain framebuffers...")
+            swapchainFramebuffers = swapchainManager!!.createFramebuffers(renderPass)
+            println("T033: Framebuffers created (${swapchainFramebuffers.size} images)")
+
+            println("T033: Creating graphics pipeline...")
+            pipeline = VulkanPipeline(device!!)
+            val extent = swapchainManager!!.getExtent()
+            if (pipeline!!.createPipeline(renderPass, extent.first, extent.second)) {
+                println("T033: Graphics pipeline created successfully")
+            } else {
+                return io.kreekt.core.Result.Error(
+                    "Failed to create graphics pipeline",
+                    io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
+                        BackendType.VULKAN,
+                        getPhysicalDeviceInfo(physicalDevice!!),
+                        "Failed to create graphics pipeline"
+                    )
+                )
+            }
+
+            println("T033: Uploading static geometry buffers...")
+            createStaticTriangleBuffers()
+            println("T033: Geometry buffers ready (triangleIndexCount=$triangleIndexCount)")
 
             // 9. Query capabilities
             println("T033: Querying device capabilities...")
@@ -231,43 +262,107 @@ class VulkanRenderer(
             throw IllegalStateException("Renderer not initialized. Call initialize() first.")
         }
 
-        if (enableFrameLogging) {
-            println("T033: [Frame $frameCount] Starting render...")
+        val swapchain = swapchainManager ?: return
+        if (swapchainFramebuffers.isEmpty() || pipeline == null) {
+            recreateSwapchainResources()
+            return
         }
 
+        val clearColor = determineClearColor(scene)
+        var drawCalls = 0
+        var triangles = 0
+
         val frameTime = measureTimeMillis {
-            // TODO: Actual rendering implementation
-            // 1. Begin command buffer recording
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Begin command buffer recording")
+            val image = try {
+                swapchain.acquireNextImage()
+            } catch (ex: SwapchainException) {
+                if (ex.message?.contains("out of date", ignoreCase = true) == true) {
+                    recreateSwapchainResources()
+                    return@measureTimeMillis
+                } else {
+                    throw RuntimeException("Failed to acquire swapchain image", ex)
+                }
+            }
 
-            // 2. Begin render pass
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Begin render pass")
+            if (image.index >= swapchainFramebuffers.size) {
+                recreateSwapchainResources()
+                return@measureTimeMillis
+            }
 
-            // 3. Bind pipeline
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Bind pipeline")
+            MemoryStack.stackPush().use { stack ->
+                val command = commandBuffer ?: return@measureTimeMillis
+                val queue = graphicsQueue ?: return@measureTimeMillis
 
-            // 4. Render scene objects
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Render ${scene.children.size} scene objects")
+                vkResetCommandBuffer(command, 0)
 
-            // 5. End render pass
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - End render pass")
+                val beginInfo = org.lwjgl.vulkan.VkCommandBufferBeginInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
+                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
 
-            // 6. Submit command buffer
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Submit command buffer")
+                val beginResult = vkBeginCommandBuffer(command, beginInfo)
+                if (beginResult != VK_SUCCESS) {
+                    throw RuntimeException("Failed to begin command buffer: VkResult=$beginResult")
+                }
 
-            // 7. Present swapchain
-            if (enableFrameLogging) println("T033: [Frame $frameCount] - Present swapchain")
+                val framebufferHandle = FramebufferHandle(swapchainFramebuffers[image.index])
+                renderPassManager?.beginRenderPass(clearColor, framebufferHandle)
+                pipeline?.let { pipelineInstance ->
+                    renderPassManager?.bindPipeline(PipelineHandle(pipelineInstance.getPipelineHandle()))
+                }
+                triangleVertexBuffer?.let { renderPassManager?.bindVertexBuffer(it) }
+                triangleIndexBuffer?.let { renderPassManager?.bindIndexBuffer(it) }
+                if (triangleIndexCount > 0) {
+                    renderPassManager?.drawIndexed(triangleIndexCount)
+                    drawCalls = 1
+                    triangles = triangleIndexCount / 3
+                }
+                renderPassManager?.endRenderPass()
 
-            // For now, just track frame stats
+                val endResult = vkEndCommandBuffer(command)
+                if (endResult != VK_SUCCESS) {
+                    throw RuntimeException("Failed to record command buffer: VkResult=$endResult")
+                }
+
+                val waitSemaphores = stack.longs(swapchain.getImageAvailableSemaphore())
+                val waitStages = stack.ints(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                val signalSemaphores = stack.longs(swapchain.getRenderFinishedSemaphore())
+                val commandBuffers = stack.pointers(command.address())
+
+                val submitInfo = org.lwjgl.vulkan.VkSubmitInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
+                    .pWaitSemaphores(waitSemaphores)
+                    .pWaitDstStageMask(waitStages)
+                    .pCommandBuffers(commandBuffers)
+                    .pSignalSemaphores(signalSemaphores)
+
+                val submitResult = vkQueueSubmit(queue, submitInfo, VK_NULL_HANDLE)
+                if (submitResult != VK_SUCCESS) {
+                    throw RuntimeException("Failed to submit draw command buffer: VkResult=$submitResult")
+                }
+
+                val presentInfo = org.lwjgl.vulkan.VkPresentInfoKHR.calloc(stack)
+                    .sType(KHRSwapchain.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
+                    .pWaitSemaphores(signalSemaphores)
+                    .swapchainCount(1)
+                    .pSwapchains(stack.longs(swapchain.getSwapchainHandle()))
+                    .pImageIndices(stack.ints(image.index))
+
+                val presentResult = vkQueuePresentKHR(queue, presentInfo)
+                if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
+                    vkQueueWaitIdle(queue)
+                    recreateSwapchainResources()
+                    return@measureTimeMillis
+                } else if (presentResult != VK_SUCCESS) {
+                    throw RuntimeException("Failed to present swapchain image: VkResult=$presentResult")
+                }
+
+                vkQueueWaitIdle(queue)
+            }
+
             frameCount++
         }
 
-        if (enableFrameLogging) {
-            println("T033: [Frame ${frameCount-1}] Render completed in ${frameTime}ms")
-        }
-
-        // Update FPS stats
-        updateStats(frameTime)
+        updateStats(frameTime, drawCalls, triangles)
     }
 
     /**
@@ -280,7 +375,80 @@ class VulkanRenderer(
             throw IllegalStateException("Renderer not initialized. Call initialize() first.")
         }
 
-        swapchainManager?.recreateSwapchain(width, height)
+        recreateSwapchainResources(width, height)
+    }
+
+    private fun recreateSwapchainResources(newWidth: Int? = null, newHeight: Int? = null) {
+        val deviceHandle = device ?: return
+        val command = commandBuffer ?: return
+        val swapchain = swapchainManager ?: return
+
+        vkDeviceWaitIdle(deviceHandle)
+
+        pipeline?.dispose()
+        pipeline = null
+
+        renderPassManager = null
+        if (renderPass != VK_NULL_HANDLE) {
+            vkDestroyRenderPass(deviceHandle, renderPass, null)
+            renderPass = VK_NULL_HANDLE
+        }
+
+        val width = newWidth ?: surface.width.coerceAtLeast(1)
+        val height = newHeight ?: surface.height.coerceAtLeast(1)
+        swapchain.recreateSwapchain(width, height)
+
+        val imageFormat = swapchain.getImageFormat()
+        renderPass = createRenderPass(deviceHandle, imageFormat)
+        renderPassManager = VulkanRenderPassManager(deviceHandle, command, renderPass)
+        swapchainFramebuffers = swapchain.createFramebuffers(renderPass)
+
+        val extent = swapchain.getExtent()
+        pipeline = VulkanPipeline(deviceHandle)
+        if (!pipeline!!.createPipeline(renderPass, extent.first, extent.second)) {
+            throw RuntimeException("Failed to create Vulkan graphics pipeline")
+        }
+    }
+
+    private fun createStaticTriangleBuffers() {
+        triangleVertexBuffer?.let { bufferManager?.destroyBuffer(it) }
+        triangleIndexBuffer?.let { bufferManager?.destroyBuffer(it) }
+
+        val vertexData = floatArrayOf(
+            0.0f, -0.6f, 0.0f, 1.0f, 0.0f, 0.0f,
+            0.6f, 0.6f, 0.0f, 0.0f, 1.0f, 0.0f,
+            -0.6f, 0.6f, 0.0f, 0.0f, 0.0f, 1.0f
+        )
+        triangleVertexBuffer = bufferManager?.createVertexBuffer(vertexData)
+
+        val indices = intArrayOf(0, 1, 2)
+        triangleIndexBuffer = bufferManager?.createIndexBuffer(indices)
+        triangleIndexCount = indices.size
+    }
+
+    private fun determineClearColor(scene: Scene): Color {
+        val defaultColor = Color(0.02f, 0.02f, 0.05f, 1.0f)
+        val background = scene.background ?: return defaultColor
+
+        return when (background) {
+            is Background.Color -> {
+                val c = background.color
+                Color(c.r, c.g, c.b, c.a)
+            }
+
+            is Background.Gradient -> {
+                val top = background.top
+                val bottom = background.bottom
+                Color(
+                    (top.r + bottom.r) * 0.5f,
+                    (top.g + bottom.g) * 0.5f,
+                    (top.b + bottom.b) * 0.5f,
+                    1.0f
+                )
+            }
+
+            else -> defaultColor
+        }
     }
 
     /**
@@ -301,6 +469,16 @@ class VulkanRenderer(
         println("T033: Waiting for device idle...")
         device?.let { vkDeviceWaitIdle(it) }
         println("T033: Device idle")
+
+        pipeline?.dispose()
+        pipeline = null
+
+        triangleVertexBuffer?.let { bufferManager?.destroyBuffer(it) }
+        triangleVertexBuffer = null
+        triangleIndexBuffer?.let { bufferManager?.destroyBuffer(it) }
+        triangleIndexBuffer = null
+        triangleIndexCount = 0
+        swapchainFramebuffers = emptyList()
 
         // T019: Dispose SwapchainManager
         println("T033: Disposing SwapchainManager...")
@@ -555,11 +733,11 @@ class VulkanRenderer(
      * Create render pass for rendering.
      * T018: Used by RenderPassManager.
      */
-    private fun createRenderPass(device: VkDevice): Long {
+    private fun createRenderPass(device: VkDevice, imageFormat: Int): Long {
         return MemoryStack.stackPush().use { stack ->
             // Color attachment description
             val colorAttachment = VkAttachmentDescription.calloc(1, stack)
-                .format(VK_FORMAT_B8G8R8A8_UNORM)
+                .format(imageFormat)
                 .samples(VK_SAMPLE_COUNT_1_BIT)
                 .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
                 .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
@@ -603,30 +781,30 @@ class VulkanRenderer(
         }
     }
 
-    private fun updateStats(frameTimeMs: Long) {
+    private fun updateStats(frameTimeMs: Long, drawCalls: Int, triangleCount: Int) {
         val currentTime = System.currentTimeMillis()
-        val deltaTime = currentTime - lastFrameTime
         lastFrameTime = currentTime
 
-        // Calculate instantaneous FPS
         val instantFps = if (frameTimeMs > 0) 1000.0 / frameTimeMs else 0.0
-
-        // Accumulate for smoothed FPS
         fpsAccumulator += instantFps
         fpsFrameCount++
 
-        // Update stats every 60 frames (roughly 1 second at 60 FPS)
+        val averageFps = fpsAccumulator / fpsFrameCount
+
+        val vertexMemory = triangleVertexBuffer?.size?.toLong() ?: 0L
+        val indexMemory = triangleIndexBuffer?.size?.toLong() ?: 0L
+
+        stats = RenderStats(
+            fps = averageFps,
+            frameTime = frameTimeMs.toDouble(),
+            triangles = triangleCount,
+            drawCalls = drawCalls,
+            textureMemory = 0L,
+            bufferMemory = vertexMemory + indexMemory,
+            timestamp = currentTime
+        )
+
         if (fpsFrameCount >= 60) {
-            val averageFps = fpsAccumulator / fpsFrameCount
-            stats = RenderStats(
-                fps = averageFps,
-                frameTime = frameTimeMs.toDouble(),
-                triangles = 0, // TODO: Track actual triangle count
-                drawCalls = 0, // TODO: Track actual draw calls
-                textureMemory = 0L, // TODO: Track texture memory
-                bufferMemory = 0L, // TODO: Track buffer memory
-                timestamp = currentTime
-            )
             fpsAccumulator = 0.0
             fpsFrameCount = 0
         }

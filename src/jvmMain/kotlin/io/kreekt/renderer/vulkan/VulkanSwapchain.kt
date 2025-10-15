@@ -33,9 +33,12 @@ class VulkanSwapchain(
 
     private var swapchain: Long = VK_NULL_HANDLE
     private var swapchainImages: List<Long> = emptyList()
+    private var swapchainImageViews: MutableList<Long> = mutableListOf()
+    private var framebuffers: MutableList<VulkanFramebufferData> = mutableListOf()
     private var currentWidth: Int = 800
     private var currentHeight: Int = 600
     private var currentImageIndex: Int = -1
+    private var imageFormat: Int = VK_FORMAT_B8G8R8A8_UNORM
 
     // Synchronization primitives
     private var imageAvailableSemaphore: Long = VK_NULL_HANDLE
@@ -57,6 +60,9 @@ class VulkanSwapchain(
     private fun create(width: Int, height: Int) {
         try {
             MemoryStack.stackPush().use { stack ->
+                destroyFramebuffers()
+                destroyImageViews()
+
                 // Query surface capabilities
                 val capabilities = VkSurfaceCapabilitiesKHR.malloc(stack)
                 vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, capabilities)
@@ -72,6 +78,7 @@ class VulkanSwapchain(
 
                 // Choose surface format (prefer B8G8R8A8_UNORM)
                 val surfaceFormat = chooseSurfaceFormat()
+                imageFormat = surfaceFormat.format
 
                 // Choose present mode (use FIFO for vsync)
                 val presentMode = VK_PRESENT_MODE_FIFO_KHR
@@ -120,6 +127,7 @@ class VulkanSwapchain(
                 vkGetSwapchainImagesKHR(device, swapchain, pImageCount, pImages)
 
                 swapchainImages = (0 until actualImageCount).map { pImages.get(it) }
+                createImageViews()
             }
         } catch (e: SwapchainException) {
             throw e
@@ -284,10 +292,69 @@ class VulkanSwapchain(
         return Pair(currentWidth, currentHeight)
     }
 
+    fun getSwapchainHandle(): Long = swapchain
+
+    fun getImageFormat(): Int = imageFormat
+
+    fun getImageAvailableSemaphore(): Long = imageAvailableSemaphore
+
+    fun getRenderFinishedSemaphore(): Long = renderFinishedSemaphore
+
+    fun getFramebuffer(index: Int): VulkanFramebufferData {
+        if (framebuffers.isEmpty()) {
+            throw SwapchainException("Framebuffers have not been created")
+        }
+        return framebuffers[index]
+    }
+
+    fun createFramebuffers(renderPass: Long): List<VulkanFramebufferData> {
+        if (swapchainImageViews.isEmpty()) {
+            throw SwapchainException("Image views not created, cannot build framebuffers")
+        }
+
+        destroyFramebuffers()
+
+        val framebufferList = mutableListOf<VulkanFramebufferData>()
+
+        MemoryStack.stackPush().use { stack ->
+            val attachments = stack.mallocLong(1)
+
+            for (imageView in swapchainImageViews) {
+                attachments.put(0, imageView)
+
+                val framebufferInfo = VkFramebufferCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO)
+                    .renderPass(renderPass)
+                    .pAttachments(attachments)
+                    .width(currentWidth)
+                    .height(currentHeight)
+                    .layers(1)
+
+                val pFramebuffer = stack.mallocLong(1)
+                val result = vkCreateFramebuffer(device, framebufferInfo, null, pFramebuffer)
+                if (result != VK_SUCCESS) {
+                    throw SwapchainException("Failed to create framebuffer: VkResult=$result")
+                }
+
+                framebufferList += VulkanFramebufferData(
+                    framebuffer = pFramebuffer[0],
+                    width = currentWidth,
+                    height = currentHeight
+                )
+            }
+        }
+
+        framebuffers = framebufferList
+        return framebuffers
+    }
+
     /**
      * Cleanup swapchain resources.
      */
     fun dispose() {
+        destroyFramebuffers()
+        destroyImageViews()
+
         if (swapchain != VK_NULL_HANDLE) {
             vkDestroySwapchainKHR(device, swapchain, null)
             swapchain = VK_NULL_HANDLE
@@ -303,6 +370,59 @@ class VulkanSwapchain(
             renderFinishedSemaphore = VK_NULL_HANDLE
         }
     }
+
+    private fun createImageViews() {
+        destroyImageViews()
+
+        swapchainImageViews = mutableListOf()
+        MemoryStack.stackPush().use { stack ->
+            val createInfo = VkImageViewCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
+                .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                .format(imageFormat)
+                .components { components ->
+                    components
+                        .r(VK_COMPONENT_SWIZZLE_IDENTITY)
+                        .g(VK_COMPONENT_SWIZZLE_IDENTITY)
+                        .b(VK_COMPONENT_SWIZZLE_IDENTITY)
+                        .a(VK_COMPONENT_SWIZZLE_IDENTITY)
+                }
+                .subresourceRange { range ->
+                    range.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                        .baseMipLevel(0)
+                        .levelCount(1)
+                        .baseArrayLayer(0)
+                        .layerCount(1)
+                }
+
+            for (image in swapchainImages) {
+                createInfo.image(image)
+
+                val pView = stack.mallocLong(1)
+                val result = vkCreateImageView(device, createInfo, null, pView)
+                if (result != VK_SUCCESS) {
+                    throw SwapchainException("Failed to create image view: VkResult=$result")
+                }
+                swapchainImageViews += pView[0]
+            }
+        }
+    }
+
+    private fun destroyImageViews() {
+        if (swapchainImageViews.isEmpty()) return
+        for (imageView in swapchainImageViews) {
+            vkDestroyImageView(device, imageView, null)
+        }
+        swapchainImageViews.clear()
+    }
+
+    private fun destroyFramebuffers() {
+        if (framebuffers.isEmpty()) return
+        for (framebuffer in framebuffers) {
+            vkDestroyFramebuffer(device, framebuffer.framebuffer, null)
+        }
+        framebuffers.clear()
+    }
 }
 
 /**
@@ -311,4 +431,10 @@ class VulkanSwapchain(
 private data class SurfaceFormatData(
     val format: Int,
     val colorSpace: Int
+)
+
+data class VulkanFramebufferData(
+    val framebuffer: Long,
+    val width: Int,
+    val height: Int
 )

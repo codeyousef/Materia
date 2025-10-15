@@ -133,6 +133,7 @@ kotlin {
                 implementation(libs.lwjgl.core)
                 implementation(libs.lwjgl.vulkan)
                 implementation(libs.lwjgl.glfw)
+                implementation(libs.lwjgl.shaderc)
 
                 // Platform-specific LWJGL natives (T001: Feature 019)
                 // Note: LWJGL requires platform natives for JVM execution
@@ -147,6 +148,7 @@ kotlin {
                 // Core LWJGL natives
                 runtimeOnly("org.lwjgl:lwjgl::$lwjglNatives")
                 runtimeOnly("org.lwjgl:lwjgl-glfw::$lwjglNatives")
+                runtimeOnly("org.lwjgl:lwjgl-shaderc::$lwjglNatives")
 
                 // Vulkan natives (note: Vulkan itself is a header-only library in LWJGL)
                 // Native libraries are loaded from system (VK_ICD_FILENAMES, vulkan-1.dll, etc.)
