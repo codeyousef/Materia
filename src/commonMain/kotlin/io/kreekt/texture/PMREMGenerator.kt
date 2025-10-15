@@ -337,7 +337,7 @@ class PMREMGenerator(private val renderer: Renderer) {
         b = ((b and 0x33333333) shl 2) or ((b and 0xCCCCCCCC.toInt()) ushr 2)
         b = ((b and 0x0F0F0F0F) shl 4) or ((b and 0xF0F0F0F0.toInt()) ushr 4)
         b = ((b and 0x00FF00FF) shl 8) or ((b and 0xFF00FF00.toInt()) ushr 8)
-        val unsigned = java.lang.Integer.toUnsignedLong(b)
+        val unsigned = b.toUInt()
         return (unsigned.toDouble() * 2.3283064365386963e-10).toFloat()
     }
 

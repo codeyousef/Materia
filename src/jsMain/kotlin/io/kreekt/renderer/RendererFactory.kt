@@ -176,32 +176,8 @@ actual object RendererFactory {
      * @param config Renderer configuration
      * @return WebGPURenderer instance
      */
-    private fun createWebGPURenderer(canvas: HTMLCanvasElement, config: RendererConfig): Renderer {
-        // Use existing WebGPURenderer implementation
-        val renderer = WebGPURenderer(canvas)
-        return object : Renderer {
-            override val backend: BackendType = BackendType.WEBGPU
-            override val capabilities: RendererCapabilities = renderer.capabilities
-            override var stats: RenderStats = RenderStats(0.0, 0.0, 0, 0)
-
-            override suspend fun initialize(config: RendererConfig): io.kreekt.core.Result<Unit> {
-                return renderer.initialize(config)
-            }
-
-            override fun render(scene: io.kreekt.core.scene.Scene, camera: io.kreekt.camera.Camera) {
-                renderer.render(scene, camera)
-                stats = renderer.stats
-            }
-
-            override fun resize(width: Int, height: Int) {
-                renderer.setSize(width, height, true)
-            }
-
-            override fun dispose() {
-                renderer.dispose()
-            }
-        }
-    }
+    private fun createWebGPURenderer(canvas: HTMLCanvasElement, config: RendererConfig): Renderer =
+        WebGPURenderer(canvas)
 
     /**
      * Create WebGLRenderer instance.
@@ -210,36 +186,6 @@ actual object RendererFactory {
      * @param config Renderer configuration
      * @return WebGLRenderer instance (stub for now)
      */
-    private fun createWebGLRenderer(canvas: HTMLCanvasElement, config: RendererConfig): Renderer {
-        // Use existing WebGLRenderer if available
-        // For now, return a stub that throws (WebGL implementation deferred)
-        return object : Renderer {
-            override val backend: BackendType = BackendType.WEBGL
-            override val capabilities: RendererCapabilities = RendererCapabilities(
-                backend = BackendType.WEBGL,
-                deviceName = "WebGL 2.0",
-                driverVersion = "Unknown"
-            )
-            override var stats: RenderStats = RenderStats(0.0, 0.0, 0, 0)
-
-            override suspend fun initialize(config: RendererConfig): io.kreekt.core.Result<Unit> {
-                // TODO: Implement WebGL renderer initialization
-                return io.kreekt.core.Result.Error(
-                    "WebGL renderer not yet implemented in Feature 019",
-                    RendererInitializationException.DeviceCreationFailedException(
-                        BackendType.WEBGL,
-                        "WebGL context",
-                        "WebGL renderer not yet implemented in Feature 019"
-                    )
-                )
-            }
-
-            override fun render(scene: io.kreekt.core.scene.Scene, camera: io.kreekt.camera.Camera) {
-                throw UnsupportedOperationException("WebGL renderer not yet implemented")
-            }
-
-            override fun resize(width: Int, height: Int) {}
-            override fun dispose() {}
-        }
-    }
+    private fun createWebGLRenderer(canvas: HTMLCanvasElement, config: RendererConfig): Renderer =
+        io.kreekt.renderer.webgl.WebGLRenderer(canvas)
 }
