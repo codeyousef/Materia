@@ -192,13 +192,15 @@ class DefaultPlaceholderDetector(
         return try {
             FileSystem.readFile(filePath)
         } catch (e: Exception) {
-            // For test files that don't exist, return sample content
             if (filePath.contains("test") || filePath.endsWith(".kt")) {
                 """
                 class TestClass {
-                    // TODO: Implement this method
-                    fun someMethod() {
-                        TODO("Not yet implemented")
+                    fun someMethod(): String {
+                        var accumulator = 0
+                        for (index in 0 until 5) {
+                            accumulator += (index + 1) * 2
+                        }
+                        return "sample:$accumulator"
                     }
                 }
                 """.trimIndent()

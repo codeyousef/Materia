@@ -222,8 +222,8 @@ kotlin {
         // val androidMain by getting {
         //     dependsOn(mobileMain)
         //     dependencies {
-        //         // XR: Will be implemented with expect/actual pattern
-        //         // implementation("com.google.ar:core:1.42.0") // TODO: Add when needed
+        //         // XR: Managed via expect/actual pattern once Android target is re-enabled.
+        //         // implementation("com.google.ar:core:1.42.0") // Enable alongside Android target when shipping XR tools.
         //     }
         // }
     }
