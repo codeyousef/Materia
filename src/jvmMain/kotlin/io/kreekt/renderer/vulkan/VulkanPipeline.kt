@@ -30,7 +30,7 @@ class VulkanPipeline(
      * @param width Swapchain width (used for static viewport/scissor configuration).
      * @param height Swapchain height.
      */
-    fun createPipeline(renderPass: Long, width: Int, height: Int): Boolean {
+    fun createPipeline(renderPass: Long, width: Int, height: Int, descriptorSetLayout: Long): Boolean {
         dispose()
 
         return try {
@@ -43,7 +43,7 @@ class VulkanPipeline(
             MemoryUtil.memFree(vertexSpv)
             MemoryUtil.memFree(fragmentSpv)
 
-            pipelineLayout = createPipelineLayout()
+            pipelineLayout = createPipelineLayout(descriptorSetLayout)
             if (pipelineLayout == VK_NULL_HANDLE) {
                 throw IllegalStateException("Failed to create pipeline layout")
             }
@@ -98,11 +98,12 @@ class VulkanPipeline(
         }
     }
 
-    private fun createPipelineLayout(): Long {
+    private fun createPipelineLayout(descriptorSetLayout: Long): Long {
         return MemoryStack.stackPush().use { stack ->
+            val setLayouts = stack.longs(descriptorSetLayout)
             val createInfo = org.lwjgl.vulkan.VkPipelineLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO)
-                .pSetLayouts(null)
+                .pSetLayouts(setLayouts)
                 .pPushConstantRanges(null)
 
             val pPipelineLayout = stack.mallocLong(1)
@@ -237,6 +238,8 @@ class VulkanPipeline(
     }
 
     fun getPipelineHandle(): Long = graphicsPipeline
+
+    fun getPipelineLayout(): Long = pipelineLayout
 
     fun dispose() {
         if (graphicsPipeline != VK_NULL_HANDLE) {
