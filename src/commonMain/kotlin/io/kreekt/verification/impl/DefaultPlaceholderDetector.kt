@@ -200,7 +200,7 @@ class DefaultPlaceholderDetector(
                         for (index in 0 until 5) {
                             accumulator += (index + 1) * 2
                         }
-                        return "sample:$accumulator"
+                        return "sample:${'$'}accumulator"
                     }
                 }
                 """.trimIndent()
