@@ -91,10 +91,46 @@ class DrawCallBatcher {
                 val geometryType = mesh.geometry::class.simpleName ?: "Unknown"
 
                 // Render state: combine depth test, culling, blending
-                // TODO: Extract actual render state from material when available
-                val renderState = 0
+                val renderState = when (val mat = mesh.material) {
+                    is Material -> computeRenderState(mat)
+                    else -> 0
+                }
 
                 return BatchKey(materialId, geometryType, renderState)
+            }
+
+            private fun computeRenderState(material: Material): Int {
+                var state = 17
+                state = state * 31 + material.side.ordinal
+                state = state * 31 + material.depthFunc.ordinal
+                state = state * 31 + if (material.depthTest) 1 else 0
+                state = state * 31 + if (material.depthWrite) 1 else 0
+                state = state * 31 + material.blending.ordinal
+                state = state * 31 + material.blendSrc.ordinal
+                state = state * 31 + material.blendDst.ordinal
+                state = state * 31 + material.blendEquation.ordinal
+                state = state * 31 + (material.blendSrcAlpha?.ordinal ?: -1)
+                state = state * 31 + (material.blendDstAlpha?.ordinal ?: -1)
+                state = state * 31 + (material.blendEquationAlpha?.ordinal ?: -1)
+                state = state * 31 + if (material.transparent) 1 else 0
+                state = state * 31 + if (material.premultipliedAlpha) 1 else 0
+                state = state * 31 + if (material.alphaToCoverage) 1 else 0
+                state = state * 31 + if (material.dithering) 1 else 0
+                state = state * 31 + if (material.colorWrite) 1 else 0
+                state = state * 31 + if (material.polygonOffset) 1 else 0
+                state = state * 31 + material.polygonOffsetFactor.toBits()
+                state = state * 31 + material.polygonOffsetUnits.toBits()
+                state = state * 31 + if (material.stencilWrite) 1 else 0
+                state = state * 31 + material.stencilFunc.ordinal
+                state = state * 31 + material.stencilFail.ordinal
+                state = state * 31 + material.stencilZFail.ordinal
+                state = state * 31 + material.stencilZPass.ordinal
+                state = state * 31 + material.stencilWriteMask
+                state = state * 31 + material.stencilFuncMask
+                state = state * 31 + material.stencilRef
+                state = state * 31 + (material.precision?.ordinal ?: -1)
+                state = state * 31 + (material.alphaTest.toRawBits())
+                return state
             }
         }
     }

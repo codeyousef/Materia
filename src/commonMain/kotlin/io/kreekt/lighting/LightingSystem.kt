@@ -2,8 +2,24 @@ package io.kreekt.lighting
 
 // Use texture types from renderer module
 import io.kreekt.core.scene.Scene
+import io.kreekt.core.math.Vector3
+import io.kreekt.renderer.CubeFace
 import io.kreekt.renderer.CubeTexture
 import io.kreekt.renderer.Texture2D
+import io.kreekt.renderer.TextureFilter
+import io.kreekt.renderer.TextureFormat
+import io.kreekt.renderer.CubeTextureImpl
+import io.kreekt.renderer.setFaceDataByIndex
+import kotlin.LazyThreadSafetyMode
+import kotlin.math.PI
+import kotlin.math.acos
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Core lighting system interface for managing lights, shadows, and environment lighting
@@ -164,6 +180,11 @@ class DefaultLightingSystem : LightingSystem {
     private var environmentMap: CubeTexture? = null
     private var environmentIntensity = 1f
     private var isDisposed = false
+    private val irradianceCache = mutableMapOf<Int, CubeTexture>()
+    private val prefilterCache = mutableMapOf<Int, CubeTexture>()
+    private var cachedBrdfLut: Texture2D? = null
+    private val diffuseSamples by lazy(LazyThreadSafetyMode.NONE) { createHemisphereSamples(DIFFUSE_SAMPLE_COUNT) }
+    private val specularSamples by lazy(LazyThreadSafetyMode.NONE) { createHemisphereSamples(SPECULAR_SAMPLE_COUNT) }
 
     init {
         // Initialize light type collections
@@ -244,6 +265,9 @@ class DefaultLightingSystem : LightingSystem {
         if (isDisposed) return LightResult.Error(LightException.UnsupportedOperation("LightingSystem is disposed"))
 
         environmentMap = cubeTexture
+        // Clear cached results when the environment changes
+        irradianceCache.clear()
+        prefilterCache.clear()
         return LightResult.Success(Unit)
     }
 
@@ -251,16 +275,43 @@ class DefaultLightingSystem : LightingSystem {
         if (intensity < 0f) {
             throw LightException.InvalidParameters("Environment intensity must be non-negative")
         }
-        environmentIntensity = intensity
+        if (environmentIntensity != intensity) {
+            environmentIntensity = intensity
+            irradianceCache.clear()
+            prefilterCache.clear()
+        }
     }
 
     override fun generateIrradianceMap(cubeTexture: CubeTexture): LightResult<CubeTexture> {
         if (isDisposed) return LightResult.Error(LightException.UnsupportedOperation("LightingSystem is disposed"))
 
         try {
-            // In a real implementation, this would generate an irradiance map from the cube texture
-            // For now, return the input texture as a placeholder
-            return LightResult.Success(cubeTexture)
+            val cacheKey = cubeTexture.id
+            irradianceCache[cacheKey]?.let { return LightResult.Success(it) }
+
+            val targetSize = min(cubeTexture.size, DEFAULT_IRRADIANCE_SIZE)
+            val irradiance = createCubeTexture(targetSize)
+
+            for (face in 0 until CUBE_FACE_COUNT) {
+                val faceData = FloatArray(targetSize * targetSize * 4)
+                for (y in 0 until targetSize) {
+                    val v = (y + 0.5f) / targetSize
+                    for (x in 0 until targetSize) {
+                        val u = (x + 0.5f) / targetSize
+                        val direction = cubeFaceUVToDirection(face, u, v)
+                        val irradianceColor = integrateDiffuseIrradiance(cubeTexture, direction)
+                        val index = (y * targetSize + x) * 4
+                        faceData[index] = irradianceColor.x
+                        faceData[index + 1] = irradianceColor.y
+                        faceData[index + 2] = irradianceColor.z
+                        faceData[index + 3] = 1f
+                    }
+                }
+                irradiance.setFaceDataByIndex(face, faceData)
+            }
+
+            irradianceCache[cacheKey] = irradiance
+            return LightResult.Success(irradiance)
         } catch (e: Exception) {
             return LightResult.Error(LightException.ResourceError("Failed to generate irradiance map", e))
         }
@@ -270,9 +321,38 @@ class DefaultLightingSystem : LightingSystem {
         if (isDisposed) return LightResult.Error(LightException.UnsupportedOperation("LightingSystem is disposed"))
 
         try {
-            // In a real implementation, this would generate a prefiltered environment map
-            // For now, return the input texture as a placeholder
-            return LightResult.Success(cubeTexture)
+            val cacheKey = cubeTexture.id
+            prefilterCache[cacheKey]?.let { return LightResult.Success(it) }
+
+            val baseSize = min(cubeTexture.size, DEFAULT_PREFILTER_SIZE)
+            val prefilter = createCubeTexture(baseSize)
+
+            val levelCount = calculatePrefilterLevels(baseSize)
+            for (level in 0 until levelCount) {
+                val mipSize = max(1, baseSize shr level)
+                val roughness = if (levelCount == 1) 0f else level.toFloat() / (levelCount - 1)
+
+                for (face in 0 until CUBE_FACE_COUNT) {
+                    val faceData = FloatArray(mipSize * mipSize * 4)
+                    for (y in 0 until mipSize) {
+                        val v = (y + 0.5f) / mipSize
+                        for (x in 0 until mipSize) {
+                            val u = (x + 0.5f) / mipSize
+                            val direction = cubeFaceUVToDirection(face, u, v)
+                            val color = integrateSpecularPrefilter(cubeTexture, direction, roughness)
+                            val index = (y * mipSize + x) * 4
+                            faceData[index] = color.x
+                            faceData[index + 1] = color.y
+                            faceData[index + 2] = color.z
+                            faceData[index + 3] = 1f
+                        }
+                    }
+                    prefilter.setFaceDataByIndex(face, faceData, level)
+                }
+            }
+
+            prefilterCache[cacheKey] = prefilter
+            return LightResult.Success(prefilter)
         } catch (e: Exception) {
             return LightResult.Error(LightException.ResourceError("Failed to generate prefilter map", e))
         }
@@ -282,14 +362,31 @@ class DefaultLightingSystem : LightingSystem {
         if (isDisposed) return LightResult.Error(LightException.UnsupportedOperation("LightingSystem is disposed"))
 
         try {
-            // In a real implementation, this would generate a BRDF lookup texture
-            // For now, create a placeholder texture
-            val brdfLUT = Texture2D(
-                width = 512,
-                height = 512,
+            cachedBrdfLut?.let { return LightResult.Success(it) }
+
+            val lut = Texture2D(
+                width = DEFAULT_BRDF_LUT_SIZE,
+                height = DEFAULT_BRDF_LUT_SIZE,
+                format = TextureFormat.RG16F,
+                filter = TextureFilter.LINEAR,
                 textureName = "BRDF_LUT"
             )
-            return LightResult.Success(brdfLUT)
+
+            val data = FloatArray(DEFAULT_BRDF_LUT_SIZE * DEFAULT_BRDF_LUT_SIZE * 2)
+            for (y in 0 until DEFAULT_BRDF_LUT_SIZE) {
+                val roughness = y.toFloat() / (DEFAULT_BRDF_LUT_SIZE - 1).coerceAtLeast(1)
+                for (x in 0 until DEFAULT_BRDF_LUT_SIZE) {
+                    val nDotV = x.toFloat() / (DEFAULT_BRDF_LUT_SIZE - 1).coerceAtLeast(1)
+                    val brdf = io.kreekt.lighting.ibl.BRDFCalculator.integrateBRDF(nDotV, roughness)
+                    val index = (y * DEFAULT_BRDF_LUT_SIZE + x) * 2
+                    data[index] = brdf.x
+                    data[index + 1] = brdf.y
+                }
+            }
+
+            lut.setData(data)
+            cachedBrdfLut = lut
+            return LightResult.Success(lut)
         } catch (e: Exception) {
             return LightResult.Error(LightException.ResourceError("Failed to generate BRDF LUT", e))
         }
@@ -336,6 +433,203 @@ class DefaultLightingSystem : LightingSystem {
         lights.clear()
         lightProbes.clear()
         environmentMap = null
+        irradianceCache.values.forEach { it.dispose() }
+        prefilterCache.values.forEach { it.dispose() }
+        cachedBrdfLut?.dispose()
+        irradianceCache.clear()
+        prefilterCache.clear()
+        cachedBrdfLut = null
         isDisposed = true
+    }
+
+    private fun createCubeTexture(size: Int): CubeTextureImpl {
+        return CubeTextureImpl(
+            size = size,
+            format = TextureFormat.RGBA32F,
+            filter = TextureFilter.LINEAR,
+            textureName = "LightingSystem_IBL_$size"
+        )
+    }
+
+    private fun calculatePrefilterLevels(baseSize: Int): Int {
+        var levels = 0
+        var dimension = baseSize
+        while (levels < DEFAULT_PREFILTER_LEVELS && dimension >= 1) {
+            levels++
+            if (dimension == 1) break
+            dimension = dimension / 2
+        }
+        return max(1, levels)
+    }
+
+    private fun integrateDiffuseIrradiance(environment: CubeTexture, normal: Vector3): Vector3 {
+        val n = normal.clone().normalize()
+        val (tangent, bitangent) = buildOrthonormalBasis(n)
+        val accumulator = Vector3(0f, 0f, 0f)
+        var totalWeight = 0f
+
+        for (sample in diffuseSamples) {
+            val worldDirection = Vector3(
+                tangent.x * sample.x + bitangent.x * sample.z + n.x * sample.y,
+                tangent.y * sample.x + bitangent.y * sample.z + n.y * sample.y,
+                tangent.z * sample.x + bitangent.z * sample.z + n.z * sample.y
+            ).normalize()
+
+            val weight = max(0f, n.dot(worldDirection))
+            if (weight > 0f) {
+                val color = sampleEnvironment(environment, worldDirection)
+                accumulator.add(Vector3(color.x, color.y, color.z).multiplyScalar(weight))
+                totalWeight += weight
+            }
+        }
+
+        if (totalWeight > 0f) {
+            accumulator.divide(totalWeight)
+        }
+
+        return accumulator.multiplyScalar(environmentIntensity)
+    }
+
+    private fun integrateSpecularPrefilter(environment: CubeTexture, normal: Vector3, roughness: Float): Vector3 {
+        val n = normal.clone().normalize()
+        val (tangent, bitangent) = buildOrthonormalBasis(n)
+        val accumulator = Vector3(0f, 0f, 0f)
+        var totalWeight = 0f
+        val rough = roughness.coerceIn(0f, 1f)
+
+        if (rough <= 0.001f) {
+            val direct = sampleEnvironment(environment, n)
+            return Vector3(direct.x, direct.y, direct.z)
+        }
+
+        for (sample in specularSamples) {
+            val blendedNormal = Vector3(
+                tangent.x * sample.x * rough + n.x * (1f - rough + sample.y * rough),
+                tangent.y * sample.x * rough + n.y * (1f - rough + sample.y * rough),
+                tangent.z * sample.x * rough + n.z * (1f - rough + sample.y * rough)
+            )
+
+            blendedNormal.add(Vector3(bitangent.x, bitangent.y, bitangent.z).multiplyScalar(sample.z * rough))
+            val worldDirection = blendedNormal.normalize()
+
+            val weight = max(0f, n.dot(worldDirection))
+            if (weight > 0f) {
+                val color = sampleEnvironment(environment, worldDirection)
+                accumulator.add(Vector3(color.x, color.y, color.z).multiplyScalar(weight))
+                totalWeight += weight
+            }
+        }
+
+        if (totalWeight > 0f) {
+            accumulator.divide(totalWeight)
+        }
+
+        return accumulator.multiplyScalar(environmentIntensity)
+    }
+
+    private fun buildOrthonormalBasis(normal: Vector3): Pair<Vector3, Vector3> {
+        val up = if (abs(normal.y) < 0.999f) Vector3(0f, 1f, 0f) else Vector3(1f, 0f, 0f)
+        val tangent = Vector3().crossVectors(up, normal).normalize()
+        val bitangent = Vector3().crossVectors(normal, tangent).normalize()
+        return tangent to bitangent
+    }
+
+    private fun createHemisphereSamples(sampleCount: Int): List<Vector3> {
+        val samples = ArrayList<Vector3>(sampleCount)
+        val goldenAngle = PI.toFloat() * (3f - sqrt(5f))
+        for (i in 0 until sampleCount) {
+            val t = (i + 0.5f) / sampleCount
+            val inclination = acos(1f - t)
+            val azimuth = goldenAngle * i
+            val sinInclination = sin(inclination)
+            samples += Vector3(
+                sinInclination * cos(azimuth),
+                cos(inclination),
+                sin(inclination) * sin(azimuth)
+            )
+        }
+        return samples
+    }
+
+    private fun cubeFaceUVToDirection(face: Int, u: Float, v: Float): Vector3 {
+        val uu = u * 2f - 1f
+        val vv = v * 2f - 1f
+        val direction = when (face) {
+            0 -> Vector3(1f, -vv, -uu)
+            1 -> Vector3(-1f, -vv, uu)
+            2 -> Vector3(uu, 1f, vv)
+            3 -> Vector3(uu, -1f, -vv)
+            4 -> Vector3(uu, -vv, 1f)
+            5 -> Vector3(-uu, -vv, -1f)
+            else -> Vector3(0f, 0f, 1f)
+        }
+        return direction.normalize()
+    }
+
+    private fun directionToFaceUV(direction: Vector3): FaceUV {
+        val dir = direction.clone().normalize()
+        val absX = abs(dir.x)
+        val absY = abs(dir.y)
+        val absZ = abs(dir.z)
+
+        return when {
+            absX >= absY && absX >= absZ -> {
+                val u = if (dir.x >= 0f) -dir.z else dir.z
+                val v = -dir.y
+                val face = if (dir.x >= 0f) 0 else 1
+                FaceUV(face, ((u / absX) + 1f) * 0.5f, ((v / absX) + 1f) * 0.5f)
+            }
+
+            absY >= absZ -> {
+                val u = dir.x
+                val v = if (dir.y >= 0f) dir.z else -dir.z
+                val face = if (dir.y >= 0f) 2 else 3
+                FaceUV(face, ((u / absY) + 1f) * 0.5f, ((v / absY) + 1f) * 0.5f)
+            }
+
+            else -> {
+                val u = if (dir.z >= 0f) dir.x else -dir.x
+                val v = -dir.y
+                val face = if (dir.z >= 0f) 4 else 5
+                FaceUV(face, ((u / absZ) + 1f) * 0.5f, ((v / absZ) + 1f) * 0.5f)
+            }
+        }
+    }
+
+    private fun sampleEnvironment(environment: CubeTexture, direction: Vector3, mip: Int = 0): Vector3 {
+        val (face, u, v) = directionToFaceUV(direction)
+        val clampedU = u.coerceIn(0f, 1f)
+        val clampedV = v.coerceIn(0f, 1f)
+
+        return when (environment) {
+            is io.kreekt.texture.CubeTexture -> environment.sampleFace(face, clampedU, clampedV).clone()
+            is CubeTextureImpl -> sampleCubeFaceFromImpl(environment, face, clampedU, clampedV, mip)
+            else -> Vector3(0f, 0f, 0f)
+        }
+    }
+
+    private fun sampleCubeFaceFromImpl(texture: CubeTextureImpl, face: Int, u: Float, v: Float, mip: Int = 0): Vector3 {
+        val data = texture.getFaceData(CubeFace.values()[face], mip)
+            ?: texture.getFaceData(CubeFace.values()[face], 0)
+            ?: return Vector3(0f, 0f, 0f)
+
+        val texelCount = data.size / 4
+        val size = max(1, sqrt(texelCount.toDouble()).roundToInt())
+        val x = (u * (size - 1)).toInt().coerceIn(0, size - 1)
+        val y = (v * (size - 1)).toInt().coerceIn(0, size - 1)
+        val index = (y * size + x) * 4
+        return Vector3(data[index], data[index + 1], data[index + 2])
+    }
+
+    private data class FaceUV(val face: Int, val u: Float, val v: Float)
+
+    private companion object {
+        const val DEFAULT_IRRADIANCE_SIZE = 32
+        const val DEFAULT_PREFILTER_SIZE = 64
+        const val DEFAULT_PREFILTER_LEVELS = 5
+        const val DEFAULT_BRDF_LUT_SIZE = 512
+        const val DIFFUSE_SAMPLE_COUNT = 32
+        const val SPECULAR_SAMPLE_COUNT = 64
+        const val CUBE_FACE_COUNT = 6
     }
 }

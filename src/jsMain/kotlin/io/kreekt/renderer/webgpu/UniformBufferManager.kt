@@ -9,12 +9,14 @@ internal data class FrameDebugInfo(
 )
 
 internal class UniformBufferManager(
-    private val deviceProvider: () -> GPUDevice?
+    private val deviceProvider: () -> GPUDevice?,
+    private val statsTracker: RenderStatsTracker? = null
 ) {
     private var uniformBuffer: WebGPUBuffer? = null
     private var bindGroupLayout: GPUBindGroupLayout? = null
     private var pipelineLayout: GPUPipelineLayout? = null
     private var cachedBindGroup: GPUBindGroup? = null
+    private var uniformBufferSizeBytes: Long = 0
 
     fun onDeviceReady(device: GPUDevice) {
         ensureLayouts(device)
@@ -109,6 +111,10 @@ internal class UniformBufferManager(
         cachedBindGroup = null
         bindGroupLayout = null
         pipelineLayout = null
+        if (uniformBuffer != null && uniformBufferSizeBytes > 0) {
+            statsTracker?.recordBufferDeallocated(uniformBufferSizeBytes)
+            uniformBufferSizeBytes = 0
+        }
         uniformBuffer?.dispose()
         uniformBuffer = null
     }
@@ -138,6 +144,8 @@ internal class UniformBufferManager(
             is io.kreekt.core.Result.Success -> {
                 uniformBuffer = buffer
                 cachedBindGroup = null
+                uniformBufferSizeBytes = UNIFORM_BUFFER_SIZE.toLong()
+                statsTracker?.recordBufferAllocated(uniformBufferSizeBytes)
             }
 
             is io.kreekt.core.Result.Error -> {

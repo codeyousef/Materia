@@ -59,27 +59,29 @@ class CubeTextureImpl(
     override val width: Int get() = size
     override val height: Int get() = size
 
-    private val faces = Array<FloatArray?>(6) { null }
+    private val faces = Array(6) { mutableMapOf<Int, FloatArray>() }
 
     fun setData(data: FloatArray) {
         // Set data for all faces
         val faceSize = size * size * 4
         for (i in 0..5) {
-            faces[i] = data.sliceArray(i * faceSize until (i + 1) * faceSize)
+            faces[i][0] = data.sliceArray(i * faceSize until (i + 1) * faceSize)
         }
         needsUpdate = true
     }
 
-    fun setFaceData(face: CubeFace, data: FloatArray) {
-        faces[face.ordinal] = data
+    fun setFaceData(face: CubeFace, data: FloatArray, mip: Int = 0) {
+        faces[face.ordinal][mip] = data
         needsUpdate = true
     }
 
-    fun getFaceData(face: CubeFace): FloatArray? = faces[face.ordinal]
+    fun getFaceData(face: CubeFace, mip: Int = 0): FloatArray? = faces[face.ordinal][mip]
+
+    fun maxMipLevel(): Int = faces.maxOfOrNull { entry -> entry.keys.maxOrNull() ?: 0 } ?: 0
 
     override fun dispose() {
         for (i in faces.indices) {
-            faces[i] = null
+            faces[i].clear()
         }
     }
 
@@ -97,7 +99,7 @@ class CubeTextureImpl(
  * Extension to set face data on CubeTextureImpl using integer face index
  */
 fun CubeTextureImpl.setFaceDataByIndex(face: Int, data: FloatArray, mip: Int = 0) {
-    setFaceData(CubeFace.values()[face], data)
+    setFaceData(CubeFace.values()[face], data, mip)
 }
 
 enum class CubeFace {

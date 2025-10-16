@@ -3,7 +3,8 @@ package io.kreekt.renderer.webgpu
 import io.kreekt.geometry.BufferGeometry
 
 internal class GeometryBufferCache(
-    private val deviceProvider: () -> GPUDevice?
+    private val deviceProvider: () -> GPUDevice?,
+    private val statsTracker: RenderStatsTracker? = null
 ) {
     private val buffersByGeometry = mutableMapOf<String, GeometryBuffers>()
 
@@ -74,10 +75,12 @@ internal class GeometryBufferCache(
             )
             vertexBuffer.create()
             vertexBuffer.upload(vertexData)
+            val vertexSizeBytes = vertexData.size * 4
 
             var indexBuffer: GPUBuffer? = null
             var indexCount = 0
             var indexFormat = "uint32"
+            var indexSizeBytes = 0
 
             if (indexAttr != null) {
                 indexCount = indexAttr.count as Int
@@ -94,15 +97,26 @@ internal class GeometryBufferCache(
                 buffer.create()
                 buffer.uploadIndices(indexData)
                 indexBuffer = buffer.getBuffer()
+                indexSizeBytes = indexData.size * 4
             }
 
-            GeometryBuffers(
+            val buffers = GeometryBuffers(
                 vertexBuffer = vertexBuffer.getBuffer()!!,
+                vertexBufferSize = vertexSizeBytes,
                 indexBuffer = indexBuffer,
+                indexBufferSize = indexSizeBytes,
                 vertexCount = vertexCount,
                 indexCount = indexCount,
                 indexFormat = indexFormat
-            ).also { buffersByGeometry[uuid] = it }
+            )
+
+            statsTracker?.recordBufferAllocated(vertexSizeBytes.toLong())
+            if (indexSizeBytes > 0) {
+                statsTracker?.recordBufferAllocated(indexSizeBytes.toLong())
+            }
+
+            buffersByGeometry[uuid] = buffers
+            buffers
         } catch (e: Exception) {
             console.error("Failed to create geometry buffers: ${e.message}")
             null
@@ -110,13 +124,32 @@ internal class GeometryBufferCache(
     }
 
     fun clear() {
+        buffersByGeometry.values.forEach { buffers ->
+            try {
+                statsTracker?.recordBufferDeallocated(buffers.vertexBufferSize.toLong())
+                buffers.vertexBuffer.destroy()
+            } catch (_: Throwable) {
+                // Ignore destroy failures; GPU context might already be lost
+            }
+
+            buffers.indexBuffer?.let { indexBuffer ->
+                try {
+                    statsTracker?.recordBufferDeallocated(buffers.indexBufferSize.toLong())
+                    indexBuffer.destroy()
+                } catch (_: Throwable) {
+                    // Ignore destroy failures for index buffers as well
+                }
+            }
+        }
         buffersByGeometry.clear()
     }
 }
 
 internal data class GeometryBuffers(
     val vertexBuffer: GPUBuffer,
+    val vertexBufferSize: Int,
     val indexBuffer: GPUBuffer?,
+    val indexBufferSize: Int,
     val vertexCount: Int,
     val indexCount: Int,
     val indexFormat: String

@@ -5,6 +5,7 @@ import io.kreekt.core.math.Matrix4
 import io.kreekt.core.math.Vector3
 import io.kreekt.core.scene.Object3D
 import io.kreekt.core.scene.Mesh
+import io.kreekt.geometry.BufferGeometry
 
 /**
  * Frustum culling optimization for skipping off-screen objects.
@@ -21,6 +22,10 @@ class FrustumCuller {
     private var totalObjects = 0
     private var culledObjects = 0
     private var visibleObjects = 0
+
+    private val tempCenter = Vector3()
+    private val tempLocalCenter = Vector3()
+    private val tempScale = Vector3()
 
     /**
      * Extracts frustum planes from camera's projection-view matrix.
@@ -92,20 +97,17 @@ class FrustumCuller {
     fun isObjectVisible(obj: Object3D): Boolean {
         totalObjects++
 
-        // Get object's world position
-        val position = obj.position
-
-        // Simple sphere test using object's scale as radius
-        // TODO: Use actual bounding sphere from geometry for better accuracy
-        val radius = maxOf(
-            obj.scale.x.toFloat(),
-            obj.scale.y.toFloat(),
-            obj.scale.z.toFloat()
-        )
+        val center = computeWorldBoundingCenter(obj, tempCenter)
+        val radius = computeBoundingRadius(obj)
+        if (radius <= 0f) {
+            // Treat objects with no size as visible
+            visibleObjects++
+            return true
+        }
 
         // Test against all 6 frustum planes
         for (plane in planes) {
-            val distance = plane.distanceToPoint(position)
+            val distance = plane.distanceToPoint(center)
             if (distance < -radius) {
                 // Object is completely outside this plane
                 culledObjects++
@@ -116,6 +118,46 @@ class FrustumCuller {
         // Object is at least partially visible
         visibleObjects++
         return true
+    }
+
+    private fun computeWorldBoundingCenter(obj: Object3D, target: Vector3): Vector3 {
+        return when (obj) {
+            is Mesh -> {
+                val geometry = obj.geometry
+                val sphere = geometry.getOrComputeBoundingSphere()
+                if (sphere.radius > 0f) {
+                    tempLocalCenter.copy(sphere.center)
+                    obj.localToWorld(tempLocalCenter)
+                    target.copy(tempLocalCenter)
+                } else {
+                    obj.getWorldPosition(target)
+                }
+            }
+
+            else -> obj.getWorldPosition(target)
+        }
+    }
+
+    private fun computeBoundingRadius(obj: Object3D): Float {
+        val worldScale = obj.getWorldScale(tempScale)
+        val maxScale = maxOf(worldScale.x, maxOf(worldScale.y, worldScale.z))
+        if (maxScale <= 0f) {
+            return 0f
+        }
+
+        return if (obj is Mesh) {
+            val sphere = obj.geometry.getOrComputeBoundingSphere()
+            when {
+                sphere.radius > 0f -> sphere.radius * maxScale
+                else -> maxScale
+            }
+        } else {
+            maxScale
+        }
+    }
+
+    private fun BufferGeometry.getOrComputeBoundingSphere(): io.kreekt.core.math.Sphere {
+        return boundingSphere ?: computeBoundingSphere()
     }
 
     /**

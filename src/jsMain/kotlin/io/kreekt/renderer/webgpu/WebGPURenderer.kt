@@ -29,6 +29,8 @@ import kotlin.js.jsTypeOf
  */
 class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
+    private val statsTracker = RenderStatsTracker()
+
     // Core WebGPU objects
     private var device: GPUDevice? = null
     private var context: GPUCanvasContext? = null
@@ -53,8 +55,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var drawIndexInFrame = 0
 
     // Geometry buffer cache (mesh.uuid -> buffers)
-    private val geometryCache = GeometryBufferCache { device }
-    private val uniformManager = UniformBufferManager { device }
+    private val geometryCache = GeometryBufferCache({ device }, statsTracker)
+    private val uniformManager = UniformBufferManager({ device }, statsTracker)
 
     // Pipeline cache map (for synchronous access)
     private val pipelineCacheMap = mutableMapOf<PipelineKey, WebGPUPipeline>()
@@ -69,6 +71,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var depthTextureView: GPUTextureView? = null
     private var depthTextureWidth: Int = 0
     private var depthTextureHeight: Int = 0
+    private var depthTextureBytes: Long = 0
 
     // Capabilities
     private var rendererCapabilities: RendererCapabilities? = null
@@ -86,14 +89,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         get() = rendererCapabilities ?: createDefaultCapabilities()
 
     override val stats: RenderStats
-        get() = RenderStats(
-            fps = 0.0, // TODO: Calculate actual FPS
-            frameTime = 0.0, // TODO: Calculate actual frame time
-            triangles = triangleCount,
-            drawCalls = drawCallCount,
-            textureMemory = 0, // TODO: Track texture memory
-            bufferMemory = 0 // TODO: Track buffer memory
-        )
+        get() = statsTracker.getStats()
 
     // Old Three.js-style properties removed - not part of Feature 020 Renderer interface
     // These will be restored in advanced features phase (Phase 2-13)
@@ -312,6 +308,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         geometryCache.clear()
         bufferManager = null
 
+        if (depthTexture != null && depthTextureBytes > 0) {
+            statsTracker.recordTextureDisposed(depthTextureBytes)
+            depthTextureBytes = 0
+        }
         depthTexture?.dispose()
         depthTexture = null
         depthTextureView = null
@@ -335,6 +335,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         frameCount = 0
 
         isInitialized = false
+        statsTracker.reset()
     }
 
     override fun render(scene: Scene, camera: Camera) {
@@ -342,6 +343,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             console.error("T033: Renderer not initialized, cannot render")
             return
         }
+
+        statsTracker.frameStart()
 
         // T021 FIX: Frame rendering (removed unreliable performance.now() logging)
 
@@ -450,6 +453,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         } catch (e: Exception) {
             console.error("T033: ERROR during rendering frame $frameCount: ${e.message}")
             console.error("T033: Stack trace: ${e.stackTraceToString()}")
+        } finally {
+            statsTracker.frameEnd()
         }
     }
 
@@ -505,10 +510,14 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         if (buffers.indexBuffer != null && buffers.indexCount > 0) {
             renderPass.setIndexBuffer(buffers.indexBuffer!!, buffers.indexFormat)
             renderPass.drawIndexed(buffers.indexCount, 1, 0, 0, 0)
-            triangleCount += buffers.indexCount / 3
+            val trianglesDrawn = buffers.indexCount / 3
+            triangleCount += trianglesDrawn
+            statsTracker.recordDrawCall(trianglesDrawn)
         } else {
             renderPass.draw(buffers.vertexCount, 1, 0, 0)
-            triangleCount += buffers.vertexCount / 3
+            val trianglesDrawn = buffers.vertexCount / 3
+            triangleCount += trianglesDrawn
+            statsTracker.recordDrawCall(trianglesDrawn)
         }
 
         drawCallCount++
@@ -634,6 +643,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             return
         }
 
+        if (depthTexture != null && depthTextureBytes > 0) {
+            statsTracker.recordTextureDisposed(depthTextureBytes)
+            depthTextureBytes = 0
+        }
         depthTexture?.dispose()
 
         val descriptor = TextureDescriptor(
@@ -652,6 +665,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 depthTextureView = null
                 depthTextureWidth = 0
                 depthTextureHeight = 0
+                depthTextureBytes = 0
             }
 
             is io.kreekt.core.Result.Success<*> -> {
@@ -659,8 +673,14 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 depthTextureView = texture.getView()
                 depthTextureWidth = width
                 depthTextureHeight = height
+                val bytesPerPixel = when (descriptor.format) {
+                    TextureFormat.DEPTH32_FLOAT -> 4
+                    TextureFormat.DEPTH24_PLUS -> 4 // Approximation; actual layout is implementation-defined
+                    else -> 4
+                }
+                depthTextureBytes = width.toLong() * height * bytesPerPixel
+                statsTracker.recordTextureCreated(depthTextureBytes)
             }
         }
     }
 }
-
