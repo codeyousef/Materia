@@ -1,5 +1,8 @@
 package io.kreekt.renderer.vulkan
 
+import io.kreekt.renderer.webgpu.VertexBufferLayout
+import io.kreekt.renderer.webgpu.VertexFormat
+import io.kreekt.renderer.webgpu.VertexStepMode
 import org.lwjgl.BufferUtils
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
@@ -9,6 +12,8 @@ import org.lwjgl.vulkan.VkCommandBuffer
 import org.lwjgl.vulkan.VkDevice
 import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo
+import org.lwjgl.vulkan.VkVertexInputAttributeDescription
+import org.lwjgl.vulkan.VkVertexInputBindingDescription
 
 /**
  * Vulkan graphics pipeline responsible for compiling shaders and creating the fixed pipeline state
@@ -30,7 +35,7 @@ class VulkanPipeline(
      * @param width Swapchain width (used for static viewport/scissor configuration).
      * @param height Swapchain height.
      */
-    fun createPipeline(renderPass: Long, width: Int, height: Int, descriptorSetLayout: Long): Boolean {
+    fun createPipeline(renderPass: Long, width: Int, height: Int, descriptorSetLayout: Long, vertexLayouts: List<VertexBufferLayout>): Boolean {
         dispose()
 
         return try {
@@ -48,7 +53,7 @@ class VulkanPipeline(
                 throw IllegalStateException("Failed to create pipeline layout")
             }
 
-            graphicsPipeline = createGraphicsPipeline(renderPass, width, height)
+            graphicsPipeline = createGraphicsPipeline(renderPass, width, height, vertexLayouts)
             graphicsPipeline != VK_NULL_HANDLE
         } catch (exc: Exception) {
             dispose()
@@ -112,7 +117,7 @@ class VulkanPipeline(
         }
     }
 
-    private fun createGraphicsPipeline(renderPass: Long, width: Int, height: Int): Long {
+    private fun createGraphicsPipeline(renderPass: Long, width: Int, height: Int, vertexLayouts: List<VertexBufferLayout>): Long {
         return MemoryStack.stackPush().use { stack ->
             val entryPoint = stack.UTF8("main")
 
@@ -129,28 +134,30 @@ class VulkanPipeline(
                 .module(fragmentShaderModule)
                 .pName(entryPoint)
 
-            val bindingDescription = org.lwjgl.vulkan.VkVertexInputBindingDescription.calloc(1, stack)
-            bindingDescription[0]
-                .binding(0)
-                .stride(VERTEX_STRIDE)
-                .inputRate(VK_VERTEX_INPUT_RATE_VERTEX)
+            val bindingDescriptions = VkVertexInputBindingDescription.calloc(vertexLayouts.size, stack)
+            val attributeCount = vertexLayouts.sumOf { it.attributes.size }
+            val attributeDescriptions = VkVertexInputAttributeDescription.calloc(attributeCount, stack)
 
-            val attributeDescriptions = org.lwjgl.vulkan.VkVertexInputAttributeDescription.calloc(2, stack)
-            attributeDescriptions[0]
-                .binding(0)
-                .location(0)
-                .format(VK_FORMAT_R32G32B32_SFLOAT)
-                .offset(0)
+            var attributeIndex = 0
+            vertexLayouts.forEachIndexed { bindingIndex, layout ->
+                bindingDescriptions[bindingIndex]
+                    .binding(bindingIndex)
+                    .stride(layout.arrayStride)
+                    .inputRate(if (layout.stepMode == VertexStepMode.VERTEX) VK_VERTEX_INPUT_RATE_VERTEX else VK_VERTEX_INPUT_RATE_INSTANCE)
 
-            attributeDescriptions[1]
-                .binding(0)
-                .location(1)
-                .format(VK_FORMAT_R32G32B32_SFLOAT)
-                .offset(POSITION_COMPONENTS * java.lang.Float.BYTES)
+                layout.attributes.forEach { attribute ->
+                    attributeDescriptions[attributeIndex]
+                        .binding(bindingIndex)
+                        .location(attribute.shaderLocation)
+                        .format(toVulkanFormat(attribute.format))
+                        .offset(attribute.offset)
+                    attributeIndex += 1
+                }
+            }
 
             val vertexInputState = org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO)
-                .pVertexBindingDescriptions(bindingDescription)
+                .pVertexBindingDescriptions(bindingDescriptions)
                 .pVertexAttributeDescriptions(attributeDescriptions)
 
             val inputAssemblyState = org.lwjgl.vulkan.VkPipelineInputAssemblyStateCreateInfo.calloc(stack)
@@ -263,10 +270,17 @@ class VulkanPipeline(
         }
     }
 
+    private fun toVulkanFormat(format: VertexFormat): Int = when (format) {
+        VertexFormat.FLOAT32 -> VK_FORMAT_R32_SFLOAT
+        VertexFormat.FLOAT32X2 -> VK_FORMAT_R32G32_SFLOAT
+        VertexFormat.FLOAT32X3 -> VK_FORMAT_R32G32B32_SFLOAT
+        VertexFormat.FLOAT32X4 -> VK_FORMAT_R32G32B32A32_SFLOAT
+        else -> throw IllegalArgumentException("Unsupported vertex format: $format")
+    }
+
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
-        private const val VERTEX_STRIDE = (POSITION_COMPONENTS + COLOR_COMPONENTS) * java.lang.Float.BYTES
 
         private const val VERTEX_SHADER_SOURCE = """
             #version 450

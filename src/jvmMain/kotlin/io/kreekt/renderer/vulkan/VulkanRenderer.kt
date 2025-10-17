@@ -13,9 +13,31 @@ import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.core.math.Matrix4
-import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.geometry.BufferGeometry
+import io.kreekt.renderer.geometry.GeometryAttribute
+import io.kreekt.renderer.geometry.GeometryBuilder
+import io.kreekt.renderer.geometry.GeometryBuildOptions
+import io.kreekt.renderer.geometry.GeometryMetadata
+import io.kreekt.renderer.webgpu.VertexAttribute
+import io.kreekt.renderer.webgpu.VertexBufferLayout
+import io.kreekt.renderer.webgpu.VertexFormat
+import io.kreekt.renderer.webgpu.VertexStepMode
 import io.kreekt.renderer.*
+import io.kreekt.renderer.material.MaterialDescriptor
+import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.renderer.feature020.*
+import io.kreekt.renderer.gpu.GpuBackend
+import io.kreekt.renderer.gpu.GpuContext
+import io.kreekt.renderer.gpu.GpuDeviceFactory
+import io.kreekt.renderer.gpu.GpuDiagnostics
+import io.kreekt.renderer.gpu.GpuPowerPreference
+import io.kreekt.renderer.gpu.GpuRequestConfig
+import io.kreekt.renderer.gpu.queueFamilyIndex
+import io.kreekt.renderer.gpu.unwrapDescriptorPool
+import io.kreekt.renderer.gpu.unwrapHandle
+import io.kreekt.renderer.gpu.unwrapInstance
+import io.kreekt.renderer.gpu.unwrapPhysicalHandle
+import java.nio.ByteBuffer
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.vulkan.*
 import org.lwjgl.vulkan.VK12.*
@@ -51,17 +73,21 @@ class VulkanRenderer(
     private var commandPool: Long = VK_NULL_HANDLE
     private var commandBuffer: VkCommandBuffer? = null
     private var renderPass: Long = VK_NULL_HANDLE
+    private var queueFamilyIndex: Int = 0
 
     // Feature 020 Managers (T017-T019)
     private var bufferManager: VulkanBufferManager? = null
     private var renderPassManager: VulkanRenderPassManager? = null
     private var swapchainManager: VulkanSwapchain? = null
     private var pipeline: VulkanPipeline? = null
+    private var activeVertexLayouts: List<VertexBufferLayout>? = null
+    private val morphWarningMeshes = mutableSetOf<Int>()
     private var descriptorSetLayout: Long = VK_NULL_HANDLE
     private var descriptorPool: Long = VK_NULL_HANDLE
     private var descriptorSet: Long = VK_NULL_HANDLE
     private var uniformBuffer: BufferHandle? = null
     private var swapchainFramebuffers: List<VulkanFramebufferData> = emptyList()
+    private var gpuContext: GpuContext? = null
 
     private val meshBuffers: MutableMap<Int, VulkanMeshBuffers> = mutableMapOf()
 
@@ -101,142 +127,122 @@ class VulkanRenderer(
         println("T033: Starting Vulkan renderer initialization...")
         val startTime = System.currentTimeMillis()
         return try {
-                // 1. Create VkInstance
-                println("T033: Creating VkInstance (validation=${config.enableValidation})...")
-                instance = createInstance(config.enableValidation)
-                    ?: return io.kreekt.core.Result.Error(
-                        "Failed to create VkInstance",
-                        io.kreekt.renderer.RendererInitializationException.AdapterRequestFailedException(
-                            BackendType.VULKAN,
-                            "Failed to create VkInstance"
-                        )
-                    )
-                println("T033: VkInstance created successfully")
+            println("T033: Requesting GPU context via abstraction...")
+            val request = GpuRequestConfig(
+                preferredBackend = GpuBackend.VULKAN,
+                powerPreference = when (config.powerPreference) {
+                    PowerPreference.LOW_POWER -> GpuPowerPreference.LOW_POWER
+                    PowerPreference.HIGH_PERFORMANCE -> GpuPowerPreference.HIGH_PERFORMANCE
+                },
+                forceFallbackAdapter = false,
+                label = "VulkanRenderer"
+            )
+            val context = GpuDeviceFactory.requestContext(request)
+            gpuContext = context
 
-            // 1.5. Create surface (T019: Required before swapchain creation)
-            println("T033: Creating Vulkan surface...")
+            val vkInstance = context.device.unwrapInstance() as? VkInstance
+                ?: throw IllegalStateException("Vulkan instance handle unavailable from GPU context")
+            val vkPhysicalDevice = context.device.unwrapPhysicalHandle() as? VkPhysicalDevice
+                ?: throw IllegalStateException("Vulkan physical device handle unavailable from GPU context")
+            val vkDevice = context.device.unwrapHandle() as? VkDevice
+                ?: throw IllegalStateException("Vulkan logical device handle unavailable from GPU context")
+            val vkQueue = context.queue.unwrapHandle() as? VkQueue
+                ?: throw IllegalStateException("Vulkan queue handle unavailable from GPU context")
+
+            instance = vkInstance
+            physicalDevice = vkPhysicalDevice
+            device = vkDevice
+            graphicsQueue = vkQueue
+            queueFamilyIndex = context.queue.queueFamilyIndex()
+            descriptorPool = (context.device.unwrapDescriptorPool() as? Long) ?: VK_NULL_HANDLE
+
+            println("T033: GPU context acquired for device '${context.device.info.name}' (queueFamily=$queueFamilyIndex)")
+
+            // Create surface prior to swapchain setup
             if (surface is VulkanSurface) {
-                surface.createSurface(instance!!)
+                println("T033: Creating Vulkan surface...")
+                surface.createSurface(vkInstance)
+                println("T033: Surface created successfully")
             }
-            println("T033: Surface created successfully")
 
-            // 2. Select physical device
-            println("T033: Selecting physical device...")
-            physicalDevice = selectPhysicalDevice(instance!!)
-                ?: return io.kreekt.core.Result.Error(
-                    "No suitable Vulkan physical device found",
-                    io.kreekt.renderer.RendererInitializationException.AdapterRequestFailedException(
-                        BackendType.VULKAN,
-                        "No suitable Vulkan physical device found"
-                    )
-                )
-            val deviceInfo = getPhysicalDeviceInfo(physicalDevice!!)
-            println("T033: Selected physical device: $deviceInfo")
-
-            // 3. Create logical device
-            println("T033: Creating logical device...")
-            device = createLogicalDevice(physicalDevice!!, config)
-                ?: return io.kreekt.core.Result.Error(
-                    "Failed to create logical device",
-                    io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
-                        BackendType.VULKAN,
-                        getPhysicalDeviceInfo(physicalDevice!!),
-                        "Failed to create logical device"
-                    )
-                )
-            println("T033: Logical device created successfully")
-
-            // 4. Get graphics queue
-            println("T033: Getting graphics queue...")
-            MemoryStack.stackPush().use { stack ->
-                val pQueue = stack.callocPointer(1)
-                vkGetDeviceQueue(device!!, 0, 0, pQueue)
-                graphicsQueue = VkQueue(pQueue.get(0), device!!)
-            }
-            println("T033: Graphics queue obtained")
-
-            // 5. Create command pool
-            println("T033: Creating command pool...")
-            commandPool = createCommandPool(device!!)
+            // Command resources
+            println("T033: Creating command pool (queueFamily=$queueFamilyIndex)...")
+            commandPool = createCommandPool(vkDevice, queueFamilyIndex)
             if (commandPool == VK_NULL_HANDLE) {
                 return io.kreekt.core.Result.Error(
                     "Failed to create command pool",
                     io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
                         BackendType.VULKAN,
-                        getPhysicalDeviceInfo(physicalDevice!!),
+                        getPhysicalDeviceInfo(vkPhysicalDevice),
                         "Failed to create command pool"
                     )
                 )
             }
             println("T033: Command pool created successfully")
 
-            // 6. Allocate command buffer
             println("T033: Allocating command buffer...")
-            commandBuffer = allocateCommandBuffer(device!!, commandPool)
+            commandBuffer = allocateCommandBuffer(vkDevice, commandPool)
             println("T033: Command buffer allocated successfully")
 
-            // 7. Create render pass
+            // Swapchain + render pass
+            println("T033: Initializing SwapchainManager...")
+            val vulkanSurface = extractVulkanSurface(surface)
+            swapchainManager = VulkanSwapchain(vkDevice, vkPhysicalDevice, vulkanSurface)
+            println("T033: SwapchainManager initialized successfully")
+
             println("T033: Creating render pass...")
             val imageFormat = swapchainManager!!.getImageFormat()
-            renderPass = createRenderPass(device!!, imageFormat)
+            renderPass = createRenderPass(vkDevice, imageFormat)
             if (renderPass == VK_NULL_HANDLE) {
                 return io.kreekt.core.Result.Error(
                     "Failed to create render pass",
                     io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
                         BackendType.VULKAN,
-                        getPhysicalDeviceInfo(physicalDevice!!),
+                        getPhysicalDeviceInfo(vkPhysicalDevice),
                         "Failed to create render pass"
                     )
                 )
             }
             println("T033: Render pass created successfully")
 
-            // 8. Initialize Feature 020 Managers (T017-T019)
-
-            // T017: Initialize BufferManager
+            // Feature 020 managers
             println("T033: Initializing BufferManager...")
-            bufferManager = VulkanBufferManager(device!!, physicalDevice!!)
+            bufferManager = VulkanBufferManager(vkDevice, vkPhysicalDevice)
             println("T033: BufferManager initialized successfully")
 
-            // T019: Initialize SwapchainManager
-            println("T033: Initializing SwapchainManager...")
-            val vulkanSurface = extractVulkanSurface(surface)
-            swapchainManager = VulkanSwapchain(device!!, physicalDevice!!, vulkanSurface)
-            println("T033: SwapchainManager initialized successfully")
-
-            // T018: Initialize RenderPassManager
             println("T033: Initializing RenderPassManager...")
-            renderPassManager = VulkanRenderPassManager(device!!, commandBuffer!!, renderPass)
+            renderPassManager = VulkanRenderPassManager(vkDevice, commandBuffer!!, renderPass)
             println("T033: RenderPassManager initialized successfully")
 
             println("T033: Creating swapchain framebuffers...")
             swapchainFramebuffers = swapchainManager!!.createFramebuffers(renderPass)
             println("T033: Framebuffers created (${swapchainFramebuffers.size} images)")
 
-        println("T033: Creating descriptor resources...")
-        createDescriptorResources()
-        println("T033: Descriptor resources ready")
+            println("T033: Creating descriptor resources...")
+            createDescriptorResources()
+            println("T033: Descriptor resources ready")
 
-        println("T033: Creating graphics pipeline...")
-        pipeline = VulkanPipeline(device!!)
-        val extent = swapchainManager!!.getExtent()
-        if (pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout)) {
-            println("T033: Graphics pipeline created successfully")
-        } else {
-            return io.kreekt.core.Result.Error(
-                "Failed to create graphics pipeline",
-                io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
-                    BackendType.VULKAN,
-                    getPhysicalDeviceInfo(physicalDevice!!),
-                    "Failed to create graphics pipeline"
+            println("T033: Creating graphics pipeline...")
+            pipeline = VulkanPipeline(vkDevice)
+            val extent = swapchainManager!!.getExtent()
+            if (pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, defaultVertexLayouts())) {
+                activeVertexLayouts = defaultVertexLayouts()
+                println("T033: Graphics pipeline created successfully")
+            } else {
+                return io.kreekt.core.Result.Error(
+                    "Failed to create graphics pipeline",
+                    io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
+                        BackendType.VULKAN,
+                        getPhysicalDeviceInfo(vkPhysicalDevice),
+                        "Failed to create graphics pipeline"
+                    )
                 )
-            )
-        }
+            }
 
-            // 9. Query capabilities
             println("T033: Querying device capabilities...")
-            capabilities = queryCapabilities(physicalDevice!!)
+            capabilities = queryCapabilities(vkPhysicalDevice)
             println("T033: Capabilities detected: maxTextureSize=${capabilities.maxTextureSize}, maxSamples=${capabilities.maxSamples}")
+            GpuDiagnostics.logContext(context, capabilities)
 
             initialized = true
             val totalInitTime = System.currentTimeMillis() - startTime
@@ -267,12 +273,11 @@ class VulkanRenderer(
         }
 
         val swapchain = swapchainManager ?: return
-        val pipelineInstance = pipeline
-        val renderPassMgr = renderPassManager
-        if (swapchainFramebuffers.isEmpty() || pipelineInstance == null || renderPassMgr == null) {
+        if (swapchainFramebuffers.isEmpty() || pipeline == null || renderPassManager == null) {
             recreateSwapchainResources()
             return
         }
+        val renderPassMgr = renderPassManager!!
 
         if (descriptorSetLayout == VK_NULL_HANDLE || descriptorSet == VK_NULL_HANDLE || uniformBuffer == null) {
             createDescriptorResources()
@@ -343,18 +348,32 @@ class VulkanRenderer(
 
                 val framebufferHandle = FramebufferHandle(swapchainFramebuffers[image.index])
                 renderPassMgr.beginRenderPass(clearColor, framebufferHandle)
-                renderPassMgr.bindPipeline(PipelineHandle(pipelineInstance.getPipelineHandle()))
+                renderPassMgr.bindPipeline(PipelineHandle(pipeline!!.getPipelineHandle()))
 
                 val descriptor = descriptorSet
-                val pipelineLayout = pipelineInstance.getPipelineLayout()
 
                 for (drawInfo in drawInfos) {
-                    val meshesIndexBuffer = drawInfo.buffers.indexBuffer ?: continue
+                    val buffers = drawInfo.buffers
+
+                    if (activeVertexLayouts != buffers.vertexLayouts) {
+                        val extent = swapchain.getExtent()
+                        val deviceHandle = device ?: continue
+                        val newPipeline = VulkanPipeline(deviceHandle)
+                        if (!newPipeline.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, buffers.vertexLayouts)) {
+                            newPipeline.dispose()
+                            throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout")
+                        }
+                        pipeline?.dispose()
+                        pipeline = newPipeline
+                        renderPassMgr.bindPipeline(PipelineHandle(newPipeline.getPipelineHandle()))
+                        activeVertexLayouts = buffers.vertexLayouts
+                    }
 
                     val mvp = Matrix4()
                     mvp.multiplyMatrices(viewProjectionMatrix, drawInfo.mesh.matrixWorld)
                     updateUniformBuffer(mvp)
 
+                    val pipelineLayout = pipeline?.getPipelineLayout() ?: continue
                     val descriptorSets = stack.longs(descriptor)
                     vkCmdBindDescriptorSets(
                         command,
@@ -365,11 +384,13 @@ class VulkanRenderer(
                         null
                     )
 
-                    renderPassMgr.bindVertexBuffer(drawInfo.buffers.vertexBuffer)
-                    renderPassMgr.bindIndexBuffer(meshesIndexBuffer)
-                    renderPassMgr.drawIndexed(drawInfo.buffers.indexCount)
+                    buffers.vertexBuffers.forEachIndexed { slot, buffer ->
+                        renderPassMgr.bindVertexBuffer(buffer, slot)
+                    }
+                    buffers.indexBuffer?.let { renderPassMgr.bindIndexBuffer(it) }
+                    renderPassMgr.drawIndexed(buffers.indexCount, 0, buffers.instanceCount)
                     drawCalls++
-                    triangles += drawInfo.buffers.triangleCount
+                    triangles += buffers.triangleCount
                 }
 
                 renderPassMgr.endRenderPass()
@@ -463,8 +484,11 @@ class VulkanRenderer(
 
         val extent = swapchain.getExtent()
         pipeline = VulkanPipeline(deviceHandle)
-        if (descriptorSetLayout == VK_NULL_HANDLE || !pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout)) {
+        if (descriptorSetLayout == VK_NULL_HANDLE || !pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, activeVertexLayouts ?: defaultVertexLayouts())) {
             throw RuntimeException("Failed to create Vulkan graphics pipeline")
+        }
+        if (activeVertexLayouts == null) {
+            activeVertexLayouts = defaultVertexLayouts()
         }
     }
 
@@ -586,74 +610,117 @@ class VulkanRenderer(
     private fun ensureMeshBuffers(mesh: Mesh): VulkanMeshBuffers? {
         val bufferMgr = bufferManager ?: return null
         val geometry = mesh.geometry
-        val position = geometry.getAttribute("position") ?: return null
-        if (position.itemSize < POSITION_COMPONENTS || position.count == 0) return null
+        val material = mesh.material ?: return null
+        val descriptor = MaterialDescriptorRegistry.descriptorFor(material) ?: return null
 
-        val colorAttribute = geometry.getAttribute("color")
+        val attributesNeedUpdate = geometry.attributes.values.any { it.needsUpdate }
+        val indexNeedsUpdate = geometry.index?.needsUpdate == true
         val existing = meshBuffers[mesh.id]
-        val needsUpdate = existing == null || position.needsUpdate || (colorAttribute?.needsUpdate == true) || (geometry.index?.needsUpdate == true)
-
-        if (!needsUpdate) {
+        if (!attributesNeedUpdate && !indexNeedsUpdate && existing != null) {
             return existing
         }
 
         meshBuffers.remove(mesh.id)?.let { destroyMeshBuffers(it) }
+        morphWarningMeshes.remove(mesh.id)
 
-        val vertexCount = position.count
-        val vertexData = FloatArray(vertexCount * (POSITION_COMPONENTS + COLOR_COMPONENTS))
-        var writeIndex = 0
-        val materialColor = (mesh.material as? MeshBasicMaterial)?.color ?: io.kreekt.core.math.Color.WHITE
-
-        for (i in 0 until vertexCount) {
-            vertexData[writeIndex++] = position.getX(i)
-            vertexData[writeIndex++] = position.getY(i)
-            vertexData[writeIndex++] = position.getZ(i)
-
-            if (colorAttribute != null && colorAttribute.itemSize >= COLOR_COMPONENTS) {
-                vertexData[writeIndex++] = colorAttribute.getX(i)
-                vertexData[writeIndex++] = colorAttribute.getY(i)
-                vertexData[writeIndex++] = colorAttribute.getZ(i)
-            } else {
-                vertexData[writeIndex++] = materialColor.r
-                vertexData[writeIndex++] = materialColor.g
-                vertexData[writeIndex++] = materialColor.b
-            }
+        val buildOptions = buildGeometryOptions(descriptor, geometry)
+        val geometryBuffer = GeometryBuilder.build(geometry, buildOptions)
+        val vertexStreams = geometryBuffer.streams
+        if (vertexStreams.isEmpty()) {
+            return null
         }
 
-        var indexArray = if (geometry.index != null && geometry.index!!.count > 0) {
-            IntArray(geometry.index!!.count) { geometry.index!!.getX(it).roundToInt() }
-        } else {
-            IntArray(vertexCount) { it }
+        val vertexBuffers = vertexStreams.map { stream ->
+            bufferMgr.createVertexBuffer(stream.data)
         }
+        val vertexLayouts = vertexStreams.map { it.layout }
 
-        if (indexArray.isEmpty()) return null
-        if (indexArray.size % 3 != 0) {
-            indexArray = indexArray.copyOf(indexArray.size - (indexArray.size % 3))
-            if (indexArray.isEmpty()) return null
-        }
-
-        val vertexBuffer = bufferMgr.createVertexBuffer(vertexData)
+        val indexArray = geometryBuffer.indexData ?: IntArray(geometryBuffer.vertexCount) { it }
         val indexBuffer = bufferMgr.createIndexBuffer(indexArray)
-        val triangles = indexArray.size / 3
+        val indexCount = indexArray.size
+        val triangles = if (indexCount > 0) indexCount / 3 else 0
+        val instanceCount = if (geometryBuffer.instanceCount > 0) geometryBuffer.instanceCount else 1
 
-        position.needsUpdate = false
-        colorAttribute?.needsUpdate = false
-        geometry.index?.let { it.needsUpdate = false }
+        if (geometryBuffer.metadata.hasMorphTargets && morphWarningMeshes.add(mesh.id)) {
+            println("Warning: VulkanRenderer detected morph targets on mesh ${mesh.name}; falling back to base geometry")
+        }
 
-        val buffers = VulkanMeshBuffers(vertexBuffer, indexBuffer, indexArray.size, triangles)
+        geometry.attributes.values.forEach { it.needsUpdate = false }
+        geometry.index?.needsUpdate = false
+
+        val buffers = VulkanMeshBuffers(
+            vertexBuffers = vertexBuffers,
+            indexBuffer = indexBuffer,
+            indexCount = indexCount,
+            triangleCount = triangles,
+            vertexLayouts = vertexLayouts,
+            metadata = geometryBuffer.metadata,
+            instanceCount = instanceCount
+        )
         meshBuffers[mesh.id] = buffers
         return buffers
     }
 
-    private fun destroyMeshBuffers(buffers: VulkanMeshBuffers) {
-        try {
-            bufferManager?.destroyBuffer(buffers.vertexBuffer)
-        } catch (_: Exception) {
+    private fun buildGeometryOptions(
+        descriptor: MaterialDescriptor,
+        geometry: BufferGeometry
+    ): GeometryBuildOptions {
+        fun requires(attribute: GeometryAttribute) = descriptor.requiredAttributes.contains(attribute)
+        fun optional(attribute: GeometryAttribute) = descriptor.optionalAttributes.contains(attribute)
+
+        fun hasAttribute(attribute: GeometryAttribute): Boolean = when (attribute) {
+            GeometryAttribute.POSITION -> true
+            GeometryAttribute.NORMAL -> geometry.getAttribute("normal") != null
+            GeometryAttribute.COLOR -> geometry.getAttribute("color") != null
+            GeometryAttribute.UV0 -> geometry.getAttribute("uv") != null
+            GeometryAttribute.UV1 -> geometry.getAttribute("uv2") != null
+            GeometryAttribute.TANGENT -> geometry.getAttribute("tangent") != null
+            GeometryAttribute.MORPH_POSITION,
+            GeometryAttribute.MORPH_NORMAL -> geometry.morphAttributes.isNotEmpty()
+            GeometryAttribute.INSTANCE_MATRIX -> geometry.isInstanced
         }
 
-        buffers.indexBuffer?.let {
+        return GeometryBuildOptions(
+            includeNormals = requires(GeometryAttribute.NORMAL) || (optional(GeometryAttribute.NORMAL) && hasAttribute(GeometryAttribute.NORMAL)),
+            includeColors = requires(GeometryAttribute.COLOR) || (optional(GeometryAttribute.COLOR) && hasAttribute(GeometryAttribute.COLOR)),
+            includeUVs = requires(GeometryAttribute.UV0) || (optional(GeometryAttribute.UV0) && hasAttribute(GeometryAttribute.UV0)),
+            includeSecondaryUVs = requires(GeometryAttribute.UV1) || (optional(GeometryAttribute.UV1) && hasAttribute(GeometryAttribute.UV1)),
+            includeTangents = requires(GeometryAttribute.TANGENT) || (optional(GeometryAttribute.TANGENT) && hasAttribute(GeometryAttribute.TANGENT)),
+            includeMorphTargets = geometry.morphAttributes.isNotEmpty(),
+            includeInstancing = geometry.isInstanced || requires(GeometryAttribute.INSTANCE_MATRIX)
+        )
+    }
+
+    private fun defaultVertexLayouts(): List<VertexBufferLayout> = listOf(
+        VertexBufferLayout(
+            arrayStride = (POSITION_COMPONENTS + COLOR_COMPONENTS) * 4,
+            stepMode = VertexStepMode.VERTEX,
+            attributes = listOf(
+                VertexAttribute(
+                    format = VertexFormat.FLOAT32X3,
+                    offset = 0,
+                    shaderLocation = 0
+                ),
+                VertexAttribute(
+                    format = VertexFormat.FLOAT32X3,
+                    offset = POSITION_COMPONENTS * 4,
+                    shaderLocation = 1
+                )
+            )
+        )
+    )
+
+    private fun destroyMeshBuffers(buffers: VulkanMeshBuffers) {
+        buffers.vertexBuffers.forEach { buffer ->
             try {
-                bufferManager?.destroyBuffer(it)
+                bufferManager?.destroyBuffer(buffer)
+            } catch (_: Exception) {
+            }
+        }
+
+        buffers.indexBuffer?.let { buffer ->
+            try {
+                bufferManager?.destroyBuffer(buffer)
             } catch (_: Exception) {
             }
         }
@@ -676,10 +743,13 @@ class VulkanRenderer(
     }
 
     private data class VulkanMeshBuffers(
-        val vertexBuffer: BufferHandle,
+        val vertexBuffers: List<BufferHandle>,
         val indexBuffer: BufferHandle?,
         val indexCount: Int,
-        val triangleCount: Int
+        val triangleCount: Int,
+        val vertexLayouts: List<VertexBufferLayout>,
+        val metadata: GeometryMetadata,
+        val instanceCount: Int
     )
 
     private data class MeshDrawInfo(
@@ -783,6 +853,7 @@ class VulkanRenderer(
             device = null
             println("T033: Logical device destroyed")
         }
+        gpuContext = null
 
         // T019: Destroy surface
         if (surface is VulkanSurface) {
@@ -910,12 +981,12 @@ class VulkanRenderer(
         }
     }
 
-    private fun createCommandPool(device: VkDevice): Long {
+    private fun createCommandPool(device: VkDevice, queueFamily: Int): Long {
         return MemoryStack.stackPush().use { stack ->
             val createInfo = VkCommandPoolCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO)
                 .flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
-                .queueFamilyIndex(0)
+                .queueFamilyIndex(queueFamily)
 
             val pCommandPool = stack.callocLong(1)
             val result = vkCreateCommandPool(device, createInfo, null, pCommandPool)
@@ -947,6 +1018,7 @@ class VulkanRenderer(
             val deviceName = String(deviceNameBytes).trim('\u0000')
 
             val limits = properties.limits()
+            val extensionNames = enumerateDeviceExtensions(physicalDevice, stack)
 
             RendererCapabilities(
                 backend = BackendType.VULKAN,
@@ -961,9 +1033,34 @@ class VulkanRenderer(
                 depthTextures = true,
                 floatTextures = true,
                 instancedRendering = true,
-                extensions = emptySet() // TODO: Query actual extensions
+                extensions = extensionNames
             )
         }
+    }
+
+    private fun enumerateDeviceExtensions(device: VkPhysicalDevice, stack: MemoryStack): Set<String> {
+        val countBuffer = stack.mallocInt(1)
+        val initialResult = vkEnumerateDeviceExtensionProperties(device, null as ByteBuffer?, countBuffer, null)
+        if (initialResult != VK_SUCCESS) {
+            return emptySet()
+        }
+
+        val count = countBuffer[0]
+        if (count == 0) return emptySet()
+
+        val propertiesBuffer = VkExtensionProperties.calloc(count, stack)
+        countBuffer.put(0, count)
+        val enumerationResult =
+            vkEnumerateDeviceExtensionProperties(device, null as ByteBuffer?, countBuffer, propertiesBuffer)
+        if (enumerationResult != VK_SUCCESS) {
+            return emptySet()
+        }
+
+        val names = HashSet<String>(count)
+        for (i in 0 until count) {
+            names.add(propertiesBuffer[i].extensionNameString())
+        }
+        return names
     }
 
     private fun getSampleCountFromVulkanSampleCount(sampleCountFlags: Int): Int {
@@ -1057,8 +1154,10 @@ class VulkanRenderer(
 
         val averageFps = fpsAccumulator / fpsFrameCount
 
-        val bufferMemory = meshBuffers.values.sumOf {
-            it.vertexBuffer.size.toLong() + (it.indexBuffer?.size?.toLong() ?: 0L)
+        val bufferMemory = meshBuffers.values.sumOf { buffers ->
+            val vertexBytes = buffers.vertexBuffers.sumOf { it.size.toLong() }
+            val indexBytes = buffers.indexBuffer?.size?.toLong() ?: 0L
+            vertexBytes + indexBytes
         }
 
         stats = RenderStats(
