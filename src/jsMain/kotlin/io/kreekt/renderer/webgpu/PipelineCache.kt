@@ -6,11 +6,13 @@ package io.kreekt.renderer.webgpu
 data class PipelineKey(
     val vertexShaderHash: Int,
     val fragmentShaderHash: Int,
-    val vertexLayoutHash: Int,
+    val vertexLayoutsHash: Int,
     val primitiveTopology: PrimitiveTopology,
     val cullMode: CullMode,
     val frontFace: FrontFace,
-    val hasDepthStencil: Boolean
+    val depthStencilState: DepthStencilState?,
+    val multisampleState: MultisampleState?,
+    val colorTarget: ColorTargetDescriptor
 ) {
     companion object {
         /**
@@ -20,11 +22,13 @@ data class PipelineKey(
             return PipelineKey(
                 vertexShaderHash = descriptor.vertexShader.hashCode(),
                 fragmentShaderHash = descriptor.fragmentShader.hashCode(),
-                vertexLayoutHash = descriptor.vertexBufferLayout.hashCode(),
+                vertexLayoutsHash = descriptor.vertexLayouts.hashCode(),
                 primitiveTopology = descriptor.primitiveTopology,
                 cullMode = descriptor.cullMode,
                 frontFace = descriptor.frontFace,
-                hasDepthStencil = descriptor.depthStencilState != null
+                depthStencilState = descriptor.depthStencilState,
+                multisampleState = descriptor.multisampleState,
+                colorTarget = descriptor.colorTarget
             )
         }
     }

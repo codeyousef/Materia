@@ -8,12 +8,36 @@ import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.BufferGeometry
 import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.material.MeshStandardMaterial
+import io.kreekt.lighting.ibl.PrefilterMipSelector
+import io.kreekt.lighting.ibl.IBLConvolutionProfiler
 import io.kreekt.optimization.BoundingBox
 import io.kreekt.optimization.Frustum
 import io.kreekt.renderer.*
-import io.kreekt.renderer.webgpu.shaders.BasicShaders
+import io.kreekt.renderer.gpu.unwrapHandle
+import io.kreekt.renderer.gpu.GpuBackend
+import io.kreekt.renderer.gpu.GpuDeviceFactory
+import io.kreekt.renderer.gpu.GpuDiagnostics
+import io.kreekt.renderer.gpu.GpuPowerPreference
+import io.kreekt.renderer.gpu.GpuRequestConfig
+import io.kreekt.renderer.gpu.unwrapHandleAdapter
+import io.kreekt.renderer.geometry.GeometryAttribute
+import io.kreekt.renderer.geometry.GeometryBuildOptions
+import io.kreekt.renderer.geometry.GeometryMetadata
+import io.kreekt.renderer.material.MaterialBindingSource
+import io.kreekt.renderer.material.MaterialDescriptor
+import io.kreekt.renderer.material.MaterialDescriptorRegistry
+import io.kreekt.renderer.material.bindingGroups
+import io.kreekt.renderer.material.requiresBinding
+import io.kreekt.renderer.material.ResolvedMaterialDescriptor
+import io.kreekt.renderer.shader.MaterialShaderDescriptor
+import io.kreekt.renderer.shader.MaterialShaderGenerator
+import io.kreekt.renderer.shader.withOverrides
+import io.kreekt.renderer.webgpu.GPUCommandBuffer
+import io.kreekt.renderer.webgpu.GPUCommandEncoder
+import io.kreekt.renderer.webgpu.GPUBindGroup
+import io.kreekt.renderer.webgpu.GPUPipelineLayout
 import org.w3c.dom.HTMLCanvasElement
-import kotlin.js.Promise
 import kotlin.js.jsTypeOf
 
 /**
@@ -33,6 +57,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
     // Core WebGPU objects
     private var device: GPUDevice? = null
+    private var gpuContext: io.kreekt.renderer.gpu.GpuContext? = null
+    private var gpuQueue: io.kreekt.renderer.gpu.GpuQueue? = null
     private var context: GPUCanvasContext? = null
     private var adapter: GPUAdapter? = null
 
@@ -40,6 +66,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private lateinit var pipelineCache: PipelineCache
     private lateinit var bufferPool: BufferPool
     private val contextLossRecovery = ContextLossRecovery()
+    private val environmentManager = WebGPUEnvironmentManager({ gpuContext?.device }, statsTracker)
 
     // Feature 020 Managers (T020)
     private var bufferManager: WebGPUBufferManager? = null
@@ -55,8 +82,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var drawIndexInFrame = 0
 
     // Geometry buffer cache (mesh.uuid -> buffers)
-    private val geometryCache = GeometryBufferCache({ device }, statsTracker)
-    private val uniformManager = UniformBufferManager({ device }, statsTracker)
+    private val geometryCache = GeometryBufferCache({ gpuContext?.device }, statsTracker)
+    private val uniformManager = UniformBufferManager({ gpuContext?.device }, statsTracker)
 
     // Pipeline cache map (for synchronous access)
     private val pipelineCacheMap = mutableMapOf<PipelineKey, WebGPUPipeline>()
@@ -183,47 +210,27 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             console.log("T033: Starting WebGPU renderer initialization...")
             val startTime = js("performance.now()").unsafeCast<Double>()
 
-            // Get GPU
-            console.log("T033: Getting GPU interface...")
-            val gpu = WebGPUDetector.getGPU()
-            if (gpu == null) {
-                console.error("T033: WebGPU not available in this browser")
-                return io.kreekt.core.Result.Error(
-                    "WebGPU not available",
-                    RuntimeException("WebGPU not available")
+            val gpuCtx = GpuDeviceFactory.requestContext(
+                GpuRequestConfig(
+                    preferredBackend = GpuBackend.WEBGPU,
+                    powerPreference = GpuPowerPreference.HIGH_PERFORMANCE
                 )
-            }
-            console.log("T033: GPU interface obtained")
+            )
 
-            // Request adapter
-            console.log("T033: Requesting GPU adapter (powerPreference=high-performance)...")
-            val adapterOptions = js("({})").unsafeCast<GPURequestAdapterOptions>()
-            adapterOptions.powerPreference = "high-performance"
-
-            val adapterPromise = gpu.requestAdapter(adapterOptions).unsafeCast<Promise<GPUAdapter?>>()
-            val adapterResult = adapterPromise.awaitPromise()
-            if (adapterResult == null) {
-                console.error("T033: Failed to request GPU adapter")
-                return io.kreekt.core.Result.Error(
-                    "Failed to request GPU adapter",
-                    RuntimeException("Failed to request GPU adapter")
+            val underlyingDevice = gpuCtx.device.unwrapHandle() as? GPUDevice
+                ?: return io.kreekt.core.Result.Error(
+                    "Failed to unwrap WebGPU device",
+                    RuntimeException("Invalid WebGPU device handle")
                 )
-            }
-            adapter = adapterResult
-            console.log("T033: GPU adapter obtained")
 
-            // Request device
-            console.log("T033: Requesting GPU device...")
-            val deviceDescriptor = js("({})").unsafeCast<GPUDeviceDescriptor>()
-            deviceDescriptor.label = "KreeKt WebGPU Device"
-
-            val devicePromise = adapter!!.requestDevice(deviceDescriptor).unsafeCast<Promise<GPUDevice>>()
-            device = devicePromise.awaitPromise()
-            console.log("T033: GPU device created successfully")
+            device = underlyingDevice
+            adapter = gpuCtx.device.unwrapHandleAdapter()
+            gpuContext = gpuCtx
+            gpuQueue = gpuCtx.queue
 
             // Monitor device loss
             console.log("T033: Setting up device loss monitoring...")
-            device!!.lost.then { info ->
+            underlyingDevice.lost.then { info ->
                 try {
                     console.warn("T033: WebGPU device lost: ${info}")
                     contextLossRecovery.handleContextLoss()
@@ -241,7 +248,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 )
 
             val contextConfig = js("({})").unsafeCast<GPUCanvasConfiguration>()
-            contextConfig.device = device!!
+            contextConfig.device = underlyingDevice
             contextConfig.format = "bgra8unorm"
             contextConfig.alphaMode = "opaque"
             context!!.configure(contextConfig)
@@ -251,14 +258,14 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // Create buffer pool
             console.log("T033: Creating buffer pool...")
-            bufferPool = BufferPool(device!!)
+            bufferPool = BufferPool(gpuCtx.device)
             console.log("T033: Buffer pool created")
 
             // T020: Initialize Feature 020 Managers
             console.log("T033: Initializing BufferManager...")
-            bufferManager = WebGPUBufferManager(device!!)
+            bufferManager = WebGPUBufferManager(gpuCtx.device)
             console.log("T033: BufferManager initialized")
-            uniformManager.onDeviceReady(device!!)
+            uniformManager.onDeviceReady(gpuCtx.device)
             // Note: RenderPassManager is initialized per-frame with command encoder
 
             // T021 PERFORMANCE: Create custom pipeline layout with dynamic offset support
@@ -269,6 +276,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             console.log("T033: Querying device capabilities...")
             rendererCapabilities = createCapabilities(adapter!!)
             console.log("T033: Capabilities detected: maxTextureSize=${rendererCapabilities!!.maxTextureSize}, maxVertexAttributes=${rendererCapabilities!!.maxVertexAttributes}")
+            GpuDiagnostics.logContext(gpuCtx, rendererCapabilities)
 
             isInitialized = true
 
@@ -292,6 +300,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
     override fun dispose() {
         renderPassManager = null
+        environmentManager.dispose()
 
         pipelineCacheMap.values.forEach { it.dispose() }
         pipelineCacheMap.clear()
@@ -326,6 +335,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         device?.destroy()
         device = null
         adapter = null
+        gpuContext = null
+        gpuQueue = null
 
         rendererCapabilities = null
         currentPipeline = null
@@ -345,6 +356,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         statsTracker.frameStart()
+        statsTracker.recordIBLConvolution(IBLConvolutionProfiler.snapshot())
+        statsTracker.recordIBLMaterial(0f, 0)
 
         // T021 FIX: Frame rendering (removed unreliable performance.now() logging)
 
@@ -387,7 +400,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // Create command encoder
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Creating command encoder...")
-            val commandEncoder = device!!.createCommandEncoder()
+            val commandEncoderWrapper = gpuContext?.device?.createCommandEncoder(label = "Frame Encoder")
+            val commandEncoder = commandEncoderWrapper?.unwrapHandle() as? GPUCommandEncoder
+            if (commandEncoderWrapper == null || commandEncoder == null) {
+                console.error("T033: Failed to create command encoder")
+                return
+            }
 
             // T020: Initialize RenderPassManager for this frame
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Initializing RenderPassManager...")
@@ -414,10 +432,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             val renderPass = (renderPassManager as WebGPURenderPassManager).getPassEncoder().unsafeCast<GPURenderPassEncoder>()
 
             // T009: Render scene with frustum culling
+            val environmentBinding = environmentManager.prepare(scene.environment)
+
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Traversing scene graph and rendering meshes...")
                     scene.traverse { obj ->
                         if (obj is Mesh) {
-                            renderMesh(obj, camera, renderPass)
+                            renderMesh(obj, camera, renderPass, environmentBinding)
                         }
                     }
             // T020: End render pass using manager
@@ -426,11 +446,17 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // Submit commands
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Finishing command encoder...")
-            val commandBuffer = commandEncoder.finish()
-            val commandBuffers = js("[]").unsafeCast<Array<GPUCommandBuffer>>()
-            js("commandBuffers.push(commandBuffer)")
+            val commandBufferWrapper = commandEncoderWrapper.finish()
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Submitting command buffer to GPU...")
-            device!!.queue.submit(commandBuffers)
+            val queue = gpuQueue
+            if (queue != null) {
+                queue.submit(listOf(commandBufferWrapper))
+            } else {
+                val commandBuffer = commandBufferWrapper.unwrapHandle() as GPUCommandBuffer
+                val commandBuffers = js("[]").unsafeCast<Array<GPUCommandBuffer>>()
+                commandBuffers.asDynamic().push(commandBuffer)
+                device!!.queue.submit(commandBuffers)
+            }
 
             // T009: Log frustum culling statistics
             if (culledCount > 0 || visibleCount > 0) {
@@ -458,7 +484,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
     }
 
-    private fun renderMesh(mesh: Mesh, camera: Camera, renderPass: GPURenderPassEncoder) {
+    private fun renderMesh(
+        mesh: Mesh,
+        camera: Camera,
+        renderPass: GPURenderPassEncoder,
+        environmentBinding: EnvironmentBinding?
+    ) {
         val maxMeshesPerFrame = UniformBufferManager.MAX_MESHES_PER_FRAME
         if (drawIndexInFrame >= maxMeshesPerFrame) {
             if (drawIndexInFrame == maxMeshesPerFrame) {
@@ -474,29 +505,94 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         val geometry = mesh.geometry
-        val material = mesh.material as? MeshBasicMaterial ?: return
+        val cameraPosition = floatArrayOf(camera.position.x, camera.position.y, camera.position.z)
+        val material = mesh.material
+        val resolvedDescriptor = MaterialDescriptorRegistry.resolve(material) ?: run {
+            console.warn("No material descriptor registered for ${material::class.simpleName}")
+            return
+        }
+        val descriptor = resolvedDescriptor.descriptor
 
-        val buffers = geometryCache.getOrCreate(geometry, frameCount)
+        val requiresEnvironment = descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+        if (requiresEnvironment && environmentBinding == null) {
+            console.warn("Skipping ${descriptor.key} without prefiltered environment")
+            return
+        }
+
+        val materialUniforms = when (material) {
+            is MeshStandardMaterial -> {
+                val baseColor = floatArrayOf(material.color.r, material.color.g, material.color.b, material.opacity)
+                val roughness = PrefilterMipSelector.clamp01(material.roughness)
+                val uniforms = MaterialUniformData(
+                    baseColor = baseColor,
+                    roughness = roughness,
+                    metalness = material.metalness,
+                    envIntensity = material.envMapIntensity,
+                    prefilterMipCount = environmentBinding?.mipCount ?: 1,
+                    cameraPosition = cameraPosition
+                )
+                environmentBinding?.let { statsTracker.recordIBLMaterial(roughness, it.mipCount) }
+                uniforms
+            }
+
+            is MeshBasicMaterial -> {
+                val baseColor = floatArrayOf(material.color.r, material.color.g, material.color.b, material.opacity)
+                val uniforms = MaterialUniformData(
+                    baseColor = baseColor,
+                    roughness = 1f,
+                    metalness = 0f,
+                    envIntensity = 0f,
+                    prefilterMipCount = environmentBinding?.mipCount ?: 1,
+                    cameraPosition = cameraPosition
+                )
+                uniforms
+            }
+
+            else -> return
+        }
+
+        val buildOptions = buildGeometryOptions(descriptor, geometry)
+        val buffers = geometryCache.getOrCreate(geometry, frameCount, buildOptions)
         if (buffers == null) {
             console.warn("Failed to create buffers for mesh")
             return
         }
 
-        val pipeline = getOrCreatePipeline(geometry, material)
+        val attributeOverrides = buildAttributeOverrides(descriptor.key, buffers.metadata)
+        val combinedDefines = descriptor.defines + resolvedDescriptor.shaderOverrides + attributeOverrides
+        val shaderDescriptor = descriptor.shader.withOverrides(combinedDefines)
+
+        val pipeline = getOrCreatePipeline(
+            resolvedDescriptor,
+            shaderDescriptor,
+            environmentBinding,
+            buffers.vertexStreams.map { it.layout }
+        )
         if (pipeline == null) {
             console.warn("Failed to create pipeline for mesh")
             return
         }
 
         val frameInfo = FrameDebugInfo(frameCount, drawCallCount)
-        if (!uniformManager.updateUniforms(mesh, camera, drawIndexInFrame, frameInfo, enableFrameLogging)) {
+        if (!uniformManager.updateUniforms(
+                mesh,
+                camera,
+                drawIndexInFrame,
+                frameInfo,
+                enableFrameLogging,
+                materialUniforms
+            )
+        ) {
             return
         }
 
         renderPass.setPipeline(pipeline)
-        renderPass.setVertexBuffer(0, buffers.vertexBuffer)
+        buffers.vertexStreams.forEachIndexed { slot, stream ->
+            renderPass.setVertexBuffer(slot, stream.buffer)
+        }
 
-        val bindGroup = uniformManager.bindGroup()
+        val bindGroupWrapper = uniformManager.bindGroup()
+        val bindGroup = bindGroupWrapper?.unwrapHandle() as? GPUBindGroup
         if (bindGroup == null) {
             console.warn("Failed to acquire uniform bind group")
             return
@@ -507,15 +603,19 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         offsetsArray[0] = dynamicOffset
         renderPass.setBindGroup(0, bindGroup, offsetsArray)
 
+        bindAdditionalGroups(descriptor, environmentBinding, renderPass)
+
+        val instanceCount = if (buffers.instanceCount > 0) buffers.instanceCount else 1
+
         if (buffers.indexBuffer != null && buffers.indexCount > 0) {
             renderPass.setIndexBuffer(buffers.indexBuffer!!, buffers.indexFormat)
-            renderPass.drawIndexed(buffers.indexCount, 1, 0, 0, 0)
-            val trianglesDrawn = buffers.indexCount / 3
+            renderPass.drawIndexed(buffers.indexCount, instanceCount, 0, 0, 0)
+            val trianglesDrawn = (buffers.indexCount / 3) * instanceCount
             triangleCount += trianglesDrawn
             statsTracker.recordDrawCall(trianglesDrawn)
         } else {
-            renderPass.draw(buffers.vertexCount, 1, 0, 0)
-            val trianglesDrawn = buffers.vertexCount / 3
+            renderPass.draw(buffers.vertexCount, instanceCount, 0, 0)
+            val trianglesDrawn = (buffers.vertexCount / 3) * instanceCount
             triangleCount += trianglesDrawn
             statsTracker.recordDrawCall(trianglesDrawn)
         }
@@ -524,29 +624,102 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         drawIndexInFrame++
     }
 
-    private fun createPipelineDescriptor(
-        geometry: BufferGeometry,
-        material: MeshBasicMaterial
-    ): RenderPipelineDescriptor {
-        // Create basic pipeline descriptor
-        // T021: Temporarily disable backface culling to debug black screen
-        return RenderPipelineDescriptor(
-            vertexShader = BasicShaders.vertexShader,
-            fragmentShader = BasicShaders.fragmentShader,
-            vertexBufferLayout = VertexBufferLayout(
-                arrayStride = 36, // 3 floats * 3 attributes * 4 bytes
-                attributes = listOf(
-                    VertexAttribute(VertexFormat.FLOAT32X3, 0, 0),  // position
-                    VertexAttribute(VertexFormat.FLOAT32X3, 12, 1), // normal
-                    VertexAttribute(VertexFormat.FLOAT32X3, 24, 2)  // color
+    private fun bindAdditionalGroups(
+        descriptor: MaterialDescriptor,
+        environmentBinding: EnvironmentBinding?,
+        renderPass: GPURenderPassEncoder
+    ) {
+        if (environmentBinding == null) return
+        val groups = descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+        if (groups.isEmpty()) return
+        val rawGroup = environmentBinding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return
+        groups.forEach { group ->
+            renderPass.setBindGroup(group, rawGroup)
+        }
+    }
+
+    private fun buildGeometryOptions(
+        descriptor: MaterialDescriptor,
+        geometry: BufferGeometry
+    ): GeometryBuildOptions {
+        fun requires(attribute: GeometryAttribute) = descriptor.requiredAttributes.contains(attribute)
+        fun optional(attribute: GeometryAttribute) = descriptor.optionalAttributes.contains(attribute)
+
+        fun hasAttribute(attribute: GeometryAttribute): Boolean = when (attribute) {
+            GeometryAttribute.POSITION -> true
+            GeometryAttribute.NORMAL -> geometry.getAttribute("normal") != null
+            GeometryAttribute.COLOR -> geometry.getAttribute("color") != null
+            GeometryAttribute.UV0 -> geometry.getAttribute("uv") != null
+            GeometryAttribute.UV1 -> geometry.getAttribute("uv2") != null
+            GeometryAttribute.TANGENT -> geometry.getAttribute("tangent") != null
+            GeometryAttribute.MORPH_POSITION,
+            GeometryAttribute.MORPH_NORMAL -> geometry.morphAttributes.isNotEmpty()
+            GeometryAttribute.INSTANCE_MATRIX -> geometry.isInstanced
+        }
+
+        return GeometryBuildOptions(
+            includeNormals = requires(GeometryAttribute.NORMAL) ||
+                (optional(GeometryAttribute.NORMAL) && hasAttribute(GeometryAttribute.NORMAL)),
+            includeColors = requires(GeometryAttribute.COLOR) ||
+                (optional(GeometryAttribute.COLOR) && hasAttribute(GeometryAttribute.COLOR)),
+            includeUVs = requires(GeometryAttribute.UV0) ||
+                (optional(GeometryAttribute.UV0) && hasAttribute(GeometryAttribute.UV0)),
+            includeSecondaryUVs = requires(GeometryAttribute.UV1) ||
+                (optional(GeometryAttribute.UV1) && hasAttribute(GeometryAttribute.UV1)),
+            includeTangents = requires(GeometryAttribute.TANGENT) ||
+                (optional(GeometryAttribute.TANGENT) && hasAttribute(GeometryAttribute.TANGENT)),
+            includeMorphTargets = geometry.morphAttributes.isNotEmpty(),
+            includeInstancing = geometry.isInstanced || requires(GeometryAttribute.INSTANCE_MATRIX)
+        )
+    }
+
+    private fun buildAttributeOverrides(
+        materialKey: String,
+        metadata: GeometryMetadata
+    ): Map<String, String> {
+        val vertexInputExtra = StringBuilder()
+        val vertexOutputExtra = StringBuilder()
+        val vertexAssignExtra = StringBuilder()
+        val fragmentInputExtra = StringBuilder()
+        val fragmentExtra = StringBuilder()
+
+        metadata.bindingFor(GeometryAttribute.UV0)?.let { binding ->
+            vertexInputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
+            vertexOutputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
+            vertexAssignExtra.append("    out.uv = in.uv;\n")
+            fragmentInputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
+            if (materialKey == "material.basic") {
+                fragmentExtra.append("    color = color * vec3<f32>(clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0)), 1.0);\n")
+            }
+        }
+
+        metadata.bindingFor(GeometryAttribute.UV1)?.let { binding ->
+            vertexInputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
+            vertexOutputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
+            vertexAssignExtra.append("    out.uv2 = in.uv2;\n")
+            fragmentInputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
+        }
+
+        metadata.bindingFor(GeometryAttribute.TANGENT)?.let { binding ->
+            vertexInputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
+            vertexOutputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
+            vertexAssignExtra.append("    out.tangent = in.tangent;\n")
+            fragmentInputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
+            if (materialKey == "material.meshStandard") {
+                fragmentExtra.append(
+                    "    let tangent = normalize(in.tangent.xyz);\n" +
+                        "    let anisotropy = clamp(1.0 - abs(dot(normalize(in.viewDir), tangent)), 0.0, 1.0);\n" +
+                        "    color = color * (0.75 + 0.25 * anisotropy);\n"
                 )
-            ),
-            cullMode = CullMode.NONE,  // T021: Disable culling to test winding order issue
-            depthStencilState = DepthStencilState(
-                format = TextureFormat.DEPTH24_PLUS,
-                depthWriteEnabled = true,
-                depthCompare = CompareFunction.LESS
-            )
+            }
+        }
+
+        return mapOf(
+            "VERTEX_INPUT_EXTRA" to vertexInputExtra.toString(),
+            "VERTEX_OUTPUT_EXTRA" to vertexOutputExtra.toString(),
+            "VERTEX_ASSIGN_EXTRA" to vertexAssignExtra.toString(),
+            "FRAGMENT_INPUT_EXTRA" to fragmentInputExtra.toString(),
+            "FRAGMENT_EXTRA" to fragmentExtra.toString()
         )
     }
 
@@ -569,8 +742,35 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
      * T006: Fixed - No longer blocks render thread with busy-wait.
      * Returns null if pipeline not ready (mesh skipped this frame, will render next frame).
      */
-    private fun getOrCreatePipeline(geometry: BufferGeometry, material: MeshBasicMaterial): GPURenderPipeline? {
-        val pipelineDescriptor = createPipelineDescriptor(geometry, material)
+    private fun getOrCreatePipeline(
+        resolved: ResolvedMaterialDescriptor,
+        shaderDescriptor: MaterialShaderDescriptor,
+        environmentBinding: EnvironmentBinding?,
+        vertexLayouts: List<VertexBufferLayout>
+    ): GPURenderPipeline? {
+        val gpuDevice = device ?: return null
+        val shaderSource = MaterialShaderGenerator.compile(shaderDescriptor)
+        val renderState = resolved.renderState
+        val depthState = if (renderState.depthTest) {
+            DepthStencilState(
+                format = renderState.depthFormat,
+                depthWriteEnabled = renderState.depthWrite,
+                depthCompare = renderState.depthCompare
+            )
+        } else {
+            null
+        }
+        val pipelineDescriptor = RenderPipelineDescriptor(
+            label = resolved.descriptor.key,
+            vertexShader = shaderSource.vertexSource,
+            fragmentShader = shaderSource.fragmentSource,
+            vertexLayouts = vertexLayouts,
+            primitiveTopology = renderState.topology,
+            cullMode = renderState.cullMode,
+            frontFace = renderState.frontFace,
+            depthStencilState = depthState,
+            colorTarget = renderState.colorTarget
+        )
         val cacheKey = PipelineKey.fromDescriptor(pipelineDescriptor)
 
         pipelineCacheMap[cacheKey]?.let { cached ->
@@ -580,16 +780,22 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         if (!pipelineCacheMap.containsKey(cacheKey)) {
-            console.log("Creating new pipeline for key: $cacheKey")
-            val pipeline = WebGPUPipeline(device!!, pipelineDescriptor)
+            console.log("Creating new pipeline for ${resolved.descriptor.key}")
+            val pipeline = WebGPUPipeline(gpuDevice, pipelineDescriptor)
             pipelineCacheMap[cacheKey] = pipeline
 
             try {
-                val layout = uniformManager.pipelineLayout()
-                val creationResult = pipeline.create(layout)
+                val requiresEnvironmentLayout = resolved.descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+                val extraLayouts = if (requiresEnvironmentLayout) {
+                    environmentBinding?.let { listOf(it.layout) } ?: return null
+                } else {
+                    emptyList()
+                }
+                val pipelineLayoutWrapper = uniformManager.pipelineLayout(extraLayouts)
+                val creationResult = pipeline.create(pipelineLayoutWrapper?.unwrapHandle() as? GPUPipelineLayout)
                 when (creationResult) {
                     is io.kreekt.core.Result.Success<*> -> {
-                        console.log("Pipeline ready for key: $cacheKey, isReady=${pipeline.isReady}, pipeline=${pipeline.getPipeline()}")
+                        console.log("Pipeline ready for ${resolved.descriptor.key}, isReady=${pipeline.isReady}")
                     }
                     is io.kreekt.core.Result.Error -> {
                         console.error("Pipeline creation failed: ${creationResult.message}")

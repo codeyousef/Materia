@@ -72,33 +72,25 @@ class WebGPUPipeline(
 
             // Vertex buffer layout
             val bufferLayouts = js("[]").unsafeCast<Array<GPUVertexBufferLayout?>>()
-            val bufferLayout = js("({})").unsafeCast<GPUVertexBufferLayout>()
-            bufferLayout.arrayStride = descriptor.vertexBufferLayout.arrayStride
-            bufferLayout.stepMode = when (descriptor.vertexBufferLayout.stepMode) {
-                VertexStepMode.VERTEX -> "vertex"
-                VertexStepMode.INSTANCE -> "instance"
-            }
-
-            // Vertex attributes
-            val attributes = js("[]").unsafeCast<Array<GPUVertexAttribute>>()
-            descriptor.vertexBufferLayout.attributes.forEach { attr ->
-                val gpuAttr = js("({})").unsafeCast<GPUVertexAttribute>()
-                gpuAttr.format = when (attr.format) {
-                    VertexFormat.FLOAT32 -> "float32"
-                    VertexFormat.FLOAT32X2 -> "float32x2"
-                    VertexFormat.FLOAT32X3 -> "float32x3"
-                    VertexFormat.FLOAT32X4 -> "float32x4"
-                    VertexFormat.UINT32 -> "uint32"
-                    VertexFormat.UINT32X2 -> "uint32x2"
-                    VertexFormat.UINT32X3 -> "uint32x3"
-                    VertexFormat.UINT32X4 -> "uint32x4"
+            descriptor.vertexLayouts.forEach { layout ->
+                val bufferLayout = js("({})").unsafeCast<GPUVertexBufferLayout>()
+                bufferLayout.arrayStride = layout.arrayStride
+                bufferLayout.stepMode = when (layout.stepMode) {
+                    VertexStepMode.VERTEX -> "vertex"
+                    VertexStepMode.INSTANCE -> "instance"
                 }
-                gpuAttr.offset = attr.offset
-                gpuAttr.shaderLocation = attr.shaderLocation
-                js("attributes.push(gpuAttr)")
+
+                val attributes = js("[]").unsafeCast<Array<GPUVertexAttribute>>()
+                layout.attributes.forEach { attr ->
+                    val gpuAttr = js("({})").unsafeCast<GPUVertexAttribute>()
+                    gpuAttr.format = toWebGPUVertexFormat(attr.format)
+                    gpuAttr.offset = attr.offset
+                    gpuAttr.shaderLocation = attr.shaderLocation
+                    js("attributes.push(gpuAttr)")
+                }
+                bufferLayout.attributes = attributes
+                js("bufferLayouts.push(bufferLayout)")
             }
-            bufferLayout.attributes = attributes
-            js("bufferLayouts.push(bufferLayout)")
             vertexState.buffers = bufferLayouts
 
             pipelineDescriptor.vertex = vertexState
@@ -126,11 +118,7 @@ class WebGPUPipeline(
             // Depth/stencil state (optional)
             descriptor.depthStencilState?.let { depthStencil ->
                 val depthStencilState = js("({})").unsafeCast<GPUDepthStencilState>()
-                depthStencilState.format = when (depthStencil.format) {
-                    TextureFormat.DEPTH24_PLUS -> "depth24plus"
-                    TextureFormat.DEPTH32_FLOAT -> "depth32float"
-                    else -> "depth24plus"
-                }
+                depthStencilState.format = toWebGPUTextureFormat(depthStencil.format)
                 depthStencilState.depthWriteEnabled = depthStencil.depthWriteEnabled
                 depthStencilState.depthCompare = when (depthStencil.depthCompare) {
                     CompareFunction.NEVER -> "never"
@@ -153,7 +141,14 @@ class WebGPUPipeline(
             // Color target
             val colorTargets = js("[]").unsafeCast<Array<GPUColorTargetState?>>()
             val colorTarget = js("({})").unsafeCast<GPUColorTargetState>()
-            colorTarget.format = "bgra8unorm"
+            colorTarget.format = toWebGPUTextureFormat(descriptor.colorTarget.format)
+            descriptor.colorTarget.blendState?.let { blend ->
+                val blendState = js("({})").unsafeCast<GPUBlendState>()
+                blendState.color = createGpuBlendComponent(blend.color)
+                blendState.alpha = createGpuBlendComponent(blend.alpha)
+                colorTarget.blend = blendState
+            }
+            colorTarget.writeMask = descriptor.colorTarget.writeMask.bits
             js("colorTargets.push(colorTarget)")
             fragmentState.targets = colorTargets
 
@@ -201,6 +196,55 @@ class WebGPUPipeline(
         pipeline?.let {
             renderPass.setPipeline(it)
         }
+    }
+
+    private fun toWebGPUVertexFormat(format: VertexFormat): String = when (format) {
+        VertexFormat.FLOAT32 -> "float32"
+        VertexFormat.FLOAT32X2 -> "float32x2"
+        VertexFormat.FLOAT32X3 -> "float32x3"
+        VertexFormat.FLOAT32X4 -> "float32x4"
+        VertexFormat.UINT32 -> "uint32"
+        VertexFormat.UINT32X2 -> "uint32x2"
+        VertexFormat.UINT32X3 -> "uint32x3"
+        VertexFormat.UINT32X4 -> "uint32x4"
+    }
+
+    private fun toWebGPUTextureFormat(format: TextureFormat): String = when (format) {
+        TextureFormat.RGBA8_UNORM -> "rgba8unorm"
+        TextureFormat.RGBA8_SRGB -> "rgba8unorm-srgb"
+        TextureFormat.BGRA8_UNORM -> "bgra8unorm"
+        TextureFormat.BGRA8_SRGB -> "bgra8unorm-srgb"
+        TextureFormat.DEPTH24_PLUS -> "depth24plus"
+        TextureFormat.DEPTH32_FLOAT -> "depth32float"
+    }
+
+    private fun createGpuBlendComponent(component: BlendComponent): GPUBlendComponent {
+        val gpuComponent = js("({})").unsafeCast<GPUBlendComponent>()
+        gpuComponent.operation = toWebGPUBlendOperation(component.operation)
+        gpuComponent.srcFactor = toWebGPUBlendFactor(component.srcFactor)
+        gpuComponent.dstFactor = toWebGPUBlendFactor(component.dstFactor)
+        return gpuComponent
+    }
+
+    private fun toWebGPUBlendFactor(factor: BlendFactor): String = when (factor) {
+        BlendFactor.ZERO -> "zero"
+        BlendFactor.ONE -> "one"
+        BlendFactor.SRC -> "src"
+        BlendFactor.ONE_MINUS_SRC -> "one-minus-src"
+        BlendFactor.SRC_ALPHA -> "src-alpha"
+        BlendFactor.ONE_MINUS_SRC_ALPHA -> "one-minus-src-alpha"
+        BlendFactor.DST -> "dst"
+        BlendFactor.ONE_MINUS_DST -> "one-minus-dst"
+        BlendFactor.DST_ALPHA -> "dst-alpha"
+        BlendFactor.ONE_MINUS_DST_ALPHA -> "one-minus-dst-alpha"
+    }
+
+    private fun toWebGPUBlendOperation(operation: BlendOperation): String = when (operation) {
+        BlendOperation.ADD -> "add"
+        BlendOperation.SUBTRACT -> "subtract"
+        BlendOperation.REVERSE_SUBTRACT -> "reverse-subtract"
+        BlendOperation.MIN -> "min"
+        BlendOperation.MAX -> "max"
     }
 
     /**
