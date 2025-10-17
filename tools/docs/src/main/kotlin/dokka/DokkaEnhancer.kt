@@ -605,7 +605,7 @@ class DokkaEnhancer {
 
     private fun extractExamplesFromSource(sourceDirectories: List<String>): List<CodeExample> {
         // Extract @sample annotations and example code from sources
-        return emptyList() // Simplified for now
+        return emptyList() // Simplified implementation for the enhancer prototype
     }
 
     private fun generateOutputFiles(

@@ -35,7 +35,7 @@ class ImplementationValidatorTest {
             assertNotNull(result)
             assertEquals(platforms, result.platformsCovered)
             assertTrue(result.analysisTimestamp > 0)
-            assertTrue(result.gaps.isEmpty() || result.gaps.isNotEmpty()) // Either is valid for now
+            assertTrue(result.gaps.isEmpty() || result.gaps.isNotEmpty()) // Either result is acceptable for this smoke check
         }
     }
 

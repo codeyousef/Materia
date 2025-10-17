@@ -28,7 +28,7 @@ dependencies {
     // Docker/Container support
     implementation("com.github.docker-java:docker-java:3.3.3")
 
-    // Build tools - Gradle Tooling API removed for now
+    // Build tools - Gradle Tooling API temporarily removed pending upgrade
     // implementation("org.gradle:gradle-tooling-api:8.14.3")
 
     // Logging

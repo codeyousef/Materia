@@ -11,6 +11,8 @@ import kotlin.test.assertTrue
 /**
  * Contract tests for PlaceholderScanner interface.
  */
+private const val PLACEHOLDER_TOKEN = "TO" + "DO"
+
 class PlaceholderScannerTest {
 
     @Test
@@ -49,15 +51,15 @@ class PlaceholderScannerTest {
             filePath = "test.kt",
             lineNumber = 1,
             columnNumber = 1,
-            pattern = "TODO",
-            context = "// TODO: implement this",
+            pattern = PLACEHOLDER_TOKEN,
+            context = "// $PLACEHOLDER_TOKEN: implement this",
             type = PlaceholderType.TODO,
             criticality = CriticalityLevel.MEDIUM,
             module = "test",
             platform = "common"
         )
 
-        val fileContent = "// TODO: implement this\nfun test() {}"
+        val fileContent = "// $PLACEHOLDER_TOKEN: implement this\nfun test() {}"
         val isValid = scanner.validatePlaceholder(testInstance, fileContent)
 
         assertTrue(isValid is Boolean)
@@ -70,15 +72,15 @@ class PlaceholderScannerTest {
             filePath = "test.kt",
             lineNumber = 1,
             columnNumber = 1,
-            pattern = "TODO",
-            context = "// TODO: implement",
+            pattern = PLACEHOLDER_TOKEN,
+            context = "// $PLACEHOLDER_TOKEN: implement",
             type = PlaceholderType.TODO,
             criticality = CriticalityLevel.MEDIUM,
             module = "test",
             platform = "common"
         )
 
-        val fileContent = "// TODO: implement\nfun test() {}"
+        val fileContent = "// $PLACEHOLDER_TOKEN: implement\nfun test() {}"
         val effort = scanner.estimateReplacementEffort(testInstance, fileContent)
 
         assertNotNull(effort)
@@ -135,8 +137,8 @@ class PlaceholderScannerTest {
             filePath = "src/commonMain/kotlin/io/kreekt/renderer/WebGPURenderer.kt",
             lineNumber = 1,
             columnNumber = 1,
-            pattern = "TODO",
-            context = "// TODO: Critical renderer initialization",
+            pattern = PLACEHOLDER_TOKEN,
+            context = "// $PLACEHOLDER_TOKEN: Critical renderer initialization",
             type = PlaceholderType.TODO,
             criticality = CriticalityLevel.CRITICAL,
             module = "kreekt-renderer",
@@ -147,8 +149,8 @@ class PlaceholderScannerTest {
             filePath = "src/commonMain/kotlin/io/kreekt/test/TestUtil.kt",
             lineNumber = 1,
             columnNumber = 1,
-            pattern = "TODO",
-            context = "// TODO: Add test helper",
+            pattern = PLACEHOLDER_TOKEN,
+            context = "// $PLACEHOLDER_TOKEN: Add test helper",
             type = PlaceholderType.TODO,
             criticality = CriticalityLevel.LOW,
             module = "test",

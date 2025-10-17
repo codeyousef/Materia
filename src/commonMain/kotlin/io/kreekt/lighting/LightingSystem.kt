@@ -3,6 +3,9 @@ package io.kreekt.lighting
 // Use texture types from renderer module
 import io.kreekt.core.scene.Scene
 import io.kreekt.core.math.Vector3
+import io.kreekt.core.platform.currentTimeMillis
+import io.kreekt.lighting.ibl.ConvolutionProcessor
+import io.kreekt.lighting.ibl.IBLConvolutionProfiler
 import io.kreekt.renderer.CubeFace
 import io.kreekt.renderer.CubeTexture
 import io.kreekt.renderer.Texture2D
@@ -292,6 +295,7 @@ class DefaultLightingSystem : LightingSystem {
             val targetSize = min(cubeTexture.size, DEFAULT_IRRADIANCE_SIZE)
             val irradiance = createCubeTexture(targetSize)
 
+            val startTime = currentTimeMillis()
             for (face in 0 until CUBE_FACE_COUNT) {
                 val faceData = FloatArray(targetSize * targetSize * 4)
                 for (y in 0 until targetSize) {
@@ -309,6 +313,11 @@ class DefaultLightingSystem : LightingSystem {
                 }
                 irradiance.setFaceDataByIndex(face, faceData)
             }
+
+            val durationMs = (currentTimeMillis() - startTime).toDouble()
+            val totalSamples =
+                CUBE_FACE_COUNT * targetSize * targetSize * ConvolutionProcessor.IRRADIANCE_SAMPLES_PER_TEXEL
+            IBLConvolutionProfiler.recordIrradiance(durationMs.toDouble(), targetSize, totalSamples)
 
             irradianceCache[cacheKey] = irradiance
             return LightResult.Success(irradiance)
@@ -328,9 +337,13 @@ class DefaultLightingSystem : LightingSystem {
             val prefilter = createCubeTexture(baseSize)
 
             val levelCount = calculatePrefilterLevels(baseSize)
+            var totalSamples = 0
+            val startTime = currentTimeMillis()
             for (level in 0 until levelCount) {
                 val mipSize = max(1, baseSize shr level)
                 val roughness = if (levelCount == 1) 0f else level.toFloat() / (levelCount - 1)
+
+                totalSamples += CUBE_FACE_COUNT * mipSize * mipSize * ConvolutionProcessor.PREFILTER_SAMPLE_COUNT
 
                 for (face in 0 until CUBE_FACE_COUNT) {
                     val faceData = FloatArray(mipSize * mipSize * 4)
@@ -350,6 +363,9 @@ class DefaultLightingSystem : LightingSystem {
                     prefilter.setFaceDataByIndex(face, faceData, level)
                 }
             }
+
+            val durationMs = (currentTimeMillis() - startTime).toDouble()
+            IBLConvolutionProfiler.recordPrefilter(durationMs, baseSize, levelCount, totalSamples)
 
             prefilterCache[cacheKey] = prefilter
             return LightResult.Success(prefilter)

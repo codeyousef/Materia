@@ -1,5 +1,7 @@
 package io.kreekt.renderer.shader
 
+import kotlin.concurrent.Volatile
+
 /**
  * Descriptor identifying the chunks required to assemble a material shader. The descriptor is used
  * as a cache key for compiled shader sources.
@@ -90,7 +92,7 @@ object MaterialShaderLibrary {
 
     internal fun ensureBuiltInsRegistered() {
         if (!builtInsRegistered) {
-            synchronized(initLock) {
+            withLock(initLock) {
                 if (!builtInsRegistered) {
                     ShaderChunkRegistry.registerAll(BuiltInMaterialChunks.defaults)
                     builtInsRegistered = true
@@ -100,7 +102,7 @@ object MaterialShaderLibrary {
     }
 
     internal fun resetForTests() {
-        synchronized(initLock) {
+        withLock(initLock) {
             builtInsRegistered = false
         }
     }
@@ -178,10 +180,12 @@ private object BuiltInMaterialChunks {
             source = """
                 #include <common.uniforms>
                 #include <material.basic.fragment.input>
+                {{FRAGMENT_BINDINGS}}
 
                 @fragment
                 fn fs_main(in: BasicFragmentInput) -> @location(0) vec4<f32> {
                     var color = in.color;
+                    {{FRAGMENT_INIT_EXTRA}}
                     {{FRAGMENT_EXTRA}}
                     return vec4<f32>(color, uniforms.baseColor.a);
                 }
@@ -286,12 +290,14 @@ private object BuiltInMaterialChunks {
                 #include <material.pbr.fragment.bindings>
                 #include <material.pbr.fragment.functions>
                 #include <material.pbr.fragment.input>
+                {{FRAGMENT_BINDINGS}}
 
                 @fragment
                 fn fs_main(in: PbrFragmentInput) -> @location(0) vec4<f32> {
-                    let N = normalize(in.worldNormal);
+                    var N = normalize(in.worldNormal);
                     let V = normalize(in.viewDir);
-                    let baseColor = clamp(in.albedo, vec3<f32>(0.0), vec3<f32>(1.0));
+                    var baseColor = clamp(in.albedo, vec3<f32>(0.0), vec3<f32>(1.0));
+                    {{FRAGMENT_INIT_EXTRA}}
 
                     let roughness = uniforms.pbrParams.x;
                     let metalness = uniforms.pbrParams.y;
@@ -317,3 +323,6 @@ private object BuiltInMaterialChunks {
         )
     )
 }
+
+private inline fun <T> withLock(lock: Any, block: () -> T): T = block()
+

@@ -1,5 +1,6 @@
 package io.kreekt.renderer.webgpu
 
+import io.kreekt.lighting.ibl.IBLConvolutionMetrics
 import io.kreekt.renderer.RenderStats
 
 /**
@@ -31,6 +32,10 @@ class RenderStatsTracker {
     private var bufferMemory = 0L
     private var textureMemory = 0L
     private var totalMemory = 0L
+
+    private var iblCpuMs = 0.0
+    private var iblPrefilterMipCount = 0
+    private var iblLastRoughness = 0f
 
     // Frame timing
     private var frameStartTime = 0.0
@@ -181,7 +186,10 @@ class RenderStatsTracker {
             triangles = triangles,
             drawCalls = drawCalls,
             textureMemory = textureMemory,
-            bufferMemory = bufferMemory
+            bufferMemory = bufferMemory,
+            iblCpuMs = iblCpuMs,
+            iblPrefilterMipCount = iblPrefilterMipCount,
+            iblLastRoughness = iblLastRoughness
         )
     }
 
@@ -207,6 +215,23 @@ class RenderStatsTracker {
         frameTimeHistory.clear()
         avgFrameTime = 0.0
         lastFrameTime = 0.0
+        iblCpuMs = 0.0
+        iblPrefilterMipCount = 0
+        iblLastRoughness = 0f
+    }
+
+    fun recordIBLConvolution(metrics: IBLConvolutionMetrics) {
+        iblCpuMs = metrics.prefilterMs + metrics.irradianceMs
+        if (metrics.prefilterMipCount >= 0) {
+            iblPrefilterMipCount = metrics.prefilterMipCount
+        }
+    }
+
+    fun recordIBLMaterial(roughness: Float, mipCount: Int) {
+        iblLastRoughness = roughness
+        if (mipCount >= 0) {
+            iblPrefilterMipCount = mipCount
+        }
     }
 
     /**

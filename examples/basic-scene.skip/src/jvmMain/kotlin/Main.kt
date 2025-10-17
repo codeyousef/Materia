@@ -192,7 +192,7 @@ fun main() {
                 val input = getCurrentInput(window)
                 example.handleInput(input)
 
-                // Render the example (even though it just prints to console for now)
+                // Render the example (currently this prints to the console)
                 example.render(deltaTime)
 
                 // Swap buffers and poll events

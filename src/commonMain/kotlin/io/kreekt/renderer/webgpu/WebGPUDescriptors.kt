@@ -38,12 +38,13 @@ data class RenderPipelineDescriptor(
     val label: String? = null,
     val vertexShader: String,
     val fragmentShader: String,
-    val vertexBufferLayout: VertexBufferLayout,
+    val vertexLayouts: List<VertexBufferLayout>,
     val primitiveTopology: PrimitiveTopology = PrimitiveTopology.TRIANGLE_LIST,
     val cullMode: CullMode = CullMode.BACK,
     val frontFace: FrontFace = FrontFace.CCW,
     val depthStencilState: DepthStencilState? = null,
-    val multisampleState: MultisampleState? = null
+    val multisampleState: MultisampleState? = null,
+    val colorTarget: ColorTargetDescriptor = ColorTargetDescriptor()
 )
 
 /**
@@ -122,6 +123,56 @@ data class DepthStencilState(
     val depthWriteEnabled: Boolean = true,
     val depthCompare: CompareFunction = CompareFunction.LESS
 )
+
+/**
+ * Color target configuration including blending.
+ */
+data class ColorTargetDescriptor(
+    val format: TextureFormat = TextureFormat.BGRA8_UNORM,
+    val blendState: BlendState? = null,
+    val writeMask: ColorWriteMask = ColorWriteMask.ALL
+)
+
+data class BlendState(
+    val color: BlendComponent,
+    val alpha: BlendComponent
+)
+
+data class BlendComponent(
+    val srcFactor: BlendFactor,
+    val dstFactor: BlendFactor,
+    val operation: BlendOperation
+)
+
+enum class BlendFactor {
+    ZERO,
+    ONE,
+    SRC,
+    ONE_MINUS_SRC,
+    SRC_ALPHA,
+    ONE_MINUS_SRC_ALPHA,
+    DST,
+    ONE_MINUS_DST,
+    DST_ALPHA,
+    ONE_MINUS_DST_ALPHA
+}
+
+enum class BlendOperation {
+    ADD,
+    SUBTRACT,
+    REVERSE_SUBTRACT,
+    MIN,
+    MAX
+}
+
+enum class ColorWriteMask(val bits: Int) {
+    NONE(0),
+    RED(0x1),
+    GREEN(0x2),
+    BLUE(0x4),
+    ALPHA(0x8),
+    ALL(0xF)
+}
 
 /**
  * Multisample state.

@@ -105,6 +105,20 @@ window.addEventListener("unload", {
 })
 ```
 
+### Environment Prefilter Integration
+
+- Set `Scene.environment` to a prefiltered `CubeTexture` (the renderer auto-detects mip chains).
+- Roughness-driven LOD selection mirrors the CPU path via `PrefilterMipSelector`, ensuring consistent reflections.
+- When no prefiltered cube is available the renderer skips PBR passes until one is provided.
+- The new `IBLConvolutionProfiler` captures CPU time for irradiance/prefilter convolutions; the latest values surface through `RenderStats` (`iblCpuMs`).
+
+### Profiling IBL Convolution
+
+```kotlin
+val metrics = IBLConvolutionProfiler.snapshot()
+console.log("Prefilter took ${metrics.prefilterMs} ms across ${metrics.prefilterMipCount} mips")
+```
+
 ## API Reference
 
 ### WebGPURendererFactory
@@ -210,20 +224,24 @@ Sets viewport rectangle.
 Gets rendering statistics.
 
 **Returns:** `RenderStats` with:
-- `frame: Int` - Frame number
-- `calls: Int` - Draw calls this frame
-- `triangles: Int` - Triangles rendered
-- `points: Int` - Points rendered
-- `lines: Int` - Lines rendered
-- `geometries: Int` - Geometry count
-- `textures: Int` - Texture count
-- `shaders: Int` - Shader count
-- `programs: Int` - Program count
+- `fps: Double` - Average frames per second
+- `frameTime: Double` - Average frame time in milliseconds
+- `triangles: Int` - Triangles rendered this frame
+- `drawCalls: Int` - Draw calls issued
+- `textureMemory: Long` - Texture memory usage in bytes
+- `bufferMemory: Long` - Buffer memory usage in bytes
+- `timestamp: Long` - Timestamp when stats were captured
+- `iblCpuMs: Double` - Last CPU time spent in IBL convolution
+- `iblPrefilterMipCount: Int` - Prefilter mip chain used by the renderer
+- `iblLastRoughness: Float` - Roughness value from the most recent PBR draw
 
 **Example:**
 ```kotlin
 val stats = renderer.getStats()
-console.log("FPS: ${1000.0 / stats.frame}, Draw calls: ${stats.calls}")
+console.log("${stats.fps} FPS | ${stats.drawCalls} draw calls")
+if (stats.iblPrefilterMipCount > 0) {
+    console.log("IBL CPU: ${stats.iblCpuMs} ms (mips=${stats.iblPrefilterMipCount})")
+}
 ```
 
 ##### `resetStats()`

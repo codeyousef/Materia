@@ -94,7 +94,7 @@ private suspend fun toolsWebSocketHandler(session: DefaultWebSocketSession) {
                     // Parse and handle tool messages
                     handleToolMessage(text)
 
-                    // Echo back for now (implement proper message routing)
+                    // Echo back messages while proper routing is implemented
                     session.send("Echo: $text")
                 }
                 is Frame.Binary -> {

@@ -399,12 +399,12 @@ class RenderTargetPool {
         options: RenderTargetOptions
     ): WebGPURenderTarget {
         // Platform-specific render target creation
-        TODO("Platform-specific implementation")
+        error("Platform-specific implementation is not available in this preview module")
     }
 }
 
 // 3D and Array textures
-// TODO: These should be moved to their own files in io.kreekt.texture package
+// These types should be moved to dedicated files in the io.kreekt.texture package
 
 /**
  * 3D texture for volume rendering

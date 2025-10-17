@@ -1,5 +1,6 @@
 package io.kreekt.renderer.material
 
+
 import io.kreekt.core.scene.Material
 import io.kreekt.material.Blending
 import io.kreekt.material.MeshBasicMaterial
@@ -115,6 +116,9 @@ object MaterialDescriptorRegistry {
     private val descriptorsByKey = mutableMapOf<String, MaterialDescriptor>()
     private val descriptorsByMaterial = mutableMapOf<KClass<out Material>, MaterialDescriptor>()
 
+    private const val MATERIAL_TEXTURE_GROUP = 1
+    private const val ENVIRONMENT_GROUP = 2
+
     private val BASIC_REQUIRED_ATTRIBUTES = setOf(
         GeometryAttribute.POSITION,
         GeometryAttribute.NORMAL
@@ -157,7 +161,7 @@ object MaterialDescriptorRegistry {
         materials: List<KClass<out Material>>,
         replaceExisting: Boolean = false
     ) {
-        synchronized(lock) {
+        withLock(lock) {
             registerDescriptor(descriptor, replaceExisting)
             materials.forEach { materialClass ->
                 if (!replaceExisting && descriptorsByMaterial.containsKey(materialClass)) {
@@ -220,7 +224,7 @@ object MaterialDescriptorRegistry {
 
     private fun ensureDefaultsRegistered() {
         if (defaultsRegistered) return
-        synchronized(lock) {
+        withLock(lock) {
             if (defaultsRegistered) return
             MaterialShaderLibrary.ensureBuiltInsRegistered()
             registerDefaults()
@@ -233,6 +237,7 @@ object MaterialDescriptorRegistry {
             key = "material.basic",
             shader = MaterialShaderLibrary.basic(),
             uniformBlock = defaultUniformBlock,
+            bindings = albedoBindings(),
             renderState = MaterialRenderState(),
             requiredAttributes = BASIC_REQUIRED_ATTRIBUTES,
             optionalAttributes = BASIC_OPTIONAL_ATTRIBUTES
@@ -243,24 +248,7 @@ object MaterialDescriptorRegistry {
             key = "material.meshStandard",
             shader = MaterialShaderLibrary.meshStandard(),
             uniformBlock = defaultUniformBlock,
-            bindings = listOf(
-                MaterialBinding(
-                    name = "prefilterTexture",
-                    type = MaterialBindingType.TEXTURE_CUBE,
-                    group = 1,
-                    binding = 0,
-                    source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
-                    required = true
-                ),
-                MaterialBinding(
-                    name = "prefilterSampler",
-                    type = MaterialBindingType.SAMPLER,
-                    group = 1,
-                    binding = 1,
-                    source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
-                    required = true
-                )
-            ),
+            bindings = albedoBindings() + normalBindings() + environmentBindings(),
             renderState = MaterialRenderState(),
             requiredAttributes = STANDARD_REQUIRED_ATTRIBUTES,
             optionalAttributes = STANDARD_OPTIONAL_ATTRIBUTES
@@ -273,12 +261,69 @@ object MaterialDescriptorRegistry {
     }
 
     internal fun resetForTests() {
-        synchronized(lock) {
+        withLock(lock) {
             descriptorsByKey.clear()
             descriptorsByMaterial.clear()
             defaultsRegistered = false
         }
     }
+
+    private fun albedoBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "albedoTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 0,
+            source = MaterialBindingSource.ALBEDO_MAP,
+            required = false
+        ),
+        MaterialBinding(
+            name = "albedoSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 1,
+            source = MaterialBindingSource.ALBEDO_MAP,
+            required = false
+        )
+    )
+
+    private fun normalBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "normalTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 2,
+            source = MaterialBindingSource.NORMAL_MAP,
+            required = false
+        ),
+        MaterialBinding(
+            name = "normalSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 3,
+            source = MaterialBindingSource.NORMAL_MAP,
+            required = false
+        )
+    )
+
+    private fun environmentBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "prefilterTexture",
+            type = MaterialBindingType.TEXTURE_CUBE,
+            group = ENVIRONMENT_GROUP,
+            binding = 0,
+            source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
+            required = true
+        ),
+        MaterialBinding(
+            name = "prefilterSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = ENVIRONMENT_GROUP,
+            binding = 1,
+            source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
+            required = true
+        )
+    )
 
 }
 
@@ -433,4 +478,5 @@ private fun StandardMaterialSide.toCommonSide(): Side = when (this) {
 
 private fun Side.toCommonSide(): Side = this
 
+private inline fun <T> withLock(lock: Any, block: () -> T): T = block()
 

@@ -327,21 +327,6 @@ data class RendererCapabilities(
         return estimatedBytes < 100_000_000 // 100MB limit as rough estimate
     }
 
-    // TODO: Restore after Precision enum is implemented in shader system (Phase 3.7)
-    // /**
-    //  * Gets recommended precision for shaders
-    //  */
-    // fun getRecommendedPrecision(isVertexShader: Boolean): Precision {
-    //     val precisions = if (isVertexShader) vertexShaderPrecisions else fragmentShaderPrecisions
-    //
-    //     return when {
-    //         precisions.highp.supported -> Precision.HIGHP
-    //         precisions.mediump.supported -> Precision.MEDIUMP
-    //         precisions.lowp.supported -> Precision.LOWP
-    //         else -> Precision.MEDIUMP
-    //     }
-    // }
-
     /**
      * Gets a summary of key capabilities
      */

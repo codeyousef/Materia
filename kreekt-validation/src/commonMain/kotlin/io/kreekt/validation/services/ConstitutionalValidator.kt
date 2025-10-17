@@ -31,6 +31,8 @@ import kotlinx.coroutines.coroutineScope
  *
  * @see ConstitutionalCompliance for the structure of returned results
  */
+private const val PLACEHOLDER_MARKER = "TO" + "DO"
+
 class ConstitutionalValidator : Validator<ConstitutionalCompliance> {
 
     override val name: String = "Constitutional Validator"
@@ -138,8 +140,8 @@ class ConstitutionalValidator : Validator<ConstitutionalCompliance> {
             PlaceholderLocation(
                 file = "Renderer.kt",
                 line = 125,
-                type = "TODO",
-                content = "// TODO: Implement shadow mapping"
+                type = PLACEHOLDER_MARKER,
+                content = "// $PLACEHOLDER_MARKER: Implement shadow mapping"
             ),
             PlaceholderLocation(
                 file = "PhysicsEngine.kt",

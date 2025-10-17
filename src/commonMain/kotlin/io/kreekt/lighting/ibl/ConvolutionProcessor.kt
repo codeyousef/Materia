@@ -15,6 +15,10 @@ import kotlin.math.*
  */
 internal object ConvolutionProcessor {
 
+    internal const val PREFILTER_SAMPLE_COUNT = 1024
+    internal const val IRRADIANCE_SAMPLE_STEPS = 64
+    internal const val IRRADIANCE_SAMPLES_PER_TEXEL = IRRADIANCE_SAMPLE_STEPS * IRRADIANCE_SAMPLE_STEPS
+
     /**
      * Generate irradiance face data
      */
@@ -78,7 +82,7 @@ internal object ConvolutionProcessor {
         var irradiance = Vector3.ZERO
         var sampleCount = 0
 
-        val samples = 64
+        val samples = IRRADIANCE_SAMPLE_STEPS
         val deltaTheta = PI.toFloat() / samples
         val deltaPhi = 2f * PI.toFloat() / samples
 
@@ -118,7 +122,7 @@ internal object ConvolutionProcessor {
         var prefilteredColor = Vector3.ZERO
         var totalWeight = 0f
 
-        val sampleCount = 1024
+        val sampleCount = PREFILTER_SAMPLE_COUNT
         for (i in 0 until sampleCount) {
             val xi = SamplingUtils.hammersley(i, sampleCount)
             val halfVector = SamplingUtils.importanceSampleGGX(xi, normal, roughness)

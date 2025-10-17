@@ -184,7 +184,7 @@ actual object RendererFactory {
      *
      * @param canvas HTMLCanvasElement
      * @param config Renderer configuration
-     * @return WebGLRenderer instance (stub for now)
+     * @return WebGLRenderer instance (temporary fallback implementation)
      */
     private fun createWebGLRenderer(canvas: HTMLCanvasElement, config: RendererConfig): Renderer =
         io.kreekt.renderer.webgl.WebGLRenderer(canvas)

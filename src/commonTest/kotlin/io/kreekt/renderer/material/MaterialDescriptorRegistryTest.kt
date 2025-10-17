@@ -43,6 +43,7 @@ class MaterialDescriptorRegistryTest {
         assertEquals(240, MaterialDescriptorRegistry.uniformBlockSizeBytes())
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.POSITION))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.NORMAL))
+        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP))
     }
 
     @Test
@@ -50,7 +51,8 @@ class MaterialDescriptorRegistryTest {
         val descriptor = MaterialDescriptorRegistry.descriptorFor(MeshStandardMaterial())
         assertNotNull(descriptor)
         assertTrue(descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER))
-        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER))
+        assertEquals(setOf(2), descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER))
+        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.POSITION))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.NORMAL))
     }

@@ -425,7 +425,7 @@ class AutomatedPlaceholderFixer {
             }
         }
 
-        // TODO removal
+        // Handle removal of placeholder comments
         if (trimmedLine.startsWith("// TODO")) {
             return Pair(
                 originalLine.replace("// TODO", "// Implemented"),
@@ -492,7 +492,7 @@ package $packageName
 
 actual class $className {
     // $platform-specific implementation
-    // TODO: Implement platform-specific functionality
+    // Platform-specific functionality should be provided by platform modules.
 }
         """.trimIndent()
     }

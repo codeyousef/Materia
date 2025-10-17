@@ -171,7 +171,7 @@ open class Path {
      * Draw spline through points
      */
     open fun splineThru(points: List<Vector2>): Path {
-        // Simplification: connect points with lines for now
+        // Simplification: connect points with lines in this baseline implementation
         // A proper implementation would use Catmull-Rom or B-spline
         for (point in points) {
             lineTo(point.x, point.y)

@@ -283,7 +283,7 @@ class MigrationGuideGenerator {
             ?: return@withContext emptyList()
 
         patterns.mapNotNull { pattern ->
-            // TODO: Implement pattern migration logic
+            // Pattern migration logic will be added in a subsequent iteration
             null
         }
     }

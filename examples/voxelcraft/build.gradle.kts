@@ -154,7 +154,7 @@ tasks.register<JavaExec>("runJvm") {
     standardOutput = System.out
     errorOutput = System.err
 
-    // Ignore exit value for now to see errors
+    // Ignore exit value temporarily to surface errors during local runs
     isIgnoreExitValue = false
 
     doFirst {

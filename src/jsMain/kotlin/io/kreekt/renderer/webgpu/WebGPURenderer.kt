@@ -9,12 +9,14 @@ import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.BufferGeometry
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.MeshStandardMaterial
+import io.kreekt.material.Material as EngineMaterial
 import io.kreekt.lighting.ibl.PrefilterMipSelector
 import io.kreekt.lighting.ibl.IBLConvolutionProfiler
 import io.kreekt.optimization.BoundingBox
 import io.kreekt.optimization.Frustum
 import io.kreekt.renderer.*
 import io.kreekt.renderer.gpu.unwrapHandle
+import io.kreekt.renderer.gpu.GpuBindGroupLayout
 import io.kreekt.renderer.gpu.GpuBackend
 import io.kreekt.renderer.gpu.GpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuDiagnostics
@@ -30,6 +32,7 @@ import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.renderer.material.bindingGroups
 import io.kreekt.renderer.material.requiresBinding
 import io.kreekt.renderer.material.ResolvedMaterialDescriptor
+import io.kreekt.renderer.material.MaterialBindingType
 import io.kreekt.renderer.shader.MaterialShaderDescriptor
 import io.kreekt.renderer.shader.MaterialShaderGenerator
 import io.kreekt.renderer.shader.withOverrides
@@ -37,6 +40,8 @@ import io.kreekt.renderer.webgpu.GPUCommandBuffer
 import io.kreekt.renderer.webgpu.GPUCommandEncoder
 import io.kreekt.renderer.webgpu.GPUBindGroup
 import io.kreekt.renderer.webgpu.GPUPipelineLayout
+import io.kreekt.renderer.webgpu.MaterialTextureBinding
+import io.kreekt.renderer.webgpu.WebGPUMaterialTextureManager
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.js.jsTypeOf
 
@@ -67,6 +72,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private lateinit var bufferPool: BufferPool
     private val contextLossRecovery = ContextLossRecovery()
     private val environmentManager = WebGPUEnvironmentManager({ gpuContext?.device }, statsTracker)
+    private val materialTextureManager = WebGPUMaterialTextureManager({ gpuContext?.device }, statsTracker)
 
     // Feature 020 Managers (T020)
     private var bufferManager: WebGPUBufferManager? = null
@@ -266,6 +272,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             bufferManager = WebGPUBufferManager(gpuCtx.device)
             console.log("T033: BufferManager initialized")
             uniformManager.onDeviceReady(gpuCtx.device)
+            materialTextureManager.onDeviceReady(gpuCtx.device)
             // Note: RenderPassManager is initialized per-frame with command encoder
 
             // T021 PERFORMANCE: Create custom pipeline layout with dynamic offset support
@@ -506,7 +513,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
         val geometry = mesh.geometry
         val cameraPosition = floatArrayOf(camera.position.x, camera.position.y, camera.position.z)
-        val material = mesh.material
+        val material = mesh.material ?: run {
+            console.warn("Mesh ${mesh.name} missing material; skipping")
+            return
+        }
         val resolvedDescriptor = MaterialDescriptorRegistry.resolve(material) ?: run {
             console.warn("No material descriptor registered for ${material::class.simpleName}")
             return
@@ -559,13 +569,34 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         val attributeOverrides = buildAttributeOverrides(descriptor.key, buffers.metadata)
-        val combinedDefines = descriptor.defines + resolvedDescriptor.shaderOverrides + attributeOverrides
-        val shaderDescriptor = descriptor.shader.withOverrides(combinedDefines)
+        val materialOverrides = buildMaterialOverrides(material as? EngineMaterial, descriptor, buffers.metadata)
+        val combinedOverrides = mergeShaderOverrides(
+            descriptor.defines,
+            resolvedDescriptor.shaderOverrides,
+            attributeOverrides,
+            materialOverrides.overrides
+        )
+        val shaderDescriptor = descriptor.shader.withOverrides(combinedOverrides)
+
+        val materialTextureBinding = if (materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap) {
+            materialTextureManager.prepare(
+                descriptor = descriptor,
+                material = material as? EngineMaterial,
+                useAlbedo = materialOverrides.usesAlbedoMap,
+                useNormal = materialOverrides.usesNormalMap
+            )
+        } else null
+
+        if ((materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap) && materialTextureBinding == null) {
+            console.warn("Material ${descriptor.key} requires texture bindings but none were prepared; skipping mesh")
+            return
+        }
 
         val pipeline = getOrCreatePipeline(
             resolvedDescriptor,
             shaderDescriptor,
             environmentBinding,
+            materialTextureBinding,
             buffers.vertexStreams.map { it.layout }
         )
         if (pipeline == null) {
@@ -603,7 +634,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         offsetsArray[0] = dynamicOffset
         renderPass.setBindGroup(0, bindGroup, offsetsArray)
 
-        bindAdditionalGroups(descriptor, environmentBinding, renderPass)
+        bindAdditionalGroups(descriptor, materialTextureBinding, environmentBinding, renderPass)
 
         val instanceCount = if (buffers.instanceCount > 0) buffers.instanceCount else 1
 
@@ -626,15 +657,29 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
     private fun bindAdditionalGroups(
         descriptor: MaterialDescriptor,
+        materialBinding: MaterialTextureBinding?,
         environmentBinding: EnvironmentBinding?,
         renderPass: GPURenderPassEncoder
     ) {
-        if (environmentBinding == null) return
-        val groups = descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
-        if (groups.isEmpty()) return
-        val rawGroup = environmentBinding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return
-        groups.forEach { group ->
-            renderPass.setBindGroup(group, rawGroup)
+        materialBinding?.let { binding ->
+            val groups = mutableSetOf<Int>()
+            groups += descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP)
+            groups += descriptor.bindingGroups(MaterialBindingSource.NORMAL_MAP)
+            if (groups.isNotEmpty()) {
+                val rawGroup = binding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return@let
+                groups.sorted().forEach { group ->
+                    renderPass.setBindGroup(group, rawGroup)
+                }
+            }
+        }
+
+        environmentBinding?.let { binding ->
+            val groups = descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+            if (groups.isEmpty()) return@let
+            val rawGroup = binding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return@let
+            groups.sorted().forEach { group ->
+                renderPass.setBindGroup(group, rawGroup)
+            }
         }
     }
 
@@ -673,6 +718,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         )
     }
 
+    private data class MaterialOverrideResult(
+        val overrides: Map<String, String>,
+        val usesAlbedoMap: Boolean,
+        val usesNormalMap: Boolean
+    )
+
     private fun buildAttributeOverrides(
         materialKey: String,
         metadata: GeometryMetadata
@@ -681,36 +732,33 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val vertexOutputExtra = StringBuilder()
         val vertexAssignExtra = StringBuilder()
         val fragmentInputExtra = StringBuilder()
+        val fragmentInitExtra = StringBuilder()
         val fragmentExtra = StringBuilder()
+        val fragmentBindings = StringBuilder()
 
         metadata.bindingFor(GeometryAttribute.UV0)?.let { binding ->
-            vertexInputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
-            vertexOutputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
-            vertexAssignExtra.append("    out.uv = in.uv;\n")
-            fragmentInputExtra.append("    @location(${binding.location}) uv: vec2<f32>,\n")
-            if (materialKey == "material.basic") {
-                fragmentExtra.append("    color = color * vec3<f32>(clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0)), 1.0);\n")
-            }
+            vertexInputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
+            vertexOutputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
+            vertexAssignExtra.appendLine("    out.uv = in.uv;")
+            fragmentInputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
         }
 
         metadata.bindingFor(GeometryAttribute.UV1)?.let { binding ->
-            vertexInputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
-            vertexOutputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
-            vertexAssignExtra.append("    out.uv2 = in.uv2;\n")
-            fragmentInputExtra.append("    @location(${binding.location}) uv2: vec2<f32>,\n")
+            vertexInputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
+            vertexOutputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
+            vertexAssignExtra.appendLine("    out.uv2 = in.uv2;")
+            fragmentInputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
         }
 
         metadata.bindingFor(GeometryAttribute.TANGENT)?.let { binding ->
-            vertexInputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
-            vertexOutputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
-            vertexAssignExtra.append("    out.tangent = in.tangent;\n")
-            fragmentInputExtra.append("    @location(${binding.location}) tangent: vec4<f32>,\n")
+            vertexInputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
+            vertexOutputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
+            vertexAssignExtra.appendLine("    out.tangent = in.tangent;")
+            fragmentInputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
             if (materialKey == "material.meshStandard") {
-                fragmentExtra.append(
-                    "    let tangent = normalize(in.tangent.xyz);\n" +
-                        "    let anisotropy = clamp(1.0 - abs(dot(normalize(in.viewDir), tangent)), 0.0, 1.0);\n" +
-                        "    color = color * (0.75 + 0.25 * anisotropy);\n"
-                )
+                fragmentExtra.appendLine("    let tangent = normalize(in.tangent.xyz);")
+                fragmentExtra.appendLine("    let anisotropy = clamp(1.0 - abs(dot(normalize(in.viewDir), tangent)), 0.0, 1.0);")
+                fragmentExtra.appendLine("    color = color * (0.75 + 0.25 * anisotropy);")
             }
         }
 
@@ -719,9 +767,139 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             "VERTEX_OUTPUT_EXTRA" to vertexOutputExtra.toString(),
             "VERTEX_ASSIGN_EXTRA" to vertexAssignExtra.toString(),
             "FRAGMENT_INPUT_EXTRA" to fragmentInputExtra.toString(),
-            "FRAGMENT_EXTRA" to fragmentExtra.toString()
+            "FRAGMENT_INIT_EXTRA" to fragmentInitExtra.toString(),
+            "FRAGMENT_EXTRA" to fragmentExtra.toString(),
+            "FRAGMENT_BINDINGS" to fragmentBindings.toString()
         )
     }
+
+    private fun buildMaterialOverrides(
+        material: EngineMaterial?,
+        descriptor: MaterialDescriptor,
+        metadata: GeometryMetadata
+    ): MaterialOverrideResult {
+        val fragmentBindings = StringBuilder()
+        val fragmentInitExtra = StringBuilder()
+        val fragmentExtra = StringBuilder()
+
+        val hasUv = metadata.bindingFor(GeometryAttribute.UV0) != null
+        val hasTangent = metadata.bindingFor(GeometryAttribute.TANGENT) != null
+
+        fun MaterialDescriptor.bindingFor(
+            source: MaterialBindingSource,
+            type: MaterialBindingType
+        ) = bindings.firstOrNull { it.source == source && it.type == type }
+
+        var usesAlbedoMap = false
+        var usesNormalMap = false
+
+        when (val typedMaterial = material) {
+            is MeshBasicMaterial -> {
+                if (typedMaterial.map != null && hasUv) {
+                    val textureBinding = descriptor.bindingFor(MaterialBindingSource.ALBEDO_MAP, MaterialBindingType.TEXTURE_2D)
+                    val samplerBinding = descriptor.bindingFor(MaterialBindingSource.ALBEDO_MAP, MaterialBindingType.SAMPLER)
+                    if (textureBinding != null && samplerBinding != null) {
+                        fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
+                        fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
+                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, in.uv);")
+                        fragmentInitExtra.appendLine("    color = clamp(color * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
+                        usesAlbedoMap = true
+                    }
+                }
+            }
+
+            is MeshStandardMaterial -> {
+                if (typedMaterial.map != null && hasUv) {
+                    val textureBinding = descriptor.bindingFor(MaterialBindingSource.ALBEDO_MAP, MaterialBindingType.TEXTURE_2D)
+                    val samplerBinding = descriptor.bindingFor(MaterialBindingSource.ALBEDO_MAP, MaterialBindingType.SAMPLER)
+                    if (textureBinding != null && samplerBinding != null) {
+                        fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
+                        fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
+                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, in.uv);")
+                        fragmentInitExtra.appendLine("    baseColor = clamp(baseColor * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
+                        usesAlbedoMap = true
+                    }
+                }
+                if (typedMaterial.normalMap != null && hasUv) {
+                    if (hasTangent) {
+                        val textureBinding = descriptor.bindingFor(MaterialBindingSource.NORMAL_MAP, MaterialBindingType.TEXTURE_2D)
+                        val samplerBinding = descriptor.bindingFor(MaterialBindingSource.NORMAL_MAP, MaterialBindingType.SAMPLER)
+                        if (textureBinding != null && samplerBinding != null) {
+                            fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialNormalTexture: texture_2d<f32>;")
+                            fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialNormalSampler: sampler;")
+                            fragmentInitExtra.appendLine("    let mappedNormal = textureSample(materialNormalTexture, materialNormalSampler, in.uv).xyz * 2.0 - vec3<f32>(1.0);")
+                            fragmentInitExtra.appendLine("    let baseNormal = N;")
+                            fragmentInitExtra.appendLine("    let tangent = normalize(in.tangent.xyz);")
+                            fragmentInitExtra.appendLine("    let bitangent = normalize(cross(baseNormal, tangent)) * in.tangent.w;")
+                            fragmentInitExtra.appendLine("    let tbn = mat3x3<f32>(tangent, bitangent, baseNormal);")
+                            fragmentInitExtra.appendLine("    N = normalize(tbn * mappedNormal);")
+                            usesNormalMap = true
+                        }
+                    } else {
+                        console.warn("Normal map assigned to ${typedMaterial.name} but geometry lacks tangents; falling back to vertex normals.")
+                    }
+                }
+            }
+        }
+
+        val overrides = mutableMapOf<String, String>()
+        if (fragmentBindings.isNotEmpty()) {
+            overrides["FRAGMENT_BINDINGS"] = fragmentBindings.toString()
+        }
+        if (fragmentInitExtra.isNotEmpty()) {
+            overrides["FRAGMENT_INIT_EXTRA"] = fragmentInitExtra.toString()
+        }
+        if (fragmentExtra.isNotEmpty()) {
+            overrides["FRAGMENT_EXTRA"] = fragmentExtra.toString()
+        }
+
+        return MaterialOverrideResult(
+            overrides = overrides,
+            usesAlbedoMap = usesAlbedoMap,
+            usesNormalMap = usesNormalMap
+        )
+    }
+
+    private fun mergeShaderOverrides(vararg overrideMaps: Map<String, String>): Map<String, String> {
+        val concatKeys = setOf(
+            "VERTEX_INPUT_EXTRA",
+            "VERTEX_OUTPUT_EXTRA",
+            "VERTEX_ASSIGN_EXTRA",
+            "FRAGMENT_INPUT_EXTRA",
+            "FRAGMENT_INIT_EXTRA",
+            "FRAGMENT_EXTRA",
+            "FRAGMENT_BINDINGS"
+        )
+        val result = LinkedHashMap<String, String>()
+        overrideMaps.forEach { map ->
+            map.forEach { (key, value) ->
+                if (key in concatKeys) {
+                    val existing = result[key]
+                    result[key] = when {
+                        existing.isNullOrEmpty() -> value
+                        value.isEmpty() -> existing
+                        else -> buildString {
+                            append(existing)
+                            if (!existing.endsWith("\n")) append('\n')
+                            append(value)
+                        }
+                    }
+                } else {
+                    result[key] = value
+                }
+            }
+        }
+        concatKeys.forEach { key ->
+            if (!result.containsKey(key)) {
+                result[key] = ""
+            }
+        }
+        return result
+    }
+
+
+
+
 
     /**
      * Internal method to resize the canvas.
@@ -746,6 +924,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         resolved: ResolvedMaterialDescriptor,
         shaderDescriptor: MaterialShaderDescriptor,
         environmentBinding: EnvironmentBinding?,
+        materialBinding: MaterialTextureBinding?,
         vertexLayouts: List<VertexBufferLayout>
     ): GPURenderPipeline? {
         val gpuDevice = device ?: return null
@@ -785,12 +964,25 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             pipelineCacheMap[cacheKey] = pipeline
 
             try {
-                val requiresEnvironmentLayout = resolved.descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)
-                val extraLayouts = if (requiresEnvironmentLayout) {
-                    environmentBinding?.let { listOf(it.layout) } ?: return null
-                } else {
-                    emptyList()
+                val layoutByGroup = mutableMapOf<Int, GpuBindGroupLayout>()
+
+                materialBinding?.let { binding ->
+                    val textureGroups = mutableSetOf<Int>()
+                    textureGroups += resolved.descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP)
+                    textureGroups += resolved.descriptor.bindingGroups(MaterialBindingSource.NORMAL_MAP)
+                    textureGroups.filter { it > 0 }.forEach { group ->
+                        layoutByGroup[group] = binding.layout
+                    }
                 }
+
+                if (resolved.descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)) {
+                    val environmentLayout = environmentBinding?.layout ?: return null
+                    resolved.descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+                        .filter { it > 0 }
+                        .forEach { group -> layoutByGroup[group] = environmentLayout }
+                }
+
+                val extraLayouts = layoutByGroup.entries.sortedBy { it.key }.map { it.value }
                 val pipelineLayoutWrapper = uniformManager.pipelineLayout(extraLayouts)
                 val creationResult = pipeline.create(pipelineLayoutWrapper?.unwrapHandle() as? GPUPipelineLayout)
                 when (creationResult) {

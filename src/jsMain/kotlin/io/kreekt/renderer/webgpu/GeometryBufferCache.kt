@@ -37,7 +37,7 @@ internal class GeometryBufferCache(
                     BufferDescriptor(
                         size = stream.data.size * 4,
                         usage = GPUBufferUsage.VERTEX or GPUBufferUsage.COPY_DST,
-                        label = "Vertex Stream $index for $uuid"
+                        label = "Vertex Stream $index for ${geometry.uuid}"
                     )
                 )
                 vertexBuffer.create()
@@ -61,7 +61,7 @@ internal class GeometryBufferCache(
                     BufferDescriptor(
                         size = indexData.size * 4,
                         usage = GPUBufferUsage.INDEX or GPUBufferUsage.COPY_DST,
-                        label = "Index Buffer $uuid"
+                        label = "Index Buffer ${geometry.uuid}"
                     )
                 )
                 buffer.create()

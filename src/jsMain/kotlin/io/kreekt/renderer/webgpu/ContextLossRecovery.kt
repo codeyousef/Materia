@@ -1,5 +1,8 @@
 package io.kreekt.renderer.webgpu
 
+import io.kreekt.renderer.gpu.GpuDevice
+import io.kreekt.renderer.gpu.unwrapHandle
+
 /**
  * Resource descriptor for tracking recreatable resources.
  */
@@ -56,7 +59,7 @@ class ContextLossRecovery {
      * @param device New GPU device
      * @return Result indicating success or failure
      */
-    suspend fun recover(device: GPUDevice): io.kreekt.core.Result<RecoveryStats> {
+    suspend fun recover(device: GpuDevice): io.kreekt.core.Result<RecoveryStats> {
         if (!isRecovering) {
             return io.kreekt.core.Result.Success(RecoveryStats(0, 0, 0, 0))
         }
@@ -68,6 +71,11 @@ class ContextLossRecovery {
         var pipelinesRecreated = 0
         var failures = 0
 
+        val rawDevice = device.unwrapHandle() as? GPUDevice ?: return io.kreekt.core.Result.Error(
+            "Unable to unwrap WebGPU device for recovery",
+            IllegalStateException("GPU device unavailable")
+        )
+
         // Recreate all tracked resources
         trackedResources.forEach { descriptor ->
             try {
@@ -78,12 +86,12 @@ class ContextLossRecovery {
                         buffersRecreated++
                     }
                     is ResourceDescriptor.Texture -> {
-                        val texture = WebGPUTexture(device, descriptor.descriptor)
+                        val texture = WebGPUTexture(rawDevice, descriptor.descriptor)
                         texture.create()
                         texturesRecreated++
                     }
                     is ResourceDescriptor.Pipeline -> {
-                        val pipeline = WebGPUPipeline(device, descriptor.descriptor)
+                        val pipeline = WebGPUPipeline(rawDevice, descriptor.descriptor)
                         pipeline.create()
                         pipelinesRecreated++
                     }

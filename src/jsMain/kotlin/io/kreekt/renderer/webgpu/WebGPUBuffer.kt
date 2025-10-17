@@ -1,5 +1,9 @@
 package io.kreekt.renderer.webgpu
 
+import io.kreekt.renderer.gpu.GpuBuffer
+import io.kreekt.renderer.gpu.GpuBufferDescriptor
+import io.kreekt.renderer.gpu.GpuDevice
+import io.kreekt.renderer.gpu.unwrapHandle
 import org.khronos.webgl.Float32Array
 import org.khronos.webgl.Uint16Array
 import org.khronos.webgl.Uint32Array
@@ -9,9 +13,10 @@ import org.khronos.webgl.Uint32Array
  * T030: GPU buffer management for vertices, indices, and uniforms.
  */
 class WebGPUBuffer(
-    private val device: GPUDevice,
+    private val device: GpuDevice,
     private val descriptor: BufferDescriptor
 ) {
+    private var gpuBuffer: GpuBuffer? = null
     private var buffer: GPUBuffer? = null
 
     /**
@@ -19,14 +24,19 @@ class WebGPUBuffer(
      */
     fun create(): io.kreekt.core.Result<Unit> {
         return try {
-            val bufferDescriptor = js("({})").unsafeCast<GPUBufferDescriptor>()
-            bufferDescriptor.size = descriptor.size
-            bufferDescriptor.usage = descriptor.usage
-            descriptor.label?.let { bufferDescriptor.label = it }
-            bufferDescriptor.mappedAtCreation = descriptor.mappedAtCreation
-
-            buffer = device.createBuffer(bufferDescriptor)
-            io.kreekt.core.Result.Success(Unit)
+            val gpuDescriptor = GpuBufferDescriptor(
+                label = descriptor.label,
+                size = descriptor.size.toLong(),
+                usage = descriptor.usage,
+                mappedAtCreation = descriptor.mappedAtCreation
+            )
+            gpuBuffer = device.createBuffer(gpuDescriptor, null)
+            buffer = gpuBuffer?.unwrapHandle() as? GPUBuffer
+            if (buffer == null) {
+                io.kreekt.core.Result.Error("Buffer creation failed", IllegalStateException("GPU buffer handle null"))
+            } else {
+                io.kreekt.core.Result.Success(Unit)
+            }
         } catch (e: Exception) {
             io.kreekt.core.Result.Error("Buffer creation failed", e)
         }
@@ -44,7 +54,9 @@ class WebGPUBuffer(
                 for (i in data.indices) {
                     float32Array.asDynamic()[i] = data[i]
                 }
-                device.queue.writeBuffer(buf, offset, float32Array, 0, data.size)
+                val rawDevice = device.unwrapHandle() as? GPUDevice
+                    ?: return io.kreekt.core.Result.Error("Device unavailable", IllegalStateException("GPU device missing"))
+                rawDevice.queue.writeBuffer(buf, offset, float32Array, 0, data.size)
                 io.kreekt.core.Result.Success(Unit)
             } ?: io.kreekt.core.Result.Error("Buffer not created", IllegalStateException("Buffer not created"))
         } catch (e: Exception) {
@@ -62,7 +74,9 @@ class WebGPUBuffer(
                 for (i in data.indices) {
                     uint32Array.asDynamic()[i] = data[i]
                 }
-                device.queue.writeBuffer(buf, offset, uint32Array, 0, data.size)
+                val rawDevice = device.unwrapHandle() as? GPUDevice
+                    ?: return io.kreekt.core.Result.Error("Device unavailable", IllegalStateException("GPU device missing"))
+                rawDevice.queue.writeBuffer(buf, offset, uint32Array, 0, data.size)
                 io.kreekt.core.Result.Success(Unit)
             } ?: io.kreekt.core.Result.Error("Buffer not created", IllegalStateException("Buffer not created"))
         } catch (e: Exception) {
@@ -80,7 +94,9 @@ class WebGPUBuffer(
                 for (i in data.indices) {
                     uint16Array.asDynamic()[i] = data[i]
                 }
-                device.queue.writeBuffer(buf, offset, uint16Array, 0, data.size)
+                val rawDevice = device.unwrapHandle() as? GPUDevice
+                    ?: return io.kreekt.core.Result.Error("Device unavailable", IllegalStateException("GPU device missing"))
+                rawDevice.queue.writeBuffer(buf, offset, uint16Array, 0, data.size)
                 io.kreekt.core.Result.Success(Unit)
             } ?: io.kreekt.core.Result.Error("Buffer not created", IllegalStateException("Buffer not created"))
         } catch (e: Exception) {
@@ -92,6 +108,11 @@ class WebGPUBuffer(
      * Gets the GPU buffer handle.
      */
     fun getBuffer(): GPUBuffer? = buffer
+
+    /**
+     * Returns the abstraction wrapper for this buffer if it was created.
+     */
+    fun gpuBuffer(): GpuBuffer? = gpuBuffer
 
     /**
      * Gets buffer size in bytes.
@@ -124,5 +145,6 @@ class WebGPUBuffer(
     fun dispose() {
         buffer?.destroy()
         buffer = null
+        gpuBuffer = null
     }
 }

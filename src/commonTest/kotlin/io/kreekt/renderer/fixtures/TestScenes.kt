@@ -145,7 +145,7 @@ object TestScenes {
         val cube = Mesh(geometry, material)
         scene.add(cube)
 
-        // TODO: Add lights when lighting system implemented
+        // Lighting is intentionally omitted until the lighting system lands in tests
         // scene.add(DirectionalLight(color = 0xFFFFFF, intensity = 1.0f))
         // scene.add(PointLight(color = 0xFF0000, intensity = 0.5f, position = Vector3(2f, 2f, 2f)))
 
@@ -190,7 +190,7 @@ object TestScenes {
             val geometry = BoxGeometry(2f, 2f, 0.1f)
             val material = MeshBasicMaterial().apply {
                 this.color = Color(color)
-                // TODO: Enable transparency when implemented
+                // Transparency is disabled until blending support is validated
                 // transparent = true
                 // opacity = 0.5f
             }

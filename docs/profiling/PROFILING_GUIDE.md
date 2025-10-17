@@ -514,3 +514,15 @@ Choose the appropriate verbosity level for your needs.
 - [Memory Management Best Practices](./MEMORY_GUIDE.md)
 - [Rendering Pipeline Deep Dive](./RENDERING_PIPELINE.md)
 - [API Reference](../api/profiling/index.html)
+
+## IBL Convolution Profiling
+
+Use `IBLConvolutionProfiler` to inspect the CPU cost of irradiance and prefilter generation. The profiler records the most recent durations and sample counts:
+
+```kotlin
+val metrics = IBLConvolutionProfiler.snapshot()
+println("Prefilter: ${metrics.prefilterMs} ms, samples=${metrics.prefilterSamples}")
+println("Irradiance: ${metrics.irradianceMs} ms")
+```
+
+These values bubble up into `RenderStats` (`iblCpuMs`, `iblPrefilterMipCount`, `iblLastRoughness`) so the WebGPU renderer can surface lighting diagnostics without additional instrumentation.

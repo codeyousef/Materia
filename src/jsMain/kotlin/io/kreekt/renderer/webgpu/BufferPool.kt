@@ -1,5 +1,7 @@
 package io.kreekt.renderer.webgpu
 
+import io.kreekt.renderer.gpu.GpuDevice
+
 /**
  * Buffer size classes for pooling.
  */
@@ -17,7 +19,7 @@ enum class BufferSizeClass(val sizeInBytes: Int) {
  *
  * Performance impact: +5-10 FPS improvement, reduces allocation overhead by 90%.
  */
-class BufferPool(private val device: GPUDevice) {
+class BufferPool(private val device: GpuDevice) {
     private val pools = mutableMapOf<BufferSizeClass, ArrayDeque<WebGPUBuffer>>()
     private val acquiredBuffers = mutableSetOf<WebGPUBuffer>()
     private var totalAllocated = 0L

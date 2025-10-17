@@ -8,6 +8,12 @@
 package io.kreekt.renderer.webgpu
 
 import io.kreekt.renderer.feature020.*
+import io.kreekt.renderer.gpu.GpuBufferDescriptor
+import io.kreekt.renderer.gpu.GpuDevice
+import io.kreekt.renderer.gpu.unwrapHandle
+import io.kreekt.renderer.webgpu.GPUBuffer
+import io.kreekt.renderer.webgpu.GPUBufferUsage
+import io.kreekt.renderer.webgpu.GPUDevice
 import org.khronos.webgl.Float32Array
 import org.khronos.webgl.Int8Array
 import org.khronos.webgl.Uint32Array
@@ -20,11 +26,11 @@ import org.khronos.webgl.Uint32Array
  * @property device WebGPU device
  */
 class WebGPUBufferManager(
-    private val device: dynamic // GPUDevice
+    private val device: GpuDevice
 ) : BufferManager {
 
     // Track destroyed buffers to prevent double-destroy
-    private val destroyedBuffers = mutableSetOf<dynamic>()
+    private val destroyedBuffers = mutableSetOf<GPUBuffer>()
 
     /**
      * Create vertex buffer from float array.
@@ -54,29 +60,24 @@ class WebGPUBufferManager(
         val sizeBytes = data.size * 4 // 4 bytes per float
 
         return try {
-            // Convert FloatArray to Float32Array
             val float32Array = Float32Array(data.size)
             for (i in data.indices) {
                 float32Array.asDynamic()[i] = data[i]
             }
 
-            // Create GPUBuffer
-            val buffer = device.createBuffer(
-                js(
-                    """({
-                size: sizeBytes,
-                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-                mappedAtCreation: false
-            })"""
+            val bufferWrapper = device.createBuffer(
+                GpuBufferDescriptor(
+                    size = sizeBytes.toLong(),
+                    usage = GPUBufferUsage.VERTEX or GPUBufferUsage.COPY_DST,
+                    mappedAtCreation = false,
+                    label = "vertex_buffer_${data.size}"
                 )
             )
+            val buffer = bufferWrapper.unwrapHandle() as? GPUBuffer
+                ?: throw OutOfMemoryException("Failed to create vertex buffer")
 
-            if (buffer == null || buffer == undefined) {
-                throw OutOfMemoryException("Failed to create vertex buffer")
-            }
-
-            // Write data to buffer
-            device.queue.writeBuffer(buffer, 0, float32Array.buffer, 0, sizeBytes)
+            val rawDevice = device.unwrapHandle() as GPUDevice
+            rawDevice.queue.writeBuffer(buffer, 0, float32Array.buffer, 0, sizeBytes)
 
             BufferHandle(
                 handle = buffer,
@@ -113,29 +114,24 @@ class WebGPUBufferManager(
         val sizeBytes = data.size * 4 // 4 bytes per uint32
 
         return try {
-            // Convert IntArray to Uint32Array
             val uint32Array = Uint32Array(data.size)
             for (i in data.indices) {
                 uint32Array.asDynamic()[i] = data[i]
             }
 
-            // Create GPUBuffer
-            val buffer = device.createBuffer(
-                js(
-                    """({
-                size: sizeBytes,
-                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-                mappedAtCreation: false
-            })"""
+            val bufferWrapper = device.createBuffer(
+                GpuBufferDescriptor(
+                    size = sizeBytes.toLong(),
+                    usage = GPUBufferUsage.INDEX or GPUBufferUsage.COPY_DST,
+                    mappedAtCreation = false,
+                    label = "index_buffer_${data.size}"
                 )
             )
+            val buffer = bufferWrapper.unwrapHandle() as? GPUBuffer
+                ?: throw OutOfMemoryException("Failed to create index buffer")
 
-            if (buffer == null || buffer == undefined) {
-                throw OutOfMemoryException("Failed to create index buffer")
-            }
-
-            // Write data to buffer
-            device.queue.writeBuffer(buffer, 0, uint32Array.buffer, 0, sizeBytes)
+            val rawDevice = device.unwrapHandle() as GPUDevice
+            rawDevice.queue.writeBuffer(buffer, 0, uint32Array.buffer, 0, sizeBytes)
 
             BufferHandle(
                 handle = buffer,
@@ -166,20 +162,16 @@ class WebGPUBufferManager(
         }
 
         return try {
-            // Create GPUBuffer
-            val buffer = device.createBuffer(
-                js(
-                    """({
-                size: sizeBytes,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-                mappedAtCreation: false
-            })"""
+            val bufferWrapper = device.createBuffer(
+                GpuBufferDescriptor(
+                    size = sizeBytes.toLong(),
+                    usage = GPUBufferUsage.UNIFORM or GPUBufferUsage.COPY_DST,
+                    mappedAtCreation = false,
+                    label = "uniform_buffer_$sizeBytes"
                 )
             )
-
-            if (buffer == null || buffer == undefined) {
-                throw OutOfMemoryException("Failed to create uniform buffer")
-            }
+            val buffer = bufferWrapper.unwrapHandle() as? GPUBuffer
+                ?: throw OutOfMemoryException("Failed to create uniform buffer")
 
             BufferHandle(
                 handle = buffer,
@@ -210,8 +202,8 @@ class WebGPUBufferManager(
             throw InvalidBufferException("Buffer handle is invalid (null handle or zero size)")
         }
 
-        val buffer = handle.handle
-            ?: throw InvalidBufferException("Buffer handle is null")
+        val buffer = handle.handle as? GPUBuffer
+            ?: throw InvalidBufferException("Buffer handle is null or not a GPUBuffer")
 
         // Check if destroyed
         if (destroyedBuffers.contains(buffer)) {
@@ -231,14 +223,13 @@ class WebGPUBufferManager(
         }
 
         try {
-            // Convert ByteArray to Int8Array
             val int8Array = Int8Array(data.size)
             for (i in data.indices) {
                 int8Array.asDynamic()[i] = data[i]
             }
 
-            // Write data to buffer
-            device.queue.writeBuffer(buffer, offset, int8Array.buffer, 0, data.size)
+            val rawDevice = device.unwrapHandle() as GPUDevice
+            rawDevice.queue.writeBuffer(buffer, offset, int8Array.buffer, 0, data.size)
         } catch (e: Exception) {
             throw InvalidBufferException("Failed to update uniform buffer: ${e.message}")
         } catch (e: Throwable) {
@@ -253,8 +244,8 @@ class WebGPUBufferManager(
      * @throws InvalidBufferException if handle already destroyed
      */
     override fun destroyBuffer(handle: BufferHandle) {
-        val buffer = handle.handle
-            ?: throw InvalidBufferException("Buffer handle is null")
+        val buffer = handle.handle as? GPUBuffer
+            ?: throw InvalidBufferException("Buffer handle is null or not a GPUBuffer")
 
         // Check if already destroyed
         if (destroyedBuffers.contains(buffer)) {
@@ -263,7 +254,7 @@ class WebGPUBufferManager(
 
         try {
             // Destroy buffer
-            buffer.asDynamic().destroy()
+            buffer.destroy()
 
             // Mark as destroyed
             destroyedBuffers.add(buffer)

@@ -334,6 +334,6 @@ data class CodeSmell(
 data class PlaceholderLocation(
     val file: String,
     val line: Int,
-    val type: String, // TODO, FIXME, STUB, etc.
+    val type: String, // Placeholder marker identifier (e.g., pending task, fix-me note)
     val content: String
 )

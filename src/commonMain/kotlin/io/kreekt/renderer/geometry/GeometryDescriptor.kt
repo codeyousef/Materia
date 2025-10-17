@@ -251,14 +251,13 @@ object GeometryBuilder {
                 shaderLocation = shaderLocation
             )
             attr.attributeType?.let { type ->
-                bindings.putIfAbsent(
-                    type,
-                    GeometryAttributeBinding(
-                        attribute = type,
-                        location = shaderLocation,
-                        stepMode = VertexStepMode.VERTEX
-                    )
+                if (!bindings.containsKey(type)) {
+                bindings[type] = GeometryAttributeBinding(
+                    attribute = type,
+                    location = shaderLocation,
+                    stepMode = VertexStepMode.VERTEX
                 )
+            }
             }
             shaderLocation += 1
             byteOffset += attr.componentCount * FLOAT_BYTES
@@ -352,14 +351,13 @@ object GeometryBuilder {
                 shaderLocation = shaderLocation
             )
             attr.attributeType?.let { type ->
-                bindings.putIfAbsent(
-                    type,
-                    GeometryAttributeBinding(
-                        attribute = type,
-                        location = shaderLocation,
-                        stepMode = VertexStepMode.INSTANCE
-                    )
+                if (!bindings.containsKey(type)) {
+                bindings[type] = GeometryAttributeBinding(
+                    attribute = type,
+                    location = shaderLocation,
+                    stepMode = VertexStepMode.INSTANCE
                 )
+            }
             }
             shaderLocation += 1
             byteOffset += attr.componentCount * FLOAT_BYTES

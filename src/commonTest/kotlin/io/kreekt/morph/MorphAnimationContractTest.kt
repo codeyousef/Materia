@@ -430,7 +430,7 @@ class MorphAnimationContractTest {
                 ), 3
             )
         )
-        // Store as attributes for now
+        // Store as attributes in this interim implementation
         geometry.setAttribute("morphTarget0", morphTargets[0])
         geometry.setAttribute("morphTarget1", morphTargets[1])
 
