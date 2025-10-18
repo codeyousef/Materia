@@ -1,6 +1,8 @@
 package io.kreekt.renderer.shader
 
-import kotlin.concurrent.Volatile
+import kotlinx.atomicfu.atomic
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized as atomicSynchronized
 
 /**
  * Descriptor identifying the chunks required to assemble a material shader. The descriptor is used
@@ -36,27 +38,34 @@ data class MaterialShaderSource(
  * cached by descriptor to avoid redundant string assembly.
  */
 object MaterialShaderGenerator {
+    private val cacheLock = SynchronizedObject()
     private val cache = mutableMapOf<MaterialShaderDescriptor, MaterialShaderSource>()
 
     fun compile(descriptor: MaterialShaderDescriptor): MaterialShaderSource {
         MaterialShaderLibrary.ensureBuiltInsRegistered()
-        return cache.getOrPut(descriptor) {
-            val vertex = ShaderChunkRegistry.assemble(
-                chunkNames = descriptor.vertexChunks,
-                stage = ShaderStageType.VERTEX,
-                replacements = descriptor.replacements
-            )
-            val fragment = ShaderChunkRegistry.assemble(
-                chunkNames = descriptor.fragmentChunks,
-                stage = ShaderStageType.FRAGMENT,
-                replacements = descriptor.replacements
-            )
-            MaterialShaderSource(vertex, fragment)
+        atomicSynchronized(cacheLock) { cache[descriptor] }?.let { return it }
+
+        val vertex = ShaderChunkRegistry.assemble(
+            chunkNames = descriptor.vertexChunks,
+            stage = ShaderStageType.VERTEX,
+            replacements = descriptor.replacements
+        )
+        val fragment = ShaderChunkRegistry.assemble(
+            chunkNames = descriptor.fragmentChunks,
+            stage = ShaderStageType.FRAGMENT,
+            replacements = descriptor.replacements
+        )
+        val compiled = MaterialShaderSource(vertex, fragment)
+
+        return atomicSynchronized(cacheLock) {
+            cache.getOrPut(descriptor) { compiled }
         }
     }
 
     internal fun clearCacheForTests() {
-        cache.clear()
+        atomicSynchronized(cacheLock) {
+            cache.clear()
+        }
     }
 }
 
@@ -64,9 +73,8 @@ object MaterialShaderGenerator {
  * Provides high-level material descriptors and handles registration of the built-in shader chunks.
  */
 object MaterialShaderLibrary {
-    private val initLock = Any()
-    @Volatile
-    private var builtInsRegistered = false
+    private val initLock = SynchronizedObject()
+    private val builtInsRegistered = atomic(false)
 
     private val basicDescriptor = MaterialShaderDescriptor(
         key = "material.basic",
@@ -91,21 +99,22 @@ object MaterialShaderLibrary {
     }
 
     internal fun ensureBuiltInsRegistered() {
-        if (!builtInsRegistered) {
-            withLock(initLock) {
-                if (!builtInsRegistered) {
-                    ShaderChunkRegistry.registerAll(BuiltInMaterialChunks.defaults)
-                    builtInsRegistered = true
-                }
+        if (builtInsRegistered.value) return
+        withInitLock {
+            if (!builtInsRegistered.value) {
+                ShaderChunkRegistry.registerAll(BuiltInMaterialChunks.defaults, replaceExisting = true)
+                builtInsRegistered.value = true
             }
         }
     }
 
     internal fun resetForTests() {
-        withLock(initLock) {
-            builtInsRegistered = false
+        withInitLock {
+            builtInsRegistered.value = false
         }
     }
+
+    private inline fun <T> withInitLock(block: () -> T): T = atomicSynchronized(initLock, block)
 }
 
 private object BuiltInMaterialChunks {
@@ -323,6 +332,4 @@ private object BuiltInMaterialChunks {
         )
     )
 }
-
-private inline fun <T> withLock(lock: Any, block: () -> T): T = block()
 

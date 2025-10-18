@@ -18,13 +18,22 @@ import io.kreekt.renderer.geometry.GeometryAttribute
 import io.kreekt.renderer.geometry.GeometryBuilder
 import io.kreekt.renderer.geometry.GeometryBuildOptions
 import io.kreekt.renderer.geometry.GeometryMetadata
+import io.kreekt.renderer.geometry.buildGeometryOptions
 import io.kreekt.renderer.webgpu.VertexAttribute
 import io.kreekt.renderer.webgpu.VertexBufferLayout
 import io.kreekt.renderer.webgpu.VertexFormat
 import io.kreekt.renderer.webgpu.VertexStepMode
+import io.kreekt.renderer.webgpu.PrimitiveTopology
+import io.kreekt.renderer.webgpu.CullMode
+import io.kreekt.renderer.webgpu.FrontFace
+import io.kreekt.renderer.webgpu.TextureFormat
+import io.kreekt.renderer.webgpu.ColorWriteMask
+import io.kreekt.renderer.webgpu.BlendFactor
+import io.kreekt.renderer.webgpu.BlendOperation
 import io.kreekt.renderer.*
 import io.kreekt.renderer.material.MaterialDescriptor
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
+import io.kreekt.renderer.material.MaterialRenderState
 import io.kreekt.renderer.feature020.*
 import io.kreekt.renderer.gpu.GpuBackend
 import io.kreekt.renderer.gpu.GpuContext
@@ -44,6 +53,7 @@ import org.lwjgl.vulkan.VK12.*
 import org.lwjgl.vulkan.KHRSwapchain.*
 import kotlin.system.measureTimeMillis
 import kotlin.math.roundToInt
+import kotlin.math.max
 
 /**
  * Vulkan renderer implementation for JVM platform.
@@ -79,17 +89,30 @@ class VulkanRenderer(
     private var bufferManager: VulkanBufferManager? = null
     private var renderPassManager: VulkanRenderPassManager? = null
     private var swapchainManager: VulkanSwapchain? = null
-    private var pipeline: VulkanPipeline? = null
-    private var activeVertexLayouts: List<VertexBufferLayout>? = null
+
+    private val pipelineCache = object : LinkedHashMap<PipelineCacheKey, VulkanPipeline>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<PipelineCacheKey, VulkanPipeline>?): Boolean {
+            if (size > MAX_PIPELINE_CACHE_SIZE) {
+                eldest?.value?.dispose()
+                return true
+            }
+            return false
+        }
+    }
+    private var activePipelineKey: PipelineCacheKey? = null
     private val morphWarningMeshes = mutableSetOf<Int>()
     private var descriptorSetLayout: Long = VK_NULL_HANDLE
     private var descriptorPool: Long = VK_NULL_HANDLE
     private var descriptorSet: Long = VK_NULL_HANDLE
+    private var materialTextureDescriptorSetLayout: Long = VK_NULL_HANDLE
+    private var materialTextureDescriptorPool: Long = VK_NULL_HANDLE
+    private var materialTextureManager: VulkanMaterialTextureManager? = null
     private var uniformBuffer: BufferHandle? = null
     private var swapchainFramebuffers: List<VulkanFramebufferData> = emptyList()
     private var gpuContext: GpuContext? = null
 
     private val meshBuffers: MutableMap<Int, VulkanMeshBuffers> = mutableMapOf()
+    private var depthStateWarningIssued = false
 
     // Renderer state
     override var backend: BackendType = BackendType.VULKAN
@@ -222,22 +245,21 @@ class VulkanRenderer(
             createDescriptorResources()
             println("T033: Descriptor resources ready")
 
-            println("T033: Creating graphics pipeline...")
-            pipeline = VulkanPipeline(vkDevice)
-            val extent = swapchainManager!!.getExtent()
-            if (pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, defaultVertexLayouts())) {
-                activeVertexLayouts = defaultVertexLayouts()
-                println("T033: Graphics pipeline created successfully")
-            } else {
-                return io.kreekt.core.Result.Error(
-                    "Failed to create graphics pipeline",
-                    io.kreekt.renderer.RendererInitializationException.DeviceCreationFailedException(
-                        BackendType.VULKAN,
-                        getPhysicalDeviceInfo(vkPhysicalDevice),
-                        "Failed to create graphics pipeline"
-                    )
-                )
-            }
+            println("T033: Creating material texture resources...")
+            createMaterialTextureResources()
+            materialTextureManager = VulkanMaterialTextureManager(
+                vkDevice,
+                vkPhysicalDevice,
+                commandPool,
+                vkQueue
+            )
+            println("T033: Material texture resources ready")
+
+            println("T033: Preparing pipeline cache...")
+            pipelineCache.values.forEach { it.dispose() }
+            pipelineCache.clear()
+            activePipelineKey = null
+            println("T033: Pipeline cache reset; pipelines will be created on demand.")
 
             println("T033: Querying device capabilities...")
             capabilities = queryCapabilities(vkPhysicalDevice)
@@ -273,7 +295,7 @@ class VulkanRenderer(
         }
 
         val swapchain = swapchainManager ?: return
-        if (swapchainFramebuffers.isEmpty() || pipeline == null || renderPassManager == null) {
+        if (swapchainFramebuffers.isEmpty() || renderPassManager == null) {
             recreateSwapchainResources()
             return
         }
@@ -298,10 +320,33 @@ class VulkanRenderer(
 
         scene.traverseVisible { node ->
             if (node is Mesh && node.visible) {
-                ensureMeshBuffers(node)?.let { buffers ->
-                    drawInfos += MeshDrawInfo(node, buffers)
-                    retainedIds += node.id
+                val material = node.material ?: return@traverseVisible
+                val descriptor = MaterialDescriptorRegistry.descriptorFor(material) ?: return@traverseVisible
+                val buffers = ensureMeshBuffers(node, descriptor) ?: return@traverseVisible
+
+                val textureBinding = if (
+                    materialTextureDescriptorSetLayout != VK_NULL_HANDLE &&
+                    materialTextureDescriptorPool != VK_NULL_HANDLE &&
+                    materialTextureManager != null
+                ) {
+                    materialTextureManager!!.prepare(
+                        material = material,
+                        descriptor = descriptor,
+                        descriptorPool = materialTextureDescriptorPool,
+                        descriptorSetLayout = materialTextureDescriptorSetLayout
+                    ) ?: return@traverseVisible
+                } else {
+                    VulkanMaterialTextureManager.MaterialTextureBinding(VK_NULL_HANDLE)
                 }
+
+                val environmentBindingForMesh = if (descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)) {
+                    environmentBindingForFrame ?: return@traverseVisible
+                } else {
+                    environmentBindingForFrame
+                }
+
+                drawInfos += MeshDrawInfo(node, descriptor, buffers, textureBinding, environmentBindingForMesh)
+                retainedIds += node.id
             }
         }
 
@@ -348,39 +393,67 @@ class VulkanRenderer(
 
                 val framebufferHandle = FramebufferHandle(swapchainFramebuffers[image.index])
                 renderPassMgr.beginRenderPass(clearColor, framebufferHandle)
-                renderPassMgr.bindPipeline(PipelineHandle(pipeline!!.getPipelineHandle()))
 
-                val descriptor = descriptorSet
+                val descriptorHandle = descriptorSet
+                val extent = swapchain.getExtent()
+                val deviceHandle = device ?: return@measureTimeMillis
 
                 for (drawInfo in drawInfos) {
                     val buffers = drawInfo.buffers
+                    val materialDescriptor = drawInfo.descriptor
 
-                    if (activeVertexLayouts != buffers.vertexLayouts) {
-                        val extent = swapchain.getExtent()
-                        val deviceHandle = device ?: continue
+                    val hasMaterialSet = materialTextureDescriptorSetLayout != VK_NULL_HANDLE &&
+                        drawInfo.textureBinding.descriptorSet != VK_NULL_HANDLE
+
+                    val descriptorSetLayouts = if (hasMaterialSet) {
+                        longArrayOf(descriptorSetLayout, materialTextureDescriptorSetLayout)
+                    } else {
+                        longArrayOf(descriptorSetLayout)
+                    }
+
+                    val pipelineKey = createPipelineKey(buffers.vertexLayouts, materialDescriptor.renderState)
+                    val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
+                        warnDepthStateIfNeeded(materialDescriptor.renderState)
                         val newPipeline = VulkanPipeline(deviceHandle)
-                        if (!newPipeline.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, buffers.vertexLayouts)) {
+                        if (!newPipeline.createPipeline(
+                                renderPass,
+                                extent.first,
+                                extent.second,
+                                descriptorSetLayouts,
+                                buffers.vertexLayouts,
+                                materialDescriptor.renderState
+                            )
+                        ) {
                             newPipeline.dispose()
-                            throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout")
+                            throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout/state")
                         }
-                        pipeline?.dispose()
-                        pipeline = newPipeline
-                        renderPassMgr.bindPipeline(PipelineHandle(newPipeline.getPipelineHandle()))
-                        activeVertexLayouts = buffers.vertexLayouts
+                        newPipeline
+                    }
+
+                    if (activePipelineKey != pipelineKey) {
+                        renderPassMgr.bindPipeline(PipelineHandle(pipelineForDraw.getPipelineHandle()))
+                        activePipelineKey = pipelineKey
                     }
 
                     val mvp = Matrix4()
                     mvp.multiplyMatrices(viewProjectionMatrix, drawInfo.mesh.matrixWorld)
                     updateUniformBuffer(mvp)
 
-                    val pipelineLayout = pipeline?.getPipelineLayout() ?: continue
-                    val descriptorSets = stack.longs(descriptor)
+                    val pipelineLayout = pipelineForDraw.getPipelineLayout()
+                    val descriptorSetsBuffer = if (hasMaterialSet) {
+                        val buffer = stack.mallocLong(2)
+                        buffer.put(0, descriptorHandle)
+                        buffer.put(1, drawInfo.textureBinding.descriptorSet)
+                        buffer
+                    } else {
+                        stack.longs(descriptorHandle)
+                    }
                     vkCmdBindDescriptorSets(
                         command,
                         VK_PIPELINE_BIND_POINT_GRAPHICS,
                         pipelineLayout,
                         0,
-                        descriptorSets,
+                        descriptorSetsBuffer,
                         null
                     )
 
@@ -462,8 +535,12 @@ class VulkanRenderer(
 
         vkDeviceWaitIdle(deviceHandle)
 
-        pipeline?.dispose()
-        pipeline = null
+        materialTextureManager?.dispose()
+        materialTextureManager = null
+
+        pipelineCache.values.forEach { it.dispose() }
+        pipelineCache.clear()
+        activePipelineKey = null
 
         renderPassManager = null
         if (renderPass != VK_NULL_HANDLE) {
@@ -481,14 +558,20 @@ class VulkanRenderer(
         swapchainFramebuffers = swapchain.createFramebuffers(renderPass)
 
         createDescriptorResources()
-
-        val extent = swapchain.getExtent()
-        pipeline = VulkanPipeline(deviceHandle)
-        if (descriptorSetLayout == VK_NULL_HANDLE || !pipeline!!.createPipeline(renderPass, extent.first, extent.second, descriptorSetLayout, activeVertexLayouts ?: defaultVertexLayouts())) {
-            throw RuntimeException("Failed to create Vulkan graphics pipeline")
-        }
-        if (activeVertexLayouts == null) {
-            activeVertexLayouts = defaultVertexLayouts()
+        createMaterialTextureResources()
+        if (physicalDevice != null && graphicsQueue != null) {
+            materialTextureManager = VulkanMaterialTextureManager(
+                deviceHandle,
+                physicalDevice!!,
+                commandPool,
+                graphicsQueue!!
+            )
+            environmentManager = VulkanEnvironmentManager(
+                deviceHandle,
+                physicalDevice!!,
+                commandPool,
+                graphicsQueue!!
+            )
         }
     }
 
@@ -607,11 +690,60 @@ class VulkanRenderer(
         descriptorSet = VK_NULL_HANDLE
     }
 
-    private fun ensureMeshBuffers(mesh: Mesh): VulkanMeshBuffers? {
+    private fun createMaterialTextureResources() {
+        val deviceHandle = device ?: return
+
+        if (materialTextureDescriptorSetLayout == VK_NULL_HANDLE) {
+            MemoryStack.stackPush().use { stack ->
+                val bindings = VkDescriptorSetLayoutBinding.calloc(2, stack)
+                bindings[0]
+                    .binding(0)
+                    .descriptorCount(1)
+                    .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                    .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
+                bindings[1]
+                    .binding(1)
+                    .descriptorCount(1)
+                    .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                    .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
+
+                val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
+                    .pBindings(bindings)
+
+                val pLayout = stack.mallocLong(1)
+                val result = vkCreateDescriptorSetLayout(deviceHandle, layoutInfo, null, pLayout)
+                if (result != VK_SUCCESS) {
+                    throw RuntimeException("Failed to create material texture descriptor set layout: VkResult=$result")
+                }
+                materialTextureDescriptorSetLayout = pLayout[0]
+            }
+        }
+
+        if (materialTextureDescriptorPool == VK_NULL_HANDLE) {
+            MemoryStack.stackPush().use { stack ->
+                val poolSize = VkDescriptorPoolSize.calloc(1, stack)
+                    .type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 2)
+
+                val poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
+                    .pPoolSizes(poolSize)
+                    .maxSets(MAX_MATERIAL_TEXTURE_SETS)
+
+                val pPool = stack.mallocLong(1)
+                val result = vkCreateDescriptorPool(deviceHandle, poolInfo, null, pPool)
+                if (result != VK_SUCCESS) {
+                    throw RuntimeException("Failed to create material texture descriptor pool: VkResult=$result")
+                }
+                materialTextureDescriptorPool = pPool[0]
+            }
+        }
+    }
+
+    private fun ensureMeshBuffers(mesh: Mesh, descriptor: MaterialDescriptor): VulkanMeshBuffers? {
         val bufferMgr = bufferManager ?: return null
         val geometry = mesh.geometry
-        val material = mesh.material ?: return null
-        val descriptor = MaterialDescriptorRegistry.descriptorFor(material) ?: return null
 
         val attributesNeedUpdate = geometry.attributes.values.any { it.needsUpdate }
         val indexNeedsUpdate = geometry.index?.needsUpdate == true
@@ -623,7 +755,7 @@ class VulkanRenderer(
         meshBuffers.remove(mesh.id)?.let { destroyMeshBuffers(it) }
         morphWarningMeshes.remove(mesh.id)
 
-        val buildOptions = buildGeometryOptions(descriptor, geometry)
+        val buildOptions = descriptor.buildGeometryOptions(geometry)
         val geometryBuffer = GeometryBuilder.build(geometry, buildOptions)
         val vertexStreams = geometryBuffer.streams
         if (vertexStreams.isEmpty()) {
@@ -659,36 +791,6 @@ class VulkanRenderer(
         )
         meshBuffers[mesh.id] = buffers
         return buffers
-    }
-
-    private fun buildGeometryOptions(
-        descriptor: MaterialDescriptor,
-        geometry: BufferGeometry
-    ): GeometryBuildOptions {
-        fun requires(attribute: GeometryAttribute) = descriptor.requiredAttributes.contains(attribute)
-        fun optional(attribute: GeometryAttribute) = descriptor.optionalAttributes.contains(attribute)
-
-        fun hasAttribute(attribute: GeometryAttribute): Boolean = when (attribute) {
-            GeometryAttribute.POSITION -> true
-            GeometryAttribute.NORMAL -> geometry.getAttribute("normal") != null
-            GeometryAttribute.COLOR -> geometry.getAttribute("color") != null
-            GeometryAttribute.UV0 -> geometry.getAttribute("uv") != null
-            GeometryAttribute.UV1 -> geometry.getAttribute("uv2") != null
-            GeometryAttribute.TANGENT -> geometry.getAttribute("tangent") != null
-            GeometryAttribute.MORPH_POSITION,
-            GeometryAttribute.MORPH_NORMAL -> geometry.morphAttributes.isNotEmpty()
-            GeometryAttribute.INSTANCE_MATRIX -> geometry.isInstanced
-        }
-
-        return GeometryBuildOptions(
-            includeNormals = requires(GeometryAttribute.NORMAL) || (optional(GeometryAttribute.NORMAL) && hasAttribute(GeometryAttribute.NORMAL)),
-            includeColors = requires(GeometryAttribute.COLOR) || (optional(GeometryAttribute.COLOR) && hasAttribute(GeometryAttribute.COLOR)),
-            includeUVs = requires(GeometryAttribute.UV0) || (optional(GeometryAttribute.UV0) && hasAttribute(GeometryAttribute.UV0)),
-            includeSecondaryUVs = requires(GeometryAttribute.UV1) || (optional(GeometryAttribute.UV1) && hasAttribute(GeometryAttribute.UV1)),
-            includeTangents = requires(GeometryAttribute.TANGENT) || (optional(GeometryAttribute.TANGENT) && hasAttribute(GeometryAttribute.TANGENT)),
-            includeMorphTargets = geometry.morphAttributes.isNotEmpty(),
-            includeInstancing = geometry.isInstanced || requires(GeometryAttribute.INSTANCE_MATRIX)
-        )
     }
 
     private fun defaultVertexLayouts(): List<VertexBufferLayout> = listOf(
@@ -754,13 +856,17 @@ class VulkanRenderer(
 
     private data class MeshDrawInfo(
         val mesh: Mesh,
-        val buffers: VulkanMeshBuffers
+        val descriptor: MaterialDescriptor,
+        val buffers: VulkanMeshBuffers,
+        val textureBinding: VulkanMaterialTextureManager.MaterialTextureBinding
     )
 
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
         private const val UNIFORM_BUFFER_SIZE = 64
+        private const val MAX_PIPELINE_CACHE_SIZE = 32
+        private const val MAX_MATERIAL_TEXTURE_SETS = 256
     }
 
     private fun determineClearColor(scene: Scene): Color {
@@ -807,8 +913,22 @@ class VulkanRenderer(
         device?.let { vkDeviceWaitIdle(it) }
         println("T033: Device idle")
 
-        pipeline?.dispose()
-        pipeline = null
+        pipelineCache.values.forEach { it.dispose() }
+        pipelineCache.clear()
+        activePipelineKey = null
+
+        materialTextureManager?.dispose()
+        materialTextureManager = null
+
+        if (materialTextureDescriptorPool != VK_NULL_HANDLE && device != null) {
+            vkDestroyDescriptorPool(device!!, materialTextureDescriptorPool, null)
+            materialTextureDescriptorPool = VK_NULL_HANDLE
+        }
+
+        if (materialTextureDescriptorSetLayout != VK_NULL_HANDLE && device != null) {
+            vkDestroyDescriptorSetLayout(device!!, materialTextureDescriptorSetLayout, null)
+            materialTextureDescriptorSetLayout = VK_NULL_HANDLE
+        }
 
         meshBuffers.values.forEach { destroyMeshBuffers(it) }
         meshBuffers.clear()
@@ -1141,6 +1261,101 @@ class VulkanRenderer(
         return when (surface) {
             is VulkanSurface -> surface.getSurfaceHandle()
             else -> throw IllegalArgumentException("RenderSurface must be VulkanSurface for Vulkan renderer")
+        }
+    }
+
+    private data class PipelineCacheKey(
+        val vertexLayouts: List<VertexLayoutSignature>,
+        val renderState: RenderStateSignature
+    )
+
+    private data class VertexLayoutSignature(
+        val arrayStride: Int,
+        val stepMode: VertexStepMode,
+        val attributes: List<VertexAttributeSignature>
+    )
+
+    private data class VertexAttributeSignature(
+        val format: VertexFormat,
+        val offset: Int,
+        val shaderLocation: Int
+    )
+
+    private data class RenderStateSignature(
+        val topology: PrimitiveTopology,
+        val cullMode: CullMode,
+        val frontFace: FrontFace,
+        val colorTarget: ColorTargetSignature
+    )
+
+    private data class ColorTargetSignature(
+        val format: TextureFormat,
+        val blend: BlendSignature?,
+        val writeMask: ColorWriteMask
+    )
+
+    private data class BlendSignature(
+        val color: BlendComponentSignature,
+        val alpha: BlendComponentSignature
+    )
+
+    private data class BlendComponentSignature(
+        val srcFactor: BlendFactor,
+        val dstFactor: BlendFactor,
+        val operation: BlendOperation
+    )
+
+    private fun createPipelineKey(
+        vertexLayouts: List<VertexBufferLayout>,
+        renderState: MaterialRenderState
+    ): PipelineCacheKey {
+        val layoutSignature = vertexLayouts.map { layout ->
+            VertexLayoutSignature(
+                arrayStride = layout.arrayStride,
+                stepMode = layout.stepMode,
+                attributes = layout.attributes.map { attr ->
+                    VertexAttributeSignature(
+                        format = attr.format,
+                        offset = attr.offset,
+                        shaderLocation = attr.shaderLocation
+                    )
+                }
+            )
+        }
+
+        val blendSignature = renderState.colorTarget.blendState?.let { blend ->
+            BlendSignature(
+                color = BlendComponentSignature(
+                    srcFactor = blend.color.srcFactor,
+                    dstFactor = blend.color.dstFactor,
+                    operation = blend.color.operation
+                ),
+                alpha = BlendComponentSignature(
+                    srcFactor = blend.alpha.srcFactor,
+                    dstFactor = blend.alpha.dstFactor,
+                    operation = blend.alpha.operation
+                )
+            )
+        }
+
+        val renderSignature = RenderStateSignature(
+            topology = renderState.topology,
+            cullMode = renderState.cullMode,
+            frontFace = renderState.frontFace,
+            colorTarget = ColorTargetSignature(
+                format = renderState.colorTarget.format,
+                blend = blendSignature,
+                writeMask = renderState.colorTarget.writeMask
+            )
+        )
+
+        return PipelineCacheKey(layoutSignature, renderSignature)
+    }
+
+    private fun warnDepthStateIfNeeded(renderState: MaterialRenderState) {
+        if ((renderState.depthTest || renderState.depthWrite) && !depthStateWarningIssued) {
+            println("Warning: Depth testing requested but VulkanRenderer currently lacks depth attachments; depthTest/depthWrite are ignored.")
+            depthStateWarningIssued = true
         }
     }
 

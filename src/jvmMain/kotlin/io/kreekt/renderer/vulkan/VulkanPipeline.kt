@@ -1,8 +1,14 @@
 package io.kreekt.renderer.vulkan
 
+import io.kreekt.renderer.material.MaterialRenderState
 import io.kreekt.renderer.webgpu.VertexBufferLayout
 import io.kreekt.renderer.webgpu.VertexFormat
 import io.kreekt.renderer.webgpu.VertexStepMode
+import io.kreekt.renderer.webgpu.PrimitiveTopology
+import io.kreekt.renderer.webgpu.CullMode
+import io.kreekt.renderer.webgpu.FrontFace
+import io.kreekt.renderer.webgpu.BlendFactor
+import io.kreekt.renderer.webgpu.BlendOperation
 import org.lwjgl.BufferUtils
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
@@ -35,7 +41,14 @@ class VulkanPipeline(
      * @param width Swapchain width (used for static viewport/scissor configuration).
      * @param height Swapchain height.
      */
-    fun createPipeline(renderPass: Long, width: Int, height: Int, descriptorSetLayout: Long, vertexLayouts: List<VertexBufferLayout>): Boolean {
+    fun createPipeline(
+        renderPass: Long,
+        width: Int,
+        height: Int,
+        descriptorSetLayouts: LongArray,
+        vertexLayouts: List<VertexBufferLayout>,
+        renderState: MaterialRenderState
+    ): Boolean {
         dispose()
 
         return try {
@@ -48,12 +61,12 @@ class VulkanPipeline(
             MemoryUtil.memFree(vertexSpv)
             MemoryUtil.memFree(fragmentSpv)
 
-            pipelineLayout = createPipelineLayout(descriptorSetLayout)
+            pipelineLayout = createPipelineLayout(descriptorSetLayouts)
             if (pipelineLayout == VK_NULL_HANDLE) {
                 throw IllegalStateException("Failed to create pipeline layout")
             }
 
-            graphicsPipeline = createGraphicsPipeline(renderPass, width, height, vertexLayouts)
+            graphicsPipeline = createGraphicsPipeline(renderPass, width, height, vertexLayouts, renderState)
             graphicsPipeline != VK_NULL_HANDLE
         } catch (exc: Exception) {
             dispose()
@@ -103,12 +116,15 @@ class VulkanPipeline(
         }
     }
 
-    private fun createPipelineLayout(descriptorSetLayout: Long): Long {
+    private fun createPipelineLayout(descriptorSetLayouts: LongArray): Long {
         return MemoryStack.stackPush().use { stack ->
-            val setLayouts = stack.longs(descriptorSetLayout)
+            val setLayoutsBuffer = stack.mallocLong(descriptorSetLayouts.size)
+            descriptorSetLayouts.forEachIndexed { index, layout ->
+                setLayoutsBuffer.put(index, layout)
+            }
             val createInfo = org.lwjgl.vulkan.VkPipelineLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO)
-                .pSetLayouts(setLayouts)
+                .pSetLayouts(setLayoutsBuffer)
                 .pPushConstantRanges(null)
 
             val pPipelineLayout = stack.mallocLong(1)
@@ -117,7 +133,13 @@ class VulkanPipeline(
         }
     }
 
-    private fun createGraphicsPipeline(renderPass: Long, width: Int, height: Int, vertexLayouts: List<VertexBufferLayout>): Long {
+    private fun createGraphicsPipeline(
+        renderPass: Long,
+        width: Int,
+        height: Int,
+        vertexLayouts: List<VertexBufferLayout>,
+        renderState: MaterialRenderState
+    ): Long {
         return MemoryStack.stackPush().use { stack ->
             val entryPoint = stack.UTF8("main")
 
@@ -162,7 +184,7 @@ class VulkanPipeline(
 
             val inputAssemblyState = org.lwjgl.vulkan.VkPipelineInputAssemblyStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO)
-                .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                .topology(toVulkanTopology(renderState.topology))
                 .primitiveRestartEnable(false)
 
             val viewport = org.lwjgl.vulkan.VkViewport.calloc(1, stack)
@@ -187,8 +209,8 @@ class VulkanPipeline(
                 .depthClampEnable(false)
                 .rasterizerDiscardEnable(false)
                 .polygonMode(VK_POLYGON_MODE_FILL)
-                .cullMode(VK_CULL_MODE_BACK_BIT)
-                .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+                .cullMode(toVulkanCullMode(renderState.cullMode))
+                .frontFace(toVulkanFrontFace(renderState.frontFace))
                 .depthBiasEnable(false)
                 .lineWidth(1.0f)
 
@@ -199,19 +221,26 @@ class VulkanPipeline(
                 .sampleShadingEnable(false)
 
             val colorBlendAttachment = org.lwjgl.vulkan.VkPipelineColorBlendAttachmentState.calloc(1, stack)
-                .blendEnable(false)
-                .srcColorBlendFactor(VK_BLEND_FACTOR_ONE)
-                .dstColorBlendFactor(VK_BLEND_FACTOR_ZERO)
-                .colorBlendOp(VK_BLEND_OP_ADD)
-                .srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE)
-                .dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO)
-                .alphaBlendOp(VK_BLEND_OP_ADD)
-                .colorWriteMask(
-                    VK_COLOR_COMPONENT_R_BIT or
-                        VK_COLOR_COMPONENT_G_BIT or
-                        VK_COLOR_COMPONENT_B_BIT or
-                        VK_COLOR_COMPONENT_A_BIT
-                )
+                .blendEnable(renderState.colorTarget.blendState != null)
+                .colorWriteMask(renderState.colorTarget.writeMask.bits)
+
+            renderState.colorTarget.blendState?.let { blend ->
+                colorBlendAttachment
+                    .srcColorBlendFactor(toVulkanBlendFactor(blend.color.srcFactor))
+                    .dstColorBlendFactor(toVulkanBlendFactor(blend.color.dstFactor))
+                    .colorBlendOp(toVulkanBlendOperation(blend.color.operation))
+                    .srcAlphaBlendFactor(toVulkanBlendFactor(blend.alpha.srcFactor))
+                    .dstAlphaBlendFactor(toVulkanBlendFactor(blend.alpha.dstFactor))
+                    .alphaBlendOp(toVulkanBlendOperation(blend.alpha.operation))
+            } ?: run {
+                colorBlendAttachment
+                    .srcColorBlendFactor(VK_BLEND_FACTOR_ONE)
+                    .dstColorBlendFactor(VK_BLEND_FACTOR_ZERO)
+                    .colorBlendOp(VK_BLEND_OP_ADD)
+                    .srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE)
+                    .dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO)
+                    .alphaBlendOp(VK_BLEND_OP_ADD)
+            }
 
             val colorBlendState = org.lwjgl.vulkan.VkPipelineColorBlendStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO)
@@ -278,6 +307,46 @@ class VulkanPipeline(
         else -> throw IllegalArgumentException("Unsupported vertex format: $format")
     }
 
+    private fun toVulkanTopology(topology: PrimitiveTopology): Int = when (topology) {
+        PrimitiveTopology.POINT_LIST -> VK_PRIMITIVE_TOPOLOGY_POINT_LIST
+        PrimitiveTopology.LINE_LIST -> VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+        PrimitiveTopology.LINE_STRIP -> VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+        PrimitiveTopology.TRIANGLE_LIST -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+        PrimitiveTopology.TRIANGLE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+    }
+
+    private fun toVulkanCullMode(cullMode: CullMode): Int = when (cullMode) {
+        CullMode.NONE -> VK_CULL_MODE_NONE
+        CullMode.FRONT -> VK_CULL_MODE_FRONT_BIT
+        CullMode.BACK -> VK_CULL_MODE_BACK_BIT
+    }
+
+    private fun toVulkanFrontFace(frontFace: FrontFace): Int = when (frontFace) {
+        FrontFace.CCW -> VK_FRONT_FACE_COUNTER_CLOCKWISE
+        FrontFace.CW -> VK_FRONT_FACE_CLOCKWISE
+    }
+
+    private fun toVulkanBlendFactor(factor: BlendFactor): Int = when (factor) {
+        BlendFactor.ZERO -> VK_BLEND_FACTOR_ZERO
+        BlendFactor.ONE -> VK_BLEND_FACTOR_ONE
+        BlendFactor.SRC -> VK_BLEND_FACTOR_SRC_COLOR
+        BlendFactor.ONE_MINUS_SRC -> VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR
+        BlendFactor.SRC_ALPHA -> VK_BLEND_FACTOR_SRC_ALPHA
+        BlendFactor.ONE_MINUS_SRC_ALPHA -> VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+        BlendFactor.DST -> VK_BLEND_FACTOR_DST_COLOR
+        BlendFactor.ONE_MINUS_DST -> VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR
+        BlendFactor.DST_ALPHA -> VK_BLEND_FACTOR_DST_ALPHA
+        BlendFactor.ONE_MINUS_DST_ALPHA -> VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA
+    }
+
+    private fun toVulkanBlendOperation(operation: BlendOperation): Int = when (operation) {
+        BlendOperation.ADD -> VK_BLEND_OP_ADD
+        BlendOperation.SUBTRACT -> VK_BLEND_OP_SUBTRACT
+        BlendOperation.REVERSE_SUBTRACT -> VK_BLEND_OP_REVERSE_SUBTRACT
+        BlendOperation.MIN -> VK_BLEND_OP_MIN
+        BlendOperation.MAX -> VK_BLEND_OP_MAX
+    }
+
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
@@ -285,20 +354,70 @@ class VulkanPipeline(
         private const val VERTEX_SHADER_SOURCE = """
             #version 450
             layout(location = 0) in vec3 inPosition;
-            layout(location = 1) in vec3 inColor;
-            layout(location = 0) out vec3 outColor;
+            layout(location = 1) in vec3 inNormal;
+            layout(location = 2) in vec3 inColor;
+            layout(location = 3) in vec4 inTangent;
+            layout(location = 4) in vec2 inUV;
+
+            layout(location = 0) out vec3 vColor;
+            layout(location = 1) out vec2 vUV;
+            layout(location = 2) out vec3 vNormal;
+            layout(location = 3) out vec3 vTangent;
+            layout(location = 4) out vec3 vBitangent;
+
+            layout(set = 0, binding = 0) uniform UniformBufferObject {
+                mat4 uMvp;
+            } ubo;
+
             void main() {
-                gl_Position = vec4(inPosition, 1.0);
-                outColor = inColor;
+                vec3 normal = normalize(inNormal);
+                vec3 tangent = inTangent.xyz;
+                float tangentLen = length(tangent);
+                if (tangentLen < 1e-5) {
+                    vec3 up = abs(normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+                    tangent = normalize(cross(up, normal));
+                } else {
+                    tangent /= tangentLen;
+                }
+                float handedness = tangentLen < 1e-5 ? 1.0 : (inTangent.w == 0.0 ? 1.0 : inTangent.w);
+                vec3 bitangent = normalize(cross(normal, tangent)) * handedness;
+
+                gl_Position = ubo.uMvp * vec4(inPosition, 1.0);
+                vColor = inColor;
+                vUV = inUV;
+                vNormal = normal;
+                vTangent = tangent;
+                vBitangent = bitangent;
             }
         """
 
         private const val FRAGMENT_SHADER_SOURCE = """
             #version 450
-            layout(location = 0) in vec3 inColor;
+            layout(location = 0) in vec3 vColor;
+            layout(location = 1) in vec2 vUV;
+            layout(location = 2) in vec3 vNormal;
+            layout(location = 3) in vec3 vTangent;
+            layout(location = 4) in vec3 vBitangent;
+
             layout(location = 0) out vec4 outColor;
+
+            layout(set = 1, binding = 0) uniform sampler2D uAlbedo;
+            layout(set = 1, binding = 1) uniform sampler2D uNormalMap;
+            layout(set = 2, binding = 0) uniform textureCube uPrefilterTexture;
+            layout(set = 2, binding = 1) uniform sampler uPrefilterSampler;
+
             void main() {
-                outColor = vec4(inColor, 1.0);
+                vec4 albedoSample = texture(uAlbedo, vUV);
+                vec3 baseColor = albedoSample.rgb * vColor;
+
+                vec3 sampledNormal = texture(uNormalMap, vUV).xyz * 2.0 - 1.0;
+                mat3 tbn = mat3(normalize(vTangent), normalize(vBitangent), normalize(vNormal));
+                vec3 perturbed = normalize(tbn * sampledNormal);
+                float lighting = clamp(perturbed.z * 0.5 + 0.5, 0.0, 1.0);
+                vec3 envColor = texture(samplerCube(uPrefilterTexture, uPrefilterSampler), normalize(perturbed)).rgb;
+                vec3 finalColor = mix(baseColor * lighting, envColor, 0.25);
+
+                outColor = vec4(finalColor, albedoSample.a);
             }
         """
     }

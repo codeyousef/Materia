@@ -1,5 +1,11 @@
 package io.kreekt.renderer.shader
 
+import kotlinx.atomicfu.atomic
+import kotlinx.collections.immutable.PersistentList
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+
 /**
  * Rendering shader stages supported by the material system.
  */
@@ -26,10 +32,14 @@ data class ShaderChunk(
  */
 object ShaderChunkRegistry {
     private val includeRegex = Regex("#include\\s*<([A-Za-z0-9_./-]+)>")
-    private val chunks = mutableMapOf<String, MutableList<ShaderChunk>>()
+    private val chunkRegistry = atomic(persistentMapOf<String, PersistentList<ShaderChunk>>())
 
-    private fun findChunk(name: String, stage: ShaderStageType): ShaderChunk? {
-        val candidates = chunks[name] ?: return null
+    private fun findChunk(
+        registry: PersistentMap<String, PersistentList<ShaderChunk>>,
+        name: String,
+        stage: ShaderStageType
+    ): ShaderChunk? {
+        val candidates = registry[name] ?: return null
         return candidates.firstOrNull { it.stage == stage }
             ?: candidates.firstOrNull { it.stage == null }
     }
@@ -40,16 +50,20 @@ object ShaderChunkRegistry {
      * registration results in an [IllegalStateException].
      */
     fun register(chunk: ShaderChunk, replaceExisting: Boolean = false) {
-        val entries = chunks.getOrPut(chunk.name) { mutableListOf() }
-        val index = entries.indexOfFirst { it.stage == chunk.stage }
-        if (index >= 0) {
-            if (replaceExisting) {
-                entries[index] = chunk
-            } else {
-                error("Shader chunk '${chunk.name}' already registered for stage ${chunk.stage}")
+        while (true) {
+            val current = chunkRegistry.value
+            val existing = current[chunk.name] ?: persistentListOf()
+            val index = existing.indexOfFirst { it.stage == chunk.stage }
+            val updatedList = when {
+                index >= 0 && !replaceExisting ->
+                    error("Shader chunk '${chunk.name}' already registered for stage ${chunk.stage}")
+                index >= 0 -> existing.set(index, chunk)
+                else -> existing.add(chunk)
             }
-        } else {
-            entries += chunk
+            val updated = current.put(chunk.name, updatedList)
+            if (chunkRegistry.compareAndSet(current, updated)) {
+                return
+            }
         }
     }
 
@@ -65,7 +79,7 @@ object ShaderChunkRegistry {
      * the method checks for any registration regardless of stage.
      */
     fun contains(name: String, stage: ShaderStageType? = null): Boolean {
-        val candidates = chunks[name] ?: return false
+        val candidates = chunkRegistry.value[name] ?: return false
         if (stage == null) {
             return candidates.isNotEmpty()
         }
@@ -76,7 +90,7 @@ object ShaderChunkRegistry {
      * Clears the registry. Intended for tests; production code should not invoke this directly.
      */
     internal fun clearForTests() {
-        chunks.clear()
+        chunkRegistry.value = persistentMapOf()
     }
 
     /**
@@ -91,11 +105,12 @@ object ShaderChunkRegistry {
         replacements: Map<String, String> = emptyMap()
     ): String {
         require(chunkNames.isNotEmpty()) { "At least one shader chunk must be specified for stage $stage" }
+        val snapshot = chunkRegistry.value
         val builder = StringBuilder()
         chunkNames.forEachIndexed { index, name ->
-            val chunk = findChunk(name, stage)
+            val chunk = findChunk(snapshot, name, stage)
                 ?: error("Shader chunk '$name' not registered for stage $stage")
-            val resolved = resolveChunk(chunk, stage, mutableListOf())
+            val resolved = resolveChunk(snapshot, chunk, stage, mutableListOf())
             builder.append(resolved.trim())
             if (index != chunkNames.lastIndex) {
                 builder.appendLine()
@@ -109,7 +124,12 @@ object ShaderChunkRegistry {
         return combined
     }
 
-    private fun resolveChunk(chunk: ShaderChunk, stage: ShaderStageType, stack: MutableList<String>): String {
+    private fun resolveChunk(
+        registry: PersistentMap<String, PersistentList<ShaderChunk>>,
+        chunk: ShaderChunk,
+        stage: ShaderStageType,
+        stack: MutableList<String>
+    ): String {
         val key = chunk.name + "::" + (chunk.stage ?: "ANY")
         if (key in stack) {
             error("Circular shader chunk include detected: ${stack.joinToString(" -> ")} -> ${chunk.name}")
@@ -120,9 +140,9 @@ object ShaderChunkRegistry {
 
         source = includeRegex.replace(source) { match ->
             val includeName = match.groupValues[1]
-            val includeChunk = findChunk(includeName, stage)
+            val includeChunk = findChunk(registry, includeName, stage)
                 ?: error("Shader chunk '$includeName' referenced from '${chunk.name}' is not registered for stage $stage")
-            resolveChunk(includeChunk, stage, stack)
+            resolveChunk(registry, includeChunk, stage, stack)
         }
 
         stack.removeAt(stack.size - 1)

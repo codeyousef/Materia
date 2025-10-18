@@ -108,7 +108,12 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - Update validation/tests to cover new shader override hooks and texture bindings across targets.
 
 ### Immediate Next Steps
-1. Fix current JS build regressions (mutableMap replacements, synchronized usage, string escapes).
-2. Re-enable geometry metadata helpers on Kotlin/JS (replace `putIfAbsent`, add explicit generics).
-3. Align MaterialDescriptorRegistry with multiplatform concurrency primitives (`Mutex`/atomic).
-4. Once green, land Vulkan pipeline layout propagation + texture binding parity.
+1. ✅ Restore Kotlin/JS build stability by swapping shared mutable caches for atomic/persistent registries and cross-platform locking (MaterialShaderLibrary, MaterialShaderGenerator, ShaderChunkRegistry, MaterialDescriptorRegistry); validated with `./gradlew compileKotlinJs`.
+2. ✅ Re-enable geometry metadata helpers on Kotlin/JS by centralising build-option derivation (MaterialDescriptor.buildGeometryOptions) and adding coverage for instancing, morphs, and optional attributes.
+3. ✅ Add regression coverage for shader placeholder replacements so escaped bindings/initialiser snippets stay correct on WGSL output.
+4. ✅ Vulkan renderer now samples bound albedo textures (normal/environment bindings still TODO); JVM smoke test covers `MeshBasicMaterial` + `Texture2D`, with documented gaps around environment maps and mipmap generation.
+5. ✅ Vulkan shader/material pipeline now perturbs normals using tangent space (falls back gracefully when tangents are absent).
+6. ✅ Texture fidelity: Vulkan path now generates mip levels when supported and respects sampler filtering/wrap modes (no anisotropic filtering yet).
+7. 🚧 Lighting parity: bind and sample environment cube textures (prefilter/BRDF) so PBR materials behave consistently.
+8. 🚧 PBR material support: wire roughness/metalness/ambient occlusion maps and tangent-space lighting into Vulkan shaders with proper descriptor bindings.
+9. 🚧 Validation: add JVM smoke tests covering textured/prefiltered environments and document Vulkan vs WebGPU parity gaps.

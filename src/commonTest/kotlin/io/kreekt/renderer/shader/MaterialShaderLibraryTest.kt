@@ -55,4 +55,54 @@ class MaterialShaderLibraryTest {
 
         assertSame(first, second, "Shader generator should return cached source for identical descriptors")
     }
+
+    @Test
+    fun fragmentOverridesRemovePlaceholdersAndPreserveFormatting() {
+        val baseOverrides = buildMap {
+            put("VERTEX_INPUT_EXTRA", "")
+            put("VERTEX_OUTPUT_EXTRA", "")
+            put("VERTEX_ASSIGN_EXTRA", "")
+            put("FRAGMENT_INPUT_EXTRA", "")
+            put("FRAGMENT_INIT_EXTRA", "")
+            put("FRAGMENT_EXTRA", "")
+            put("FRAGMENT_BINDINGS", "")
+        }.toMutableMap()
+
+        val fragmentBindings = listOf(
+            "    @group(1) @binding(0) var materialAlbedo: texture_2d<f32>;",
+            "    @group(1) @binding(1) var materialSampler: sampler;"
+        ).joinToString("\n")
+        val fragmentInit = """
+            let sample = textureSample(materialAlbedo, materialSampler, in.uv).rgb;
+        """.trimIndent().prependIndent("    ")
+        val fragmentExtra = "    color = sample;"
+
+        baseOverrides["FRAGMENT_BINDINGS"] = fragmentBindings
+        baseOverrides["FRAGMENT_INIT_EXTRA"] = fragmentInit
+        baseOverrides["FRAGMENT_EXTRA"] = fragmentExtra
+
+        val descriptor = MaterialShaderLibrary.basic().withOverrides(baseOverrides)
+        val shader = MaterialShaderGenerator.compile(descriptor)
+        val fragmentSource = shader.fragmentSource
+
+        assertTrue(
+            fragmentSource.contains(fragmentBindings),
+            "Fragment shader should include custom binding block"
+        )
+        assertTrue(
+            fragmentSource.contains(fragmentInit.trim()),
+            "Fragment shader should include initialisation snippet"
+        )
+        assertTrue(
+            fragmentSource.contains(fragmentExtra.trim()),
+            "Fragment shader should include fragment extra snippet"
+        )
+
+        listOf("FRAGMENT_BINDINGS", "FRAGMENT_INIT_EXTRA", "FRAGMENT_EXTRA").forEach { placeholder ->
+            assertFalse(
+                fragmentSource.contains("{{$placeholder}}"),
+                "Placeholder {{$placeholder}} should be removed from fragment shader"
+            )
+        }
+    }
 }

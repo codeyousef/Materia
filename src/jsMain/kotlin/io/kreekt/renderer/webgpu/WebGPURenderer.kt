@@ -26,6 +26,7 @@ import io.kreekt.renderer.gpu.unwrapHandleAdapter
 import io.kreekt.renderer.geometry.GeometryAttribute
 import io.kreekt.renderer.geometry.GeometryBuildOptions
 import io.kreekt.renderer.geometry.GeometryMetadata
+import io.kreekt.renderer.geometry.buildGeometryOptions
 import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.material.MaterialDescriptor
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
@@ -561,7 +562,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             else -> return
         }
 
-        val buildOptions = buildGeometryOptions(descriptor, geometry)
+        val buildOptions = descriptor.buildGeometryOptions(geometry)
         val buffers = geometryCache.getOrCreate(geometry, frameCount, buildOptions)
         if (buffers == null) {
             console.warn("Failed to create buffers for mesh")
@@ -681,41 +682,6 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 renderPass.setBindGroup(group, rawGroup)
             }
         }
-    }
-
-    private fun buildGeometryOptions(
-        descriptor: MaterialDescriptor,
-        geometry: BufferGeometry
-    ): GeometryBuildOptions {
-        fun requires(attribute: GeometryAttribute) = descriptor.requiredAttributes.contains(attribute)
-        fun optional(attribute: GeometryAttribute) = descriptor.optionalAttributes.contains(attribute)
-
-        fun hasAttribute(attribute: GeometryAttribute): Boolean = when (attribute) {
-            GeometryAttribute.POSITION -> true
-            GeometryAttribute.NORMAL -> geometry.getAttribute("normal") != null
-            GeometryAttribute.COLOR -> geometry.getAttribute("color") != null
-            GeometryAttribute.UV0 -> geometry.getAttribute("uv") != null
-            GeometryAttribute.UV1 -> geometry.getAttribute("uv2") != null
-            GeometryAttribute.TANGENT -> geometry.getAttribute("tangent") != null
-            GeometryAttribute.MORPH_POSITION,
-            GeometryAttribute.MORPH_NORMAL -> geometry.morphAttributes.isNotEmpty()
-            GeometryAttribute.INSTANCE_MATRIX -> geometry.isInstanced
-        }
-
-        return GeometryBuildOptions(
-            includeNormals = requires(GeometryAttribute.NORMAL) ||
-                (optional(GeometryAttribute.NORMAL) && hasAttribute(GeometryAttribute.NORMAL)),
-            includeColors = requires(GeometryAttribute.COLOR) ||
-                (optional(GeometryAttribute.COLOR) && hasAttribute(GeometryAttribute.COLOR)),
-            includeUVs = requires(GeometryAttribute.UV0) ||
-                (optional(GeometryAttribute.UV0) && hasAttribute(GeometryAttribute.UV0)),
-            includeSecondaryUVs = requires(GeometryAttribute.UV1) ||
-                (optional(GeometryAttribute.UV1) && hasAttribute(GeometryAttribute.UV1)),
-            includeTangents = requires(GeometryAttribute.TANGENT) ||
-                (optional(GeometryAttribute.TANGENT) && hasAttribute(GeometryAttribute.TANGENT)),
-            includeMorphTargets = geometry.morphAttributes.isNotEmpty(),
-            includeInstancing = geometry.isInstanced || requires(GeometryAttribute.INSTANCE_MATRIX)
-        )
     }
 
     private data class MaterialOverrideResult(
