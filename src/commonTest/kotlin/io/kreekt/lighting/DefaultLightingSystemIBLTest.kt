@@ -1,5 +1,6 @@
 package io.kreekt.lighting
 
+import io.kreekt.core.scene.Scene
 import io.kreekt.renderer.CubeFace
 import io.kreekt.renderer.CubeTextureImpl
 import io.kreekt.renderer.Texture2D
@@ -61,5 +62,19 @@ class DefaultLightingSystemIBLTest {
         assertEquals(512, lut.height)
         // The cached LUT should be returned on subsequent calls
         assertSame(first.value, second.value)
+    }
+
+    @Test
+    fun applyEnvironmentToSceneWiresPrefilterAndBrdf() {
+        val scene = Scene()
+        val result = lightingSystem.applyEnvironmentToScene(scene, environment)
+
+        assertTrue(result is LightResult.Success)
+        val prefiltered = scene.environment
+        val brdfLut = scene.environmentBrdfLut
+
+        assertTrue(prefiltered != null)
+        assertTrue(brdfLut is Texture2D)
+        assertEquals(environment.size, prefiltered!!.size)
     }
 }
