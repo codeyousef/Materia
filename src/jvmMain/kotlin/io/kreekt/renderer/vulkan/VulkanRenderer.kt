@@ -330,7 +330,8 @@ class VulkanRenderer(
         val viewMatrix = camera.matrixWorldInverse
 
         val environmentMgr = environmentManager
-        val sceneEnvironmentBinding = environmentMgr?.prepare(scene.environment)
+        val sceneEnvironmentBrdf = scene.environmentBrdfLut as? Texture2D
+        val sceneEnvironmentBinding = environmentMgr?.prepare(scene.environment, sceneEnvironmentBrdf)
 
         val drawInfos = mutableListOf<MeshDrawInfo>()
         val retainedIds = mutableSetOf<Int>()
@@ -364,7 +365,7 @@ class VulkanRenderer(
                     if (cubeTexture == null) {
                         return@traverseVisible
                     }
-                    environmentMgr?.prepare(cubeTexture) ?: return@traverseVisible
+                    environmentMgr?.prepare(cubeTexture, sceneEnvironmentBrdf) ?: return@traverseVisible
                 } else {
                     sceneEnvironmentBinding
                 }

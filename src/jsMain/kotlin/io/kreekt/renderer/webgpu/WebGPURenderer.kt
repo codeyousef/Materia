@@ -440,7 +440,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             val renderPass = (renderPassManager as WebGPURenderPassManager).getPassEncoder().unsafeCast<GPURenderPassEncoder>()
 
             // T009: Render scene with frustum culling
-            val environmentBinding = environmentManager.prepare(scene.environment)
+            val sceneBrdf = scene.environmentBrdfLut as? Texture2D
+            val environmentBinding = environmentManager.prepare(scene.environment, sceneBrdf)
 
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Traversing scene graph and rendering meshes...")
                     scene.traverse { obj ->
@@ -675,7 +676,9 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         environmentBinding?.let { binding ->
-            val groups = descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+            val groups = mutableSetOf<Int>()
+            groups += descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+            groups += descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_BRDF)
             if (groups.isEmpty()) return@let
             val rawGroup = binding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return@let
             groups.sorted().forEach { group ->

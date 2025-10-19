@@ -3,12 +3,10 @@ package io.kreekt.renderer.vulkan
 import io.kreekt.core.math.Color
 import io.kreekt.renderer.CubeFace
 import io.kreekt.renderer.CubeTexture as RendererCubeTexture
-import io.kreekt.renderer.TextureFormat
+import io.kreekt.renderer.CubeTextureImpl
+import io.kreekt.renderer.Texture2D
 import io.kreekt.renderer.TextureFilter
-import io.kreekt.renderer.TextureWrap
-import io.kreekt.texture.CubeTexture as DataCubeTexture
-import io.kreekt.texture.CubeFace as DataCubeFace
-import io.kreekt.texture.Texture2D
+import io.kreekt.renderer.TextureFormat
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import org.lwjgl.vulkan.VK12.*
@@ -66,12 +64,14 @@ internal class VulkanEnvironmentManager(
     private var lastTextureId: Int = -1
     private var lastVersion: Int = -1
     private var mipCount: Int = 1
-    private var fallbackCubeTexture: DataCubeTexture? = null
+    private var lastBrdfTextureId: Int = -1
+    private var lastBrdfVersion: Int = -1
+    private var fallbackCubeTexture: CubeTextureImpl? = null
     private var fallbackBrdfTexture: Texture2D? = null
     private var fallbackCubeResource: CubeResource? = null
     private var fallbackBrdfResource: BrdfResource? = null
 
-    fun prepare(cube: RendererCubeTexture?): EnvironmentBinding? {
+    fun prepare(cube: RendererCubeTexture?, brdfLut: Texture2D?): EnvironmentBinding? {
         if (descriptorSetLayout == VK_NULL_HANDLE) {
             createDescriptorSetLayout()
         }
@@ -83,7 +83,7 @@ internal class VulkanEnvironmentManager(
             descriptorSet = allocateDescriptorSet()
         }
 
-        val dataCube = cube as? DataCubeTexture
+        val dataCube = cube as? CubeTextureImpl
         val usingFallbackCube = dataCube == null
         val effectiveCube = dataCube ?: ensureFallbackCube()
 
@@ -108,13 +108,38 @@ internal class VulkanEnvironmentManager(
             mipCount = cubeResource?.mipLevels ?: 1
         }
 
-        if (brdfResource == null) {
-            brdfResource = fallbackBrdfResource ?: uploadBrdfTexture(ensureFallbackBrdf()).also { fallbackBrdfResource = it }
+        val dataBrdf = brdfLut as? Texture2D
+        val brdfSourceId = dataBrdf?.id ?: FALLBACK_BRDF_ID
+        val brdfSourceVersion = dataBrdf?.version ?: FALLBACK_VERSION
+
+        val needsBrdfUpload = brdfSourceId != lastBrdfTextureId ||
+            brdfSourceVersion != lastBrdfVersion ||
+            brdfResource == null
+        if (needsBrdfUpload) {
+            brdfResource?.let { resource ->
+                if (resource !== fallbackBrdfResource) {
+                    resource.destroy(device)
+                }
+            }
+            brdfResource = if (dataBrdf == null) {
+                fallbackBrdfResource ?: uploadBrdfTexture(ensureFallbackBrdf()).also { fallbackBrdfResource = it }
+            } else {
+                uploadBrdfTexture(dataBrdf)
+            }
+            lastBrdfTextureId = brdfSourceId
+            lastBrdfVersion = brdfSourceVersion
         }
 
         val resource = cubeResource ?: fallbackCubeResource ?: return null
         val brdf = brdfResource ?: fallbackBrdfResource ?: return null
         updateDescriptorSet(descriptorSet, resource, brdf)
+
+        if (dataCube != null) {
+            dataCube.needsUpdate = false
+        }
+        if (dataBrdf != null) {
+            dataBrdf.needsUpdate = false
+        }
 
         return EnvironmentBinding(
             descriptorSet = descriptorSet,
@@ -143,6 +168,8 @@ internal class VulkanEnvironmentManager(
         lastTextureId = -1
         lastVersion = -1
         mipCount = 1
+        lastBrdfTextureId = -1
+        lastBrdfVersion = -1
         descriptorSet = VK_NULL_HANDLE
     }
 
@@ -164,6 +191,8 @@ internal class VulkanEnvironmentManager(
             }
         }
         brdfResource = null
+        lastBrdfTextureId = -1
+        lastBrdfVersion = -1
     }
 
     private fun createDescriptorSetLayout() {
@@ -218,7 +247,7 @@ internal class VulkanEnvironmentManager(
         }
     }
 
-    private fun uploadCubeTexture(cube: DataCubeTexture): CubeResource {
+    private fun uploadCubeTexture(cube: CubeTextureImpl): CubeResource {
         val mipData = collectMipData(cube)
         val format = when (cube.format) {
             io.kreekt.renderer.TextureFormat.RGBA8,
@@ -462,15 +491,15 @@ internal class VulkanEnvironmentManager(
         pView[0]
     }
 
-    private fun createSampler(cube: DataCubeTexture, mipLevels: Int): Long = MemoryStack.stackPush().use { stack ->
+    private fun createSampler(cube: CubeTextureImpl, mipLevels: Int): Long = MemoryStack.stackPush().use { stack ->
         val createInfo = VkSamplerCreateInfo.calloc(stack)
             .sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO)
-            .magFilter(toVulkanFilter(cube.magFilter))
-            .minFilter(toVulkanFilter(cube.minFilter))
-            .mipmapMode(toVulkanMipmapMode(cube.minFilter))
-            .addressModeU(toVulkanAddressMode(cube.wrapS))
-            .addressModeV(toVulkanAddressMode(cube.wrapT))
-            .addressModeW(toVulkanAddressMode(cube.wrapT))
+            .magFilter(toVulkanFilter(cube.filter))
+            .minFilter(toVulkanFilter(cube.filter))
+            .mipmapMode(toVulkanMipmapMode(cube.filter))
+            .addressModeU(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+            .addressModeV(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+            .addressModeW(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
             .anisotropyEnable(false)
             .maxAnisotropy(1.0f)
             .compareEnable(false)
@@ -492,7 +521,7 @@ internal class VulkanEnvironmentManager(
         val totalBytes: Int
     )
 
-    private fun collectMipData(cube: DataCubeTexture): CubeMipData {
+    private fun collectMipData(cube: CubeTextureImpl): CubeMipData {
         val bytesPerTexel = when (cube.format) {
             io.kreekt.renderer.TextureFormat.RGBA16F -> 8
             io.kreekt.renderer.TextureFormat.RGBA32F -> 16
@@ -511,31 +540,22 @@ internal class VulkanEnvironmentManager(
             }
         }
 
-        val baseFaces = Array<ByteArray>(6) { faceIndex ->
-            val face = DataCubeFace.values()[faceIndex]
-            cube.getFaceData(face) ?: cube.getFaceFloatData(face)?.let { floats ->
-                floats.toByteArray()
-            } ?: throw IllegalStateException("Cube texture missing face data for ${face.name}")
+        val baseFaces = Array(6) { faceIndex ->
+            val face = CubeFace.values()[faceIndex]
+            cube.getFaceFloatData(face, 0)?.toByteArray()
+                ?: throw IllegalStateException("Cube texture missing face data for ${face.name}")
         }
         appendLevel(baseFaces, cube.size)
 
-        val mipmaps = cube.mipmaps
-        if (mipmaps is Array<*>) {
-            var size = cube.size
-            mipmaps.forEach { level ->
-                size = maxOf(1, size / 2)
-                if (level is Array<*>) {
-                    val faces = Array<ByteArray>(6) { faceIndex ->
-                        val element = level[faceIndex]
-                        when (element) {
-                            is ByteArray -> element
-                            is FloatArray -> element.toByteArray()
-                            else -> throw IllegalStateException("Unsupported mip data type: ${element?.javaClass}")
-                        }
-                    }
-                    appendLevel(faces, size)
-                }
+        val maxMipLevel = cube.maxMipLevel()
+        for (level in 1..maxMipLevel) {
+            val size = maxOf(1, cube.size shr level)
+            val faces = Array(6) { faceIndex ->
+                val face = CubeFace.values()[faceIndex]
+                cube.getFaceFloatData(face, level)?.toByteArray()
+                    ?: throw IllegalStateException("Cube texture missing face data for ${face.name} at mip $level")
             }
+            appendLevel(faces, size)
         }
 
         val totalBytes = levelData.sumOf { it.size }
@@ -548,7 +568,7 @@ internal class VulkanEnvironmentManager(
         return CubeMipData(
             allBytes = merged,
             bytesPerTexel = bytesPerTexel,
-            levelCount = levelData.size / 6,
+            levelCount = maxOf(1, maxMipLevel + 1),
             totalBytes = totalBytes
         )
     }
@@ -563,12 +583,10 @@ internal class VulkanEnvironmentManager(
             else -> VK_FORMAT_R32G32_SFLOAT
         }
 
-        val pixelData = texture.getFloatData()?.let { floats ->
+        val pixelData = texture.getData()?.let { floats ->
             val buffer = MemoryUtil.memAlloc(floats.size * 4)
             buffer.asFloatBuffer().put(floats).flip()
             buffer
-        } ?: texture.getData()?.let { bytes ->
-            MemoryUtil.memAlloc(bytes.size).put(bytes).flip() as ByteBuffer
         } ?: throw IllegalStateException("BRDF texture has no data to upload")
 
         val imageSize = pixelData.remaining().toLong()
@@ -694,11 +712,11 @@ internal class VulkanEnvironmentManager(
             val sampler = MemoryStack.stackPush().use { samplerStack ->
                 val samplerInfo = VkSamplerCreateInfo.calloc(samplerStack)
                     .sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO)
-                    .magFilter(toVulkanFilter(texture.magFilter))
-                    .minFilter(toVulkanFilter(texture.minFilter))
+                    .magFilter(VK_FILTER_LINEAR)
+                    .minFilter(VK_FILTER_LINEAR)
                     .mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST)
-                    .addressModeU(toVulkanAddressMode(texture.wrapS))
-                    .addressModeV(toVulkanAddressMode(texture.wrapT))
+                    .addressModeU(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+                    .addressModeV(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
                     .addressModeW(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
                     .anisotropyEnable(false)
                     .maxAnisotropy(1.0f)
@@ -723,22 +741,18 @@ internal class VulkanEnvironmentManager(
         }
     }
 
-    private fun ensureFallbackCube(): DataCubeTexture {
+    private fun ensureFallbackCube(): CubeTextureImpl {
         fallbackCubeTexture?.let { return it }
 
-        val cube = DataCubeTexture(
+        val cube = CubeTextureImpl(
             size = 1,
             format = TextureFormat.RGBA8,
-            magFilter = TextureFilter.LINEAR,
-            minFilter = TextureFilter.LINEAR,
+            filter = TextureFilter.LINEAR,
             textureName = "FallbackEnvironment"
         )
-        cube.generateMipmaps = false
-        cube.wrapS = TextureWrap.CLAMP_TO_EDGE
-        cube.wrapT = TextureWrap.CLAMP_TO_EDGE
         val faceData = FloatArray(4) { index -> if (index == 3) 1f else 0f }
-        DataCubeFace.values().forEach { face ->
-            cube.setFaceFloatData(face, faceData.copyOf())
+        CubeFace.values().forEach { face ->
+            cube.setFaceData(face, faceData.copyOf())
         }
         cube.needsUpdate = false
         cube.version = FALLBACK_VERSION
@@ -748,16 +762,22 @@ internal class VulkanEnvironmentManager(
 
     private fun ensureFallbackBrdf(): Texture2D {
         fallbackBrdfTexture?.let { return it }
-        val texture = Texture2D.fromFloatData(
-            width = 1,
-            height = 1,
-            data = floatArrayOf(0f, 1f),
-            format = TextureFormat.RG32F
+        val fallbackWidth = 32
+        val fallbackHeight = 32
+        val texture = Texture2D(
+            width = fallbackWidth,
+            height = fallbackHeight,
+            format = TextureFormat.RG32F,
+            filter = TextureFilter.LINEAR,
+            generateMipmaps = false,
+            textureName = "FallbackBrdfLut"
         )
-        texture.magFilter = TextureFilter.LINEAR
-        texture.minFilter = TextureFilter.LINEAR
-        texture.wrapS = TextureWrap.CLAMP_TO_EDGE
-        texture.wrapT = TextureWrap.CLAMP_TO_EDGE
+        val data = FloatArray(fallbackWidth * fallbackHeight * 2)
+        for (i in data.indices step 2) {
+            data[i] = 0f
+            data[i + 1] = 1f
+        }
+        texture.setData(data)
         texture.needsUpdate = false
         texture.version = FALLBACK_VERSION
         fallbackBrdfTexture = texture
@@ -896,15 +916,10 @@ internal class VulkanEnvironmentManager(
         else -> VK_SAMPLER_MIPMAP_MODE_LINEAR
     }
 
-    private fun toVulkanAddressMode(wrap: io.kreekt.renderer.TextureWrap): Int = when (wrap) {
-        io.kreekt.renderer.TextureWrap.REPEAT -> VK_SAMPLER_ADDRESS_MODE_REPEAT
-        io.kreekt.renderer.TextureWrap.MIRRORED_REPEAT -> VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT
-        io.kreekt.renderer.TextureWrap.CLAMP_TO_EDGE -> VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-    }
-
     companion object {
         private const val MAX_ENV_DESCRIPTOR_SETS = 4
         private const val FALLBACK_TEXTURE_ID = -2
         private const val FALLBACK_VERSION = -1
+        private const val FALLBACK_BRDF_ID = -3
     }
 }

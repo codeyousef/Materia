@@ -3,6 +3,7 @@ package io.kreekt.renderer.webgpu
 import io.kreekt.renderer.CubeTexture
 import io.kreekt.renderer.CubeTextureImpl
 import io.kreekt.renderer.CubeFace
+import io.kreekt.renderer.Texture2D
 import io.kreekt.renderer.gpu.GpuBindGroup
 import io.kreekt.renderer.gpu.GpuBindGroupDescriptor
 import io.kreekt.renderer.gpu.GpuBindGroupEntry
@@ -30,6 +31,7 @@ import io.kreekt.renderer.gpu.unwrapHandle
 import io.kreekt.renderer.webgpu.GPUTextureUsage
 import io.kreekt.renderer.webgpu.GPUDevice
 import io.kreekt.renderer.webgpu.GPUTexture
+import org.khronos.webgl.Float32Array
 import org.khronos.webgl.Uint8Array
 import kotlin.math.abs
 import kotlin.math.max
@@ -52,13 +54,19 @@ internal class WebGPUEnvironmentManager(
     private var cubeTexture: GpuTexture? = null
     private var cubeView: GpuTextureView? = null
     private var sampler: GpuSampler? = null
+    private var brdfTexture: GpuTexture? = null
+    private var brdfView: GpuTextureView? = null
+    private var brdfSampler: GpuSampler? = null
     private var bindGroupLayout: GpuBindGroupLayout? = null
     private var bindGroup: GpuBindGroup? = null
     private var lastTextureId: Int = -1
     private var mipCount: Int = 1
     private var trackedBytes: Long = 0
+    private var lastBrdfId: Int = -1
+    private var lastBrdfVersion: Int = -1
+    private var trackedBrdfBytes: Long = 0
 
-    fun prepare(cube: CubeTexture?): EnvironmentBinding? {
+    fun prepare(cube: CubeTexture?, brdf: Texture2D?): EnvironmentBinding? {
         val device = deviceProvider() ?: return null
         cube ?: run {
             dispose()
@@ -73,6 +81,7 @@ internal class WebGPUEnvironmentManager(
 
         uploadEnvironment(device, cube)
         createSampler(device)
+        ensureBrdfResources(device, brdf)
         createBindGroup(device)
 
         val layout = bindGroupLayout ?: return null
@@ -85,14 +94,23 @@ internal class WebGPUEnvironmentManager(
             statsTracker?.recordTextureDisposed(trackedBytes)
             trackedBytes = 0
         }
+        if (trackedBrdfBytes > 0) {
+            statsTracker?.recordTextureDisposed(trackedBrdfBytes)
+            trackedBrdfBytes = 0
+        }
         resourceRegistry.disposeAll()
         resourceRegistry.reset()
         cubeTexture = null
         cubeView = null
         sampler = null
+        brdfTexture = null
+        brdfView = null
+        brdfSampler = null
         bindGroup = null
         bindGroupLayout = null
         lastTextureId = -1
+        lastBrdfId = -1
+        lastBrdfVersion = -1
     }
 
     private fun uploadEnvironment(device: GpuDevice, cube: CubeTexture) {
@@ -105,11 +123,20 @@ internal class WebGPUEnvironmentManager(
             statsTracker?.recordTextureDisposed(trackedBytes)
             trackedBytes = 0
         }
+        if (trackedBrdfBytes > 0) {
+            statsTracker?.recordTextureDisposed(trackedBrdfBytes)
+            trackedBrdfBytes = 0
+        }
         resourceRegistry.disposeAll()
         resourceRegistry.reset()
         cubeTexture = null
         cubeView = null
+        brdfTexture = null
+        brdfView = null
+        brdfSampler = null
         bindGroup = null
+        lastBrdfId = -1
+        lastBrdfVersion = -1
 
         val descriptor = GpuTextureDescriptor(
             width = size,
@@ -182,6 +209,67 @@ internal class WebGPUEnvironmentManager(
         lastTextureId = cube.id
     }
 
+    private fun ensureBrdfResources(device: GpuDevice, brdf: Texture2D?) {
+        val sourceId = brdf?.id ?: FALLBACK_BRDF_ID
+        val sourceVersion = brdf?.version ?: FALLBACK_VERSION
+
+        if (brdfView != null && sourceId == lastBrdfId && sourceVersion == lastBrdfVersion) {
+            brdf?.needsUpdate = false
+            return
+        }
+
+        brdfTexture = null
+        brdfView = null
+        brdfSampler = null
+
+        val width = brdf?.width ?: FALLBACK_BRDF_SIZE
+        val height = brdf?.height ?: FALLBACK_BRDF_SIZE
+        val floatData = brdf?.getData() ?: fallbackBrdfData(width, height)
+
+        val descriptor = GpuTextureDescriptor(
+            width = width,
+            height = height,
+            depthOrArrayLayers = 1,
+            mipLevelCount = 1,
+            sampleCount = 1,
+            dimension = GpuTextureDimension.D2,
+            format = "rg32float",
+            usage = GPUTextureUsage.TEXTURE_BINDING or GPUTextureUsage.COPY_DST,
+            label = "IBL BRDF LUT"
+        )
+
+        val texture = device.createTexture(descriptor)
+        resourceRegistry.trackTexture(texture)
+        brdfTexture = texture
+        val view = texture.createView(
+            GpuTextureViewDescriptor(
+                label = "IBL BRDF View",
+                dimension = GpuTextureViewDimension.D2
+            )
+        )
+        brdfView = view
+
+        val samplerDescriptor = GpuSamplerDescriptor(
+            magFilter = GpuSamplerFilter.LINEAR,
+            minFilter = GpuSamplerFilter.LINEAR,
+            mipmapFilter = GpuSamplerFilter.LINEAR,
+            lodMinClamp = 0f,
+            lodMaxClamp = 0f,
+            label = "IBL BRDF Sampler"
+        )
+        val samplerHandle = device.createSampler(samplerDescriptor)
+        brdfSampler = samplerHandle
+
+        uploadBrdfData(device, texture, floatData, width, height)
+
+        trackedBrdfBytes = width.toLong() * height.toLong() * BRDF_BYTES_PER_PIXEL
+        statsTracker?.recordTextureCreated(trackedBrdfBytes)
+
+        lastBrdfId = sourceId
+        lastBrdfVersion = sourceVersion
+        brdf?.needsUpdate = false
+    }
+
     private fun createSampler(device: GpuDevice) {
         sampler = device.createSampler(
             GpuSamplerDescriptor(
@@ -199,6 +287,8 @@ internal class WebGPUEnvironmentManager(
         val layout = bindGroupLayout ?: createBindGroupLayout(device)
         val view = cubeView ?: return
         val samplerHandle = sampler ?: return
+        val brdfViewHandle = brdfView ?: return
+        val brdfSamplerHandle = brdfSampler ?: return
 
         val descriptor = GpuBindGroupDescriptor(
             layout = layout,
@@ -210,6 +300,14 @@ internal class WebGPUEnvironmentManager(
                 GpuBindGroupEntry(
                     binding = 1,
                     resource = GpuBindingResource.Sampler(samplerHandle)
+                ),
+                GpuBindGroupEntry(
+                    binding = 2,
+                    resource = GpuBindingResource.Texture(brdfViewHandle)
+                ),
+                GpuBindGroupEntry(
+                    binding = 3,
+                    resource = GpuBindingResource.Sampler(brdfSamplerHandle)
                 )
             ),
             label = "IBL Prefilter Bind Group"
@@ -231,6 +329,20 @@ internal class WebGPUEnvironmentManager(
                 ),
                 GpuBindGroupLayoutEntry(
                     binding = 1,
+                    visibility = GpuShaderStage.FRAGMENT.bits,
+                    sampler = GpuSamplerBindingLayout(GpuSamplerBindingType.FILTERING)
+                ),
+                GpuBindGroupLayoutEntry(
+                    binding = 2,
+                    visibility = GpuShaderStage.FRAGMENT.bits,
+                    texture = GpuTextureBindingLayout(
+                        sampleType = GpuTextureSampleType.FLOAT,
+                        viewDimension = GpuTextureViewDimension.D2,
+                        multisampled = false
+                    )
+                ),
+                GpuBindGroupLayoutEntry(
+                    binding = 3,
                     visibility = GpuShaderStage.FRAGMENT.bits,
                     sampler = GpuSamplerBindingLayout(GpuSamplerBindingType.FILTERING)
                 )
@@ -350,7 +462,54 @@ internal class WebGPUEnvironmentManager(
         return padded
     }
 
+    private fun uploadBrdfData(device: GpuDevice, texture: GpuTexture, data: FloatArray, width: Int, height: Int) {
+        val floatArray = Float32Array(data.size)
+        val floatDynamic = floatArray.asDynamic()
+        for (i in data.indices) {
+            floatDynamic[i] = data[i]
+        }
+        val rawBytes = Uint8Array(floatArray.buffer)
+
+        val rawDevice = device.unwrapHandle() as? GPUDevice ?: return
+        val rawTexture = texture.unwrapHandle() as GPUTexture
+
+        val destination = js("({})")
+        destination.texture = rawTexture
+        destination.mipLevel = 0
+        val origin = js("({})")
+        origin.x = 0
+        origin.y = 0
+        origin.z = 0
+        destination.origin = origin
+
+        val bytesPerRow = width * BRDF_BYTES_PER_PIXEL
+        val dataLayout = js("({})")
+        dataLayout.offset = 0
+        dataLayout.bytesPerRow = bytesPerRow
+        dataLayout.rowsPerImage = height
+
+        val sizeDesc = js("({})")
+        sizeDesc.width = width
+        sizeDesc.height = height
+        sizeDesc.depthOrArrayLayers = 1
+
+        rawDevice.queue.writeTexture(destination, rawBytes, dataLayout, sizeDesc)
+    }
+
+    private fun fallbackBrdfData(width: Int, height: Int): FloatArray {
+        val data = FloatArray(width * height * 2)
+        for (i in 0 until width * height) {
+            data[i * 2] = 0f
+            data[i * 2 + 1] = 1f
+        }
+        return data
+    }
+
     companion object {
         private const val HALF_BYTE_STRIDE = 8 // rgba16f = 4 * 2 bytes
+        private const val BRDF_BYTES_PER_PIXEL = 8
+        private const val FALLBACK_BRDF_ID = -3
+        private const val FALLBACK_VERSION = -1
+        private const val FALLBACK_BRDF_SIZE = 32
     }
 }

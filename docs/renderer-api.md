@@ -108,6 +108,7 @@ window.addEventListener("unload", {
 ### Environment Prefilter Integration
 
 - Set `Scene.environment` to a prefiltered `CubeTexture` (the renderer auto-detects mip chains).
+- Assign `Scene.environmentBrdfLut` with the BRDF lookup returned from the IBL pipeline (see `Scene.applyEnvironmentMaps`).
 - Roughness-driven LOD selection mirrors the CPU path via `PrefilterMipSelector`, ensuring consistent reflections.
 - When no prefiltered cube is available the renderer binds a neutral fallback so Vulkan stays stable (diffuse-only response, zero specular) while WebGPU continues sampling normally.
 - Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; missing BRDF data falls back to a constant approximation (documented in `RenderStats.notes`).

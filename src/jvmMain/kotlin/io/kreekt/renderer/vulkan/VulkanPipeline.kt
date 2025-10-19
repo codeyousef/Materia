@@ -435,6 +435,8 @@ class VulkanPipeline(
 
             layout(set = 2, binding = 0) uniform textureCube uPrefilterTexture;
             layout(set = 2, binding = 1) uniform sampler uPrefilterSampler;
+            layout(set = 2, binding = 2) uniform texture2D uBrdfLutTexture;
+            layout(set = 2, binding = 3) uniform sampler uBrdfLutSampler;
 
             float roughnessToMip(float roughness, float mipCount) {
                 if (mipCount <= 1.0) {
@@ -446,17 +448,17 @@ class VulkanPipeline(
                 return min(maxLevel, perceptual * maxLevel);
             }
 
-            vec3 applyNormalMap(vec3 normal, vec3 tangent, vec3 bitangent) {
-                vec3 mapped = texture(sampler2D(uNormalTexture, uNormalSampler), vUV).xyz * 2.0 - 1.0;
-                mat3 tbn = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
-                return normalize(tbn * mapped);
-            }
+                vec3 applyNormalMap(vec3 normal, vec3 tangent, vec3 bitangent) {
+                    vec3 mapped = texture(sampler2D(uNormalTexture, uNormalSampler), vUV).xyz * 2.0 - 1.0;
+                    mat3 tbn = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
+                    return normalize(tbn * mapped);
+                }
 
-            float sampleScalar(texture2D tex, sampler samp) {
-                return texture(sampler2D(tex, samp), vUV).r;
-            }
+                float sampleScalar(texture2D tex, sampler samp) {
+                    return texture(sampler2D(tex, samp), vUV).r;
+                }
 
-            void main() {
+                void main() {
                 vec4 albedoSample = texture(sampler2D(uAlbedoTexture, uAlbedoSampler), vUV);
                 vec3 baseColor = clamp(ubo.uBaseColor.rgb * vColor * albedoSample.rgb, 0.0, 1.0);
                 float alpha = clamp(ubo.uBaseColor.a * albedoSample.a, 0.0, 1.0);
@@ -473,14 +475,17 @@ class VulkanPipeline(
 
                 vec3 viewDir = normalize(ubo.uCameraPosition.xyz - vWorldPos);
                 vec3 reflection = vec3(0.0);
+                float NdotV = 0.0;
                 if (length(viewDir) > 0.0) {
                     vec3 R = reflect(-viewDir, perturbedNormal);
                     float lod = roughnessToMip(roughness, mipCount);
                     reflection = textureLod(samplerCube(uPrefilterTexture, uPrefilterSampler), R, lod).rgb;
+                    NdotV = clamp(dot(perturbedNormal, viewDir), 0.0, 1.0);
                 }
 
                 vec3 F0 = mix(vec3(0.04), baseColor, metalness);
-                vec3 specular = reflection * F0 * envIntensity;
+                vec2 brdf = texture(sampler2D(uBrdfLutTexture, uBrdfLutSampler), vec2(NdotV, roughness)).rg;
+                vec3 specular = reflection * (F0 * brdf.x + vec3(brdf.y)) * envIntensity;
                 vec3 diffuse = baseColor * (1.0 - metalness);
 
                 float ao = clamp(sampleScalar(uAoTexture, uAoSampler) * ubo.uCameraPosition.w, 0.0, 1.0);

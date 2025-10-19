@@ -256,8 +256,10 @@ private object BuiltInMaterialChunks {
             name = "material.pbr.fragment.bindings",
             stage = ShaderStageType.FRAGMENT,
             source = """
-                @group(1) @binding(0) var prefilterTexture: texture_cube<f32>;
-                @group(1) @binding(1) var prefilterSampler: sampler;
+                @group(2) @binding(0) var prefilterTexture: texture_cube<f32>;
+                @group(2) @binding(1) var prefilterSampler: sampler;
+                @group(2) @binding(2) var brdfLutTexture: texture_2d<f32>;
+                @group(2) @binding(3) var brdfLutSampler: sampler;
             """.trimIndent()
         ),
         ShaderChunk(
@@ -276,6 +278,10 @@ private object BuiltInMaterialChunks {
 
                 fn mix_vec3(a: vec3<f32>, b: vec3<f32>, factor: f32) -> vec3<f32> {
                     return a * (1.0 - factor) + b * factor;
+                }
+
+                fn saturate(value: f32) -> f32 {
+                    return clamp(value, 0.0, 1.0);
                 }
             """.trimIndent()
         ),
@@ -314,15 +320,18 @@ private object BuiltInMaterialChunks {
                     let mipCount = uniforms.pbrParams.w;
 
                     var reflection = vec3<f32>(0.0);
+                    var NdotV = 0.0;
                     if (length(V) > 0.0) {
                         let R = reflect(-V, N);
                         let lod = roughness_to_mip(roughness, mipCount);
                         let sampled = textureSampleLevel(prefilterTexture, prefilterSampler, R, lod);
                         reflection = sampled.rgb;
+                        NdotV = saturate(dot(N, V));
                     }
 
                     let F0 = mix_vec3(vec3<f32>(0.04), baseColor, metalness);
-                    let specular = reflection * F0 * envIntensity;
+                    let brdfSample = textureSample(brdfLutTexture, brdfLutSampler, vec2<f32>(NdotV, roughness)).rg;
+                    let specular = reflection * (F0 * brdfSample.x + vec3<f32>(brdfSample.y)) * envIntensity;
                     let diffuse = baseColor * (1.0 - metalness);
                     var color = clamp(diffuse + specular, vec3<f32>(0.0), vec3<f32>(1.0));
                     {{FRAGMENT_EXTRA}}
@@ -332,4 +341,3 @@ private object BuiltInMaterialChunks {
         )
     )
 }
-

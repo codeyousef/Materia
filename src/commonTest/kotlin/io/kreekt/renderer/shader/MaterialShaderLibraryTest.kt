@@ -43,7 +43,8 @@ class MaterialShaderLibraryTest {
     fun meshStandardShaderExposesEnvironmentBindings() {
         val shader = MaterialShaderGenerator.compile(MaterialShaderLibrary.meshStandard())
 
-        assertTrue(shader.fragmentSource.contains("@group(1) @binding(0) var prefilterTexture"))
+        assertTrue(shader.fragmentSource.contains("@group(2) @binding(0) var prefilterTexture"))
+        assertTrue(shader.fragmentSource.contains("@group(2) @binding(2) var brdfLutTexture"))
         assertTrue(shader.fragmentSource.contains("roughness_to_mip"))
     }
 

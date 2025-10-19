@@ -24,13 +24,17 @@ class Texture2D(
     override val id: Int = generateId()
     val name: String = textureName
     override var needsUpdate: Boolean = true
+    var version: Int = 0
 
     private var data: FloatArray? = null
 
     fun setData(data: FloatArray) {
-        this.data = data
+        this.data = data.copyOf()
         needsUpdate = true
+        version += 1
     }
+
+    fun getData(): FloatArray? = data?.copyOf()
 
     override fun dispose() {
         data = null
@@ -55,6 +59,7 @@ class CubeTextureImpl(
     override val id: Int = generateId()
     val name: String = textureName
     override var needsUpdate: Boolean = true
+    var version: Int = 0
 
     override val width: Int get() = size
     override val height: Int get() = size
@@ -68,14 +73,18 @@ class CubeTextureImpl(
             faces[i][0] = data.sliceArray(i * faceSize until (i + 1) * faceSize)
         }
         needsUpdate = true
+        version += 1
     }
 
     fun setFaceData(face: CubeFace, data: FloatArray, mip: Int = 0) {
-        faces[face.ordinal][mip] = data
+        faces[face.ordinal][mip] = data.copyOf()
         needsUpdate = true
+        version += 1
     }
 
-    fun getFaceData(face: CubeFace, mip: Int = 0): FloatArray? = faces[face.ordinal][mip]
+    fun getFaceData(face: CubeFace, mip: Int = 0): FloatArray? = faces[face.ordinal][mip]?.copyOf()
+
+    fun getFaceFloatData(face: CubeFace, mip: Int = 0): FloatArray? = faces[face.ordinal][mip]?.copyOf()
 
     fun maxMipLevel(): Int = faces.maxOfOrNull { entry -> entry.keys.maxOrNull() ?: 0 } ?: 0
 
