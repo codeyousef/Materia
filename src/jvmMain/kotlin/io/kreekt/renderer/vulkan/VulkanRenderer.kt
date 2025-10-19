@@ -17,6 +17,8 @@ import io.kreekt.geometry.BufferGeometry
 import io.kreekt.renderer.geometry.GeometryAttribute
 import io.kreekt.renderer.geometry.GeometryBuilder
 import io.kreekt.renderer.geometry.GeometryBuildOptions
+import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.material.MeshStandardMaterial
 import io.kreekt.renderer.geometry.GeometryMetadata
 import io.kreekt.renderer.geometry.buildGeometryOptions
 import io.kreekt.renderer.webgpu.VertexAttribute
@@ -34,6 +36,8 @@ import io.kreekt.renderer.*
 import io.kreekt.renderer.material.MaterialDescriptor
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.renderer.material.MaterialRenderState
+import io.kreekt.renderer.material.MaterialBindingSource
+import io.kreekt.renderer.material.requiresBinding
 import io.kreekt.renderer.feature020.*
 import io.kreekt.renderer.gpu.GpuBackend
 import io.kreekt.renderer.gpu.GpuContext
@@ -47,6 +51,7 @@ import io.kreekt.renderer.gpu.unwrapHandle
 import io.kreekt.renderer.gpu.unwrapInstance
 import io.kreekt.renderer.gpu.unwrapPhysicalHandle
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.vulkan.*
 import org.lwjgl.vulkan.VK12.*
@@ -107,6 +112,7 @@ class VulkanRenderer(
     private var materialTextureDescriptorSetLayout: Long = VK_NULL_HANDLE
     private var materialTextureDescriptorPool: Long = VK_NULL_HANDLE
     private var materialTextureManager: VulkanMaterialTextureManager? = null
+    private var environmentManager: VulkanEnvironmentManager? = null
     private var uniformBuffer: BufferHandle? = null
     private var swapchainFramebuffers: List<VulkanFramebufferData> = emptyList()
     private var gpuContext: GpuContext? = null
@@ -255,6 +261,14 @@ class VulkanRenderer(
             )
             println("T033: Material texture resources ready")
 
+            environmentManager = VulkanEnvironmentManager(
+                vkDevice,
+                vkPhysicalDevice,
+                commandPool,
+                vkQueue
+            )
+            println("T033: Environment resources ready")
+
             println("T033: Preparing pipeline cache...")
             pipelineCache.values.forEach { it.dispose() }
             pipelineCache.clear()
@@ -312,8 +326,11 @@ class VulkanRenderer(
         camera.updateMatrixWorld(false)
         camera.updateProjectionMatrix()
 
-        val viewProjectionMatrix = Matrix4()
-        viewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+        val projectionMatrix = camera.projectionMatrix
+        val viewMatrix = camera.matrixWorldInverse
+
+        val environmentMgr = environmentManager
+        val sceneEnvironmentBinding = environmentMgr?.prepare(scene.environment)
 
         val drawInfos = mutableListOf<MeshDrawInfo>()
         val retainedIds = mutableSetOf<Int>()
@@ -339,10 +356,17 @@ class VulkanRenderer(
                     VulkanMaterialTextureManager.MaterialTextureBinding(VK_NULL_HANDLE)
                 }
 
-                val environmentBindingForMesh = if (descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)) {
-                    environmentBindingForFrame ?: return@traverseVisible
+                val requiresEnvironment = descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)
+
+                val environmentBindingForMesh = if (requiresEnvironment) {
+                    val materialEnv = (material as? MeshStandardMaterial)?.envMap
+                    val cubeTexture = materialEnv ?: scene.environment
+                    if (cubeTexture == null) {
+                        return@traverseVisible
+                    }
+                    environmentMgr?.prepare(cubeTexture) ?: return@traverseVisible
                 } else {
-                    environmentBindingForFrame
+                    sceneEnvironmentBinding
                 }
 
                 drawInfos += MeshDrawInfo(node, descriptor, buffers, textureBinding, environmentBindingForMesh)
@@ -404,14 +428,22 @@ class VulkanRenderer(
 
                     val hasMaterialSet = materialTextureDescriptorSetLayout != VK_NULL_HANDLE &&
                         drawInfo.textureBinding.descriptorSet != VK_NULL_HANDLE
+                    val environmentBinding = drawInfo.environmentBinding
+                    val hasEnvironmentSet = environmentBinding != null &&
+                        environmentBinding.descriptorSet != VK_NULL_HANDLE
 
-                    val descriptorSetLayouts = if (hasMaterialSet) {
-                        longArrayOf(descriptorSetLayout, materialTextureDescriptorSetLayout)
-                    } else {
-                        longArrayOf(descriptorSetLayout)
-                    }
+                    val descriptorSetLayouts = buildList {
+                        add(descriptorSetLayout)
+                        if (hasMaterialSet) add(materialTextureDescriptorSetLayout)
+                        if (hasEnvironmentSet) add(environmentBinding!!.layout)
+                    }.toLongArray()
 
-                    val pipelineKey = createPipelineKey(buffers.vertexLayouts, materialDescriptor.renderState)
+                    val pipelineKey = createPipelineKey(
+                        buffers.vertexLayouts,
+                        materialDescriptor.renderState,
+                        hasMaterialSet,
+                        hasEnvironmentSet
+                    )
                     val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
                         warnDepthStateIfNeeded(materialDescriptor.renderState)
                         val newPipeline = VulkanPipeline(deviceHandle)
@@ -435,19 +467,75 @@ class VulkanRenderer(
                         activePipelineKey = pipelineKey
                     }
 
-                    val mvp = Matrix4()
-                    mvp.multiplyMatrices(viewProjectionMatrix, drawInfo.mesh.matrixWorld)
-                    updateUniformBuffer(mvp)
+                    val modelMatrix = drawInfo.mesh.matrixWorld
+                    val material = drawInfo.mesh.material ?: continue
+
+                    val baseColor = when (material) {
+                        is MeshStandardMaterial -> floatArrayOf(
+                            material.color.r,
+                            material.color.g,
+                            material.color.b,
+                            material.opacity
+                        )
+
+                        is MeshBasicMaterial -> floatArrayOf(
+                            material.color.r,
+                            material.color.g,
+                            material.color.b,
+                            material.opacity
+                        )
+
+                        else -> floatArrayOf(1f, 1f, 1f, 1f)
+                    }
+
+                    val prefilterMipCount = (environmentBinding?.mipCount ?: 1).toFloat()
+
+                    val pbrParams = when (material) {
+                        is MeshStandardMaterial -> floatArrayOf(
+                            material.roughness,
+                            material.metalness,
+                            material.envMapIntensity,
+                            prefilterMipCount
+                        )
+
+                        else -> floatArrayOf(1f, 0f, 0f, prefilterMipCount)
+                    }
+
+                    val aoIntensity = when (material) {
+                        is MeshStandardMaterial -> material.aoMapIntensity
+                        else -> 1f
+                    }
+
+                    val cameraPositionVector = floatArrayOf(
+                        camera.position.x,
+                        camera.position.y,
+                        camera.position.z,
+                        aoIntensity
+                    )
+
+                    updateUniformBuffer(
+                        projectionMatrix,
+                        viewMatrix,
+                        modelMatrix,
+                        baseColor,
+                        pbrParams,
+                        cameraPositionVector
+                    )
 
                     val pipelineLayout = pipelineForDraw.getPipelineLayout()
-                    val descriptorSetsBuffer = if (hasMaterialSet) {
-                        val buffer = stack.mallocLong(2)
-                        buffer.put(0, descriptorHandle)
-                        buffer.put(1, drawInfo.textureBinding.descriptorSet)
-                        buffer
-                    } else {
-                        stack.longs(descriptorHandle)
+                    val descriptorSetsBuffer = stack.mallocLong(1 + (if (hasMaterialSet) 1 else 0) + (if (hasEnvironmentSet) 1 else 0))
+                    descriptorSetsBuffer.put(0, descriptorHandle)
+                    var descriptorIndex = 1
+                    if (hasMaterialSet) {
+                        descriptorSetsBuffer.put(descriptorIndex, drawInfo.textureBinding.descriptorSet)
+                        descriptorIndex += 1
                     }
+                    if (hasEnvironmentSet) {
+                        descriptorSetsBuffer.put(descriptorIndex, environmentBinding!!.descriptorSet)
+                        descriptorIndex += 1
+                    }
+                    descriptorSetsBuffer.limit(descriptorIndex)
+                    descriptorSetsBuffer.position(0)
                     vkCmdBindDescriptorSets(
                         command,
                         VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -537,6 +625,8 @@ class VulkanRenderer(
 
         materialTextureManager?.dispose()
         materialTextureManager = null
+        environmentManager?.dispose()
+        environmentManager = null
 
         pipelineCache.values.forEach { it.dispose() }
         pipelineCache.clear()
@@ -663,7 +753,15 @@ class VulkanRenderer(
             vkUpdateDescriptorSets(deviceHandle, descriptorWrite, null)
         }
 
-        updateUniformBuffer(Matrix4())
+        val identity = Matrix4()
+        updateUniformBuffer(
+            projection = identity,
+            view = identity,
+            model = identity,
+            baseColor = floatArrayOf(1f, 1f, 1f, 1f),
+            pbrParams = floatArrayOf(1f, 0f, 0f, 1f),
+            cameraPosition = floatArrayOf(0f, 0f, 0f, 1f)
+        )
     }
 
     private fun destroyDescriptorResources() {
@@ -695,17 +793,26 @@ class VulkanRenderer(
 
         if (materialTextureDescriptorSetLayout == VK_NULL_HANDLE) {
             MemoryStack.stackPush().use { stack ->
-                val bindings = VkDescriptorSetLayoutBinding.calloc(2, stack)
-                bindings[0]
-                    .binding(0)
-                    .descriptorCount(1)
-                    .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                    .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
-                bindings[1]
-                    .binding(1)
-                    .descriptorCount(1)
-                    .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                    .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
+                val bindings = VkDescriptorSetLayoutBinding.calloc(10, stack)
+
+                fun configure(binding: Int, descriptorType: Int) {
+                    bindings[binding]
+                        .binding(binding)
+                        .descriptorCount(1)
+                        .descriptorType(descriptorType)
+                        .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
+                }
+
+                configure(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                configure(1, VK_DESCRIPTOR_TYPE_SAMPLER)
+                configure(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                configure(3, VK_DESCRIPTOR_TYPE_SAMPLER)
+                configure(4, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                configure(5, VK_DESCRIPTOR_TYPE_SAMPLER)
+                configure(6, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                configure(7, VK_DESCRIPTOR_TYPE_SAMPLER)
+                configure(8, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                configure(9, VK_DESCRIPTOR_TYPE_SAMPLER)
 
                 val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
@@ -722,13 +829,17 @@ class VulkanRenderer(
 
         if (materialTextureDescriptorPool == VK_NULL_HANDLE) {
             MemoryStack.stackPush().use { stack ->
-                val poolSize = VkDescriptorPoolSize.calloc(1, stack)
-                    .type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 2)
+                val poolSizes = VkDescriptorPoolSize.calloc(2, stack)
+                poolSizes[0]
+                    .type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 5)
+                poolSizes[1]
+                    .type(VK_DESCRIPTOR_TYPE_SAMPLER)
+                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 5)
 
                 val poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
-                    .pPoolSizes(poolSize)
+                    .pPoolSizes(poolSizes)
                     .maxSets(MAX_MATERIAL_TEXTURE_SETS)
 
                 val pPool = stack.mallocLong(1)
@@ -828,19 +939,39 @@ class VulkanRenderer(
         }
     }
 
-    private fun updateUniformBuffer(matrix: Matrix4) {
+    private fun updateUniformBuffer(
+        projection: Matrix4,
+        view: Matrix4,
+        model: Matrix4,
+        baseColor: FloatArray,
+        pbrParams: FloatArray,
+        cameraPosition: FloatArray
+    ) {
         val bufferMgr = bufferManager ?: return
         val buffer = uniformBuffer ?: return
         val bytes = ByteArray(UNIFORM_BUFFER_SIZE)
-        for (i in 0 until 16) {
-            val value = matrix.elements[i]
-            val bits = java.lang.Float.floatToIntBits(value)
-            val base = i * 4
-            bytes[base] = (bits and 0xFF).toByte()
-            bytes[base + 1] = ((bits ushr 8) and 0xFF).toByte()
-            bytes[base + 2] = ((bits ushr 16) and 0xFF).toByte()
-            bytes[base + 3] = ((bits ushr 24) and 0xFF).toByte()
+        val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+
+        fun putMatrix(matrix: Matrix4) {
+            val elements = matrix.elements
+            for (i in 0 until 16) {
+                byteBuffer.putFloat(elements[i])
+            }
         }
+
+        fun putVec4(array: FloatArray) {
+            for (i in 0 until 4) {
+                byteBuffer.putFloat(array.getOrElse(i) { if (i == 3) 1f else 0f })
+            }
+        }
+
+        putMatrix(projection)
+        putMatrix(view)
+        putMatrix(model)
+        putVec4(baseColor)
+        putVec4(pbrParams)
+        putVec4(cameraPosition)
+
         bufferMgr.updateUniformBuffer(buffer, bytes)
     }
 
@@ -858,13 +989,14 @@ class VulkanRenderer(
         val mesh: Mesh,
         val descriptor: MaterialDescriptor,
         val buffers: VulkanMeshBuffers,
-        val textureBinding: VulkanMaterialTextureManager.MaterialTextureBinding
+        val textureBinding: VulkanMaterialTextureManager.MaterialTextureBinding,
+        val environmentBinding: VulkanEnvironmentManager.EnvironmentBinding?
     )
 
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
-        private const val UNIFORM_BUFFER_SIZE = 64
+        private const val UNIFORM_BUFFER_SIZE = 240
         private const val MAX_PIPELINE_CACHE_SIZE = 32
         private const val MAX_MATERIAL_TEXTURE_SETS = 256
     }
@@ -919,6 +1051,9 @@ class VulkanRenderer(
 
         materialTextureManager?.dispose()
         materialTextureManager = null
+
+        environmentManager?.dispose()
+        environmentManager = null
 
         if (materialTextureDescriptorPool != VK_NULL_HANDLE && device != null) {
             vkDestroyDescriptorPool(device!!, materialTextureDescriptorPool, null)
@@ -1266,7 +1401,9 @@ class VulkanRenderer(
 
     private data class PipelineCacheKey(
         val vertexLayouts: List<VertexLayoutSignature>,
-        val renderState: RenderStateSignature
+        val renderState: RenderStateSignature,
+        val usesMaterialTextures: Boolean,
+        val usesEnvironment: Boolean
     )
 
     private data class VertexLayoutSignature(
@@ -1307,7 +1444,9 @@ class VulkanRenderer(
 
     private fun createPipelineKey(
         vertexLayouts: List<VertexBufferLayout>,
-        renderState: MaterialRenderState
+        renderState: MaterialRenderState,
+        usesMaterialTextures: Boolean,
+        usesEnvironment: Boolean
     ): PipelineCacheKey {
         val layoutSignature = vertexLayouts.map { layout ->
             VertexLayoutSignature(
@@ -1349,7 +1488,7 @@ class VulkanRenderer(
             )
         )
 
-        return PipelineCacheKey(layoutSignature, renderSignature)
+        return PipelineCacheKey(layoutSignature, renderSignature, usesMaterialTextures, usesEnvironment)
     }
 
     private fun warnDepthStateIfNeeded(renderState: MaterialRenderState) {

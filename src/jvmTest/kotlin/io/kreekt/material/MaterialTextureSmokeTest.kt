@@ -6,6 +6,7 @@ import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.material.MaterialBindingType
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.texture.Texture2D
+import io.kreekt.renderer.material.requiresBinding
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -68,5 +69,22 @@ class MaterialTextureSmokeTest {
         val descriptor = MaterialDescriptorRegistry.descriptorFor(material)
         assertNotNull(descriptor)
         assertTrue(descriptor!!.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER))
+        assertTrue(descriptor!!.requiresBinding(MaterialBindingSource.ENVIRONMENT_BRDF))
+    }
+
+    @Test
+    fun meshStandardMaterialIncludesPbrBindings() {
+        val descriptor = MaterialDescriptorRegistry.descriptorFor(MeshStandardMaterial())
+        assertNotNull(descriptor)
+
+        fun hasBinding(source: MaterialBindingSource, type: MaterialBindingType) =
+            descriptor!!.bindings.any { it.source == source && it.type == type }
+
+        assertTrue(hasBinding(MaterialBindingSource.ROUGHNESS_MAP, MaterialBindingType.TEXTURE_2D))
+        assertTrue(hasBinding(MaterialBindingSource.ROUGHNESS_MAP, MaterialBindingType.SAMPLER))
+        assertTrue(hasBinding(MaterialBindingSource.METALNESS_MAP, MaterialBindingType.TEXTURE_2D))
+        assertTrue(hasBinding(MaterialBindingSource.METALNESS_MAP, MaterialBindingType.SAMPLER))
+        assertTrue(hasBinding(MaterialBindingSource.AO_MAP, MaterialBindingType.TEXTURE_2D))
+        assertTrue(hasBinding(MaterialBindingSource.AO_MAP, MaterialBindingType.SAMPLER))
     }
 }

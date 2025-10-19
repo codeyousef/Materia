@@ -4,6 +4,7 @@ import io.kreekt.material.MaterialSide
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.MeshStandardMaterial
 import io.kreekt.renderer.geometry.GeometryAttribute
+import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.webgpu.ColorWriteMask
 import io.kreekt.renderer.webgpu.CullMode
 import io.kreekt.renderer.shader.MaterialShaderGenerator
@@ -52,6 +53,11 @@ class MaterialDescriptorRegistryTest {
         assertNotNull(descriptor)
         assertTrue(descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER))
         assertEquals(setOf(2), descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_PREFILTER))
+        assertTrue(descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_BRDF))
+        assertEquals(setOf(2), descriptor.bindingGroups(MaterialBindingSource.ENVIRONMENT_BRDF))
+        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ROUGHNESS_MAP))
+        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.METALNESS_MAP))
+        assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.AO_MAP))
         assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.POSITION))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.NORMAL))

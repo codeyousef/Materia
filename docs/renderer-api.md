@@ -109,7 +109,9 @@ window.addEventListener("unload", {
 
 - Set `Scene.environment` to a prefiltered `CubeTexture` (the renderer auto-detects mip chains).
 - Roughness-driven LOD selection mirrors the CPU path via `PrefilterMipSelector`, ensuring consistent reflections.
-- When no prefiltered cube is available the renderer skips PBR passes until one is provided.
+- When no prefiltered cube is available the renderer binds a neutral fallback so Vulkan stays stable (diffuse-only response, zero specular) while WebGPU continues sampling normally.
+- Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; missing BRDF data falls back to a constant approximation (documented in `RenderStats.notes`).
+- Specular highlights can appear subtly softer on Vulkan while the fallback BRDF is active; expect to revisit once the GPU LUT generator lands.
 - The new `IBLConvolutionProfiler` captures CPU time for irradiance/prefilter convolutions; the latest values surface through `RenderStats` (`iblCpuMs`).
 
 ### Profiling IBL Convolution

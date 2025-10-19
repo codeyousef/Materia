@@ -48,7 +48,13 @@ internal class VulkanMaterialTextureManager(
         var albedoTextureId: Int,
         var albedoVersion: Int,
         var normalTextureId: Int,
-        var normalVersion: Int
+        var normalVersion: Int,
+        var roughnessTextureId: Int,
+        var roughnessVersion: Int,
+        var metalnessTextureId: Int,
+        var metalnessVersion: Int,
+        var aoTextureId: Int,
+        var aoVersion: Int
     )
 
     private val textureCache = mutableMapOf<Int, VulkanTextureResource>()
@@ -58,6 +64,9 @@ internal class VulkanMaterialTextureManager(
     private val fallbackNormal = createFallbackTexture(
         Texture2D.solidColor(Color(0.5f, 0.5f, 1f)).apply { needsUpdate = false }
     )
+    private val fallbackRoughness = createFallbackTexture(Texture2D.solidColor(Color.WHITE).apply { needsUpdate = false })
+    private val fallbackMetalness = createFallbackTexture(Texture2D.solidColor(Color.BLACK).apply { needsUpdate = false })
+    private val fallbackAo = createFallbackTexture(Texture2D.solidColor(Color.WHITE).apply { needsUpdate = false })
 
     fun prepare(
         material: Material,
@@ -65,11 +74,6 @@ internal class VulkanMaterialTextureManager(
         descriptorPool: Long,
         descriptorSetLayout: Long
     ): MaterialTextureBinding? {
-        if (descriptor.bindings.any { it.source == MaterialBindingSource.ENVIRONMENT_PREFILTER && it.required }) {
-            // Environment bindings are not yet supported on Vulkan
-            return null
-        }
-
         val materialId = material.id
         val bindingState = materialBindings.getOrPut(materialId) {
             val descriptorSet = allocateDescriptorSet(descriptorPool, descriptorSetLayout)
@@ -78,7 +82,13 @@ internal class VulkanMaterialTextureManager(
                 albedoTextureId = fallbackAlbedo.textureId,
                 albedoVersion = fallbackAlbedo.version,
                 normalTextureId = fallbackNormal.textureId,
-                normalVersion = fallbackNormal.version
+                normalVersion = fallbackNormal.version,
+                roughnessTextureId = fallbackRoughness.textureId,
+                roughnessVersion = fallbackRoughness.version,
+                metalnessTextureId = fallbackMetalness.textureId,
+                metalnessVersion = fallbackMetalness.version,
+                aoTextureId = fallbackAo.textureId,
+                aoVersion = fallbackAo.version
             )
         }
 
@@ -89,23 +99,56 @@ internal class VulkanMaterialTextureManager(
         val normalTexture = if (requiresNormal) extractNormalTexture(material) else null
         val normalResource = ensureTextureResource(normalTexture, fallbackNormal)
 
+        val requiresRoughness = descriptor.bindings.any {
+            it.source == MaterialBindingSource.ROUGHNESS_MAP && it.type == MaterialBindingType.TEXTURE_2D
+        }
+        val roughnessTexture = if (requiresRoughness) extractRoughnessTexture(material) else null
+        val roughnessResource = ensureTextureResource(roughnessTexture, fallbackRoughness)
+
+        val requiresMetalness = descriptor.bindings.any {
+            it.source == MaterialBindingSource.METALNESS_MAP && it.type == MaterialBindingType.TEXTURE_2D
+        }
+        val metalnessTexture = if (requiresMetalness) extractMetalnessTexture(material) else null
+        val metalnessResource = ensureTextureResource(metalnessTexture, fallbackMetalness)
+
+        val requiresAo = descriptor.bindings.any {
+            it.source == MaterialBindingSource.AO_MAP && it.type == MaterialBindingType.TEXTURE_2D
+        }
+        val aoTexture = if (requiresAo) extractAoTexture(material) else null
+        val aoResource = ensureTextureResource(aoTexture, fallbackAo)
+
         val texturesChanged =
             bindingState.albedoTextureId != albedoResource.textureId ||
                 bindingState.albedoVersion != albedoResource.version ||
                 bindingState.normalTextureId != normalResource.textureId ||
-                bindingState.normalVersion != normalResource.version
+                bindingState.normalVersion != normalResource.version ||
+                bindingState.roughnessTextureId != roughnessResource.textureId ||
+                bindingState.roughnessVersion != roughnessResource.version ||
+                bindingState.metalnessTextureId != metalnessResource.textureId ||
+                bindingState.metalnessVersion != metalnessResource.version ||
+                bindingState.aoTextureId != aoResource.textureId ||
+                bindingState.aoVersion != aoResource.version
 
         if (texturesChanged) {
             updateDescriptorSet(
                 bindingState.descriptorSet,
                 albedoResource,
-                normalResource
+                normalResource,
+                roughnessResource,
+                metalnessResource,
+                aoResource
             )
 
             bindingState.albedoTextureId = albedoResource.textureId
             bindingState.albedoVersion = albedoResource.version
             bindingState.normalTextureId = normalResource.textureId
             bindingState.normalVersion = normalResource.version
+            bindingState.roughnessTextureId = roughnessResource.textureId
+            bindingState.roughnessVersion = roughnessResource.version
+            bindingState.metalnessTextureId = metalnessResource.textureId
+            bindingState.metalnessVersion = metalnessResource.version
+            bindingState.aoTextureId = aoResource.textureId
+            bindingState.aoVersion = aoResource.version
         }
 
         return MaterialTextureBinding(bindingState.descriptorSet)
@@ -116,6 +159,9 @@ internal class VulkanMaterialTextureManager(
         textureCache.clear()
         fallbackAlbedo.destroy(device)
         fallbackNormal.destroy(device)
+        fallbackRoughness.destroy(device)
+        fallbackMetalness.destroy(device)
+        fallbackAo.destroy(device)
         materialBindings.clear()
     }
 
@@ -127,6 +173,21 @@ internal class VulkanMaterialTextureManager(
 
     private fun extractNormalTexture(material: Material): Texture2D? = when (material) {
         is MeshStandardMaterial -> material.normalMap
+        else -> null
+    }
+
+    private fun extractRoughnessTexture(material: Material): Texture2D? = when (material) {
+        is MeshStandardMaterial -> material.roughnessMap
+        else -> null
+    }
+
+    private fun extractMetalnessTexture(material: Material): Texture2D? = when (material) {
+        is MeshStandardMaterial -> material.metalnessMap
+        else -> null
+    }
+
+    private fun extractAoTexture(material: Material): Texture2D? = when (material) {
+        is MeshStandardMaterial -> material.aoMap
         else -> null
     }
 
@@ -361,7 +422,7 @@ internal class VulkanMaterialTextureManager(
                 .compareEnable(false)
                 .compareOp(VK_COMPARE_OP_ALWAYS)
                 .minLod(0f)
-                .maxLod((mipLevels - 1).coerceAtLeast(0))
+            .maxLod((mipLevels - 1).coerceAtLeast(0).toFloat())
                 .borderColor(VK_BORDER_COLOR_INT_OPAQUE_BLACK)
                 .unnormalizedCoordinates(false)
 
@@ -400,34 +461,58 @@ internal class VulkanMaterialTextureManager(
     private fun updateDescriptorSet(
         descriptorSet: Long,
         albedoResource: VulkanTextureResource,
-        normalResource: VulkanTextureResource
+        normalResource: VulkanTextureResource,
+        roughnessResource: VulkanTextureResource,
+        metalnessResource: VulkanTextureResource,
+        aoResource: VulkanTextureResource
     ) {
         MemoryStack.stackPush().use { stack ->
-            val albedoInfo = VkDescriptorImageInfo.calloc(1, stack)
-            albedoInfo[0]
-                .sampler(albedoResource.sampler)
-                .imageView(albedoResource.imageView)
-                .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            fun sampledImageInfo(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .sampler(VK_NULL_HANDLE)
+                    .imageView(resource.imageView)
+                    .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                return info
+            }
 
-            val normalInfo = VkDescriptorImageInfo.calloc(1, stack)
-            normalInfo[0]
-                .sampler(normalResource.sampler)
-                .imageView(normalResource.imageView)
-                .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            fun samplerInfo(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .sampler(resource.sampler)
+                    .imageView(VK_NULL_HANDLE)
+                    .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                return info
+            }
 
-            val writes = VkWriteDescriptorSet.calloc(2, stack)
-            writes[0]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(0)
-                .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                .pImageInfo(albedoInfo)
-            writes[1]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(1)
-                .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                .pImageInfo(normalInfo)
+            val imageInfos = arrayOf(
+                sampledImageInfo(albedoResource),
+                samplerInfo(albedoResource),
+                sampledImageInfo(normalResource),
+                samplerInfo(normalResource),
+                sampledImageInfo(roughnessResource),
+                samplerInfo(roughnessResource),
+                sampledImageInfo(metalnessResource),
+                samplerInfo(metalnessResource),
+                sampledImageInfo(aoResource),
+                samplerInfo(aoResource)
+            )
+
+            val writes = VkWriteDescriptorSet.calloc(imageInfos.size, stack)
+
+            var bindingIndex = 0
+            imageInfos.forEachIndexed { index, info ->
+                writes[index]
+                    .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
+                    .dstSet(descriptorSet)
+                    .dstBinding(bindingIndex)
+                    .descriptorCount(1)
+                    .descriptorType(
+                        if (bindingIndex % 2 == 0) VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE else VK_DESCRIPTOR_TYPE_SAMPLER
+                    )
+                    .pImageInfo(info)
+                bindingIndex += 1
+            }
 
             vkUpdateDescriptorSets(device, writes, null)
         }

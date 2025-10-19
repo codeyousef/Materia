@@ -81,7 +81,8 @@ enum class MaterialBindingSource {
     ALBEDO_MAP,
     NORMAL_MAP,
     ROUGHNESS_MAP,
-    METALNESS_MAP
+    METALNESS_MAP,
+    AO_MAP
 }
 
 /**
@@ -252,7 +253,12 @@ object MaterialDescriptorRegistry {
             key = "material.meshStandard",
             shader = MaterialShaderLibrary.meshStandard(),
             uniformBlock = defaultUniformBlock,
-            bindings = albedoBindings() + normalBindings() + environmentBindings(),
+            bindings = albedoBindings() +
+                normalBindings() +
+                roughnessBindings() +
+                metalnessBindings() +
+                aoBindings() +
+                environmentBindings(),
             renderState = MaterialRenderState(),
             requiredAttributes = STANDARD_REQUIRED_ATTRIBUTES,
             optionalAttributes = STANDARD_OPTIONAL_ATTRIBUTES
@@ -329,6 +335,63 @@ object MaterialDescriptorRegistry {
         )
     )
 
+    private fun roughnessBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "roughnessTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 4,
+            source = MaterialBindingSource.ROUGHNESS_MAP,
+            required = false
+        ),
+        MaterialBinding(
+            name = "roughnessSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 5,
+            source = MaterialBindingSource.ROUGHNESS_MAP,
+            required = false
+        )
+    )
+
+    private fun metalnessBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "metalnessTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 6,
+            source = MaterialBindingSource.METALNESS_MAP,
+            required = false
+        ),
+        MaterialBinding(
+            name = "metalnessSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 7,
+            source = MaterialBindingSource.METALNESS_MAP,
+            required = false
+        )
+    )
+
+    private fun aoBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "aoTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 8,
+            source = MaterialBindingSource.AO_MAP,
+            required = false
+        ),
+        MaterialBinding(
+            name = "aoSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 9,
+            source = MaterialBindingSource.AO_MAP,
+            required = false
+        )
+    )
+
     private fun environmentBindings(): List<MaterialBinding> = listOf(
         MaterialBinding(
             name = "prefilterTexture",
@@ -344,6 +407,22 @@ object MaterialDescriptorRegistry {
             group = ENVIRONMENT_GROUP,
             binding = 1,
             source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
+            required = true
+        ),
+        MaterialBinding(
+            name = "brdfLutTexture",
+            type = MaterialBindingType.TEXTURE_2D,
+            group = ENVIRONMENT_GROUP,
+            binding = 2,
+            source = MaterialBindingSource.ENVIRONMENT_BRDF,
+            required = true
+        ),
+        MaterialBinding(
+            name = "brdfLutSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = ENVIRONMENT_GROUP,
+            binding = 3,
+            source = MaterialBindingSource.ENVIRONMENT_BRDF,
             required = true
         )
     )
