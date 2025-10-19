@@ -7,8 +7,13 @@ import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.geometry.primitives.BoxGeometry
 import io.kreekt.geometry.primitives.SphereGeometry
 import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.renderer.*
 import io.kreekt.profiling.*
+import io.kreekt.renderer.*
+import io.kreekt.lighting.IBLConfig
+import io.kreekt.lighting.IBLProcessorImpl
+import io.kreekt.lighting.IBLResult
+import io.kreekt.lighting.processEnvironmentForScene
+import kotlinx.coroutines.runBlocking
 
 /**
  * Comprehensive profiling example demonstrating:
@@ -24,6 +29,13 @@ class ProfilingExample {
     private lateinit var scene: Scene
     private lateinit var camera: PerspectiveCamera
     private lateinit var renderer: Renderer
+    private val iblProcessor = IBLProcessorImpl()
+    private val iblConfig = IBLConfig(
+        irradianceSize = 32,
+        prefilterSize = 128,
+        brdfLutSize = 256,
+        roughnessLevels = 5
+    )
 
     fun run() {
         println("KreeKt Profiling Example")
@@ -119,6 +131,7 @@ class ProfilingExample {
 
         val summary = session.end()
         summary.printSummary()
+        setupEnvironmentLighting()
     }
 
     private fun analyzeScene() {
@@ -275,6 +288,33 @@ class ProfilingExample {
         val stats = PerformanceProfiler.getFrameStats()
         println("  FPS: ${String.format("%.1f", stats.averageFps)}, " +
                 "Frame time: ${stats.averageFrameTime / 1_000_000}ms")
+    }
+
+    private fun setupEnvironmentLighting() = runBlocking {
+        println("Processing HDR environment for IBL...")
+        when (val hdrResult = iblProcessor.loadHDREnvironment("assets/environments/studio_small.hdr")) {
+            is IBLResult.Success -> {
+                val iblResult = iblProcessor.processEnvironmentForScene(
+                    hdr = hdrResult.data,
+                    config = iblConfig,
+                    scene = scene
+                )
+                when (iblResult) {
+                    is IBLResult.Success -> {
+                        val maps = iblResult.data
+                        println(
+                            "✓ Applied prefiltered environment (prefilter=${maps.prefilter.size}, " +
+                                    "brdf=${maps.brdfLut.width}x${maps.brdfLut.height})"
+                        )
+                        if (maps.brdfLut.width < 512) {
+                            println("  Note: BRDF LUT fallback is active; expect softer specular highlights on Vulkan.")
+                        }
+                    }
+                    is IBLResult.Error -> println("⚠ IBL processing failed: ${iblResult.message}")
+                }
+            }
+            is IBLResult.Error -> println("⚠ Failed to load HDR environment: ${hdrResult.message}")
+        }
     }
 
     // Create renderer with backend integration

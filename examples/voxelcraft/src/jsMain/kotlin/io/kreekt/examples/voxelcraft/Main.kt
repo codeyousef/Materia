@@ -2,10 +2,15 @@
 
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.controls.PointerLock
+import io.kreekt.core.scene.Scene
 import io.kreekt.renderer.FPSCounter
 import io.kreekt.renderer.RendererFactory
 import io.kreekt.renderer.RendererInitializationException
 import io.kreekt.renderer.SurfaceFactory
+import io.kreekt.lighting.IBLConfig
+import io.kreekt.lighting.IBLProcessorImpl
+import io.kreekt.lighting.IBLResult
+import io.kreekt.lighting.processEnvironmentForScene
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.*
@@ -13,6 +18,13 @@ import org.w3c.dom.HTMLCanvasElement
 
 private val gameScope = MainScope()
 private var initJob: Job? = null
+private val iblProcessor = IBLProcessorImpl()
+private val iblConfig = IBLConfig(
+    irradianceSize = 32,
+    prefilterSize = 128,
+    brdfLutSize = 256,
+    roughnessLevels = 5
+)
 
 /**
  * VoxelCraft entry point
@@ -265,6 +277,8 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
         name = "MainCamera"  // T021: Add name for logging
     }
 
+    wireEnvironmentLighting(world.scene)
+
     updateLoadingProgress("Renderer ready, finalizing world...")
 
     // Initialize block interaction
@@ -393,6 +407,33 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
     gameLoop()
 }
 
+private suspend fun wireEnvironmentLighting(scene: Scene) {
+    logInfo("Processing HDR environment for scene lighting...")
+    when (val hdrResult = iblProcessor.loadHDREnvironment("assets/environments/studio_small.hdr")) {
+        is IBLResult.Success -> {
+            val iblResult = iblProcessor.processEnvironmentForScene(
+                hdr = hdrResult.data,
+                config = iblConfig,
+                scene = scene
+            )
+            when (iblResult) {
+                is IBLResult.Success -> {
+                    val maps = iblResult.data
+                    logInfo(
+                        "IBL environment applied (prefilter=${maps.prefilter.size}, " +
+                                "brdf=${maps.brdfLut.width}x${maps.brdfLut.height})"
+                    )
+                    if (maps.brdfLut.width < 512) {
+                        logWarn("BRDF LUT fallback is active; expect slightly softer specular highlights until GPU LUT generation ships.")
+                    }
+                }
+                is IBLResult.Error -> logWarn("IBL processing failed: ${iblResult.message}")
+            }
+        }
+        is IBLResult.Error -> logWarn("Failed to load HDR environment: ${hdrResult.message}")
+    }
+}
+
 fun updateLoadingProgress(message: String) {
     val progressElement = document.getElementById("loading-progress")
     if (message == "World ready!") {
@@ -477,7 +518,3 @@ class VoxelCraft(val seed: Long, private val scope: CoroutineScope = gameScope) 
         }
     }
 }
-
-
-
-

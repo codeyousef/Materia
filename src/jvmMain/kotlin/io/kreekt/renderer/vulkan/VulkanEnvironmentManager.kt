@@ -28,7 +28,9 @@ internal class VulkanEnvironmentManager(
     data class EnvironmentBinding(
         val descriptorSet: Long,
         val layout: Long,
-        val mipCount: Int
+        val mipCount: Int,
+        val usingFallbackEnvironment: Boolean,
+        val usingFallbackBrdf: Boolean
     )
 
     private data class CubeResource(
@@ -148,7 +150,9 @@ internal class VulkanEnvironmentManager(
         return EnvironmentBinding(
             descriptorSet = descriptorSet,
             layout = descriptorSetLayout,
-            mipCount = resource.mipLevels
+            mipCount = resource.mipLevels,
+            usingFallbackEnvironment = usingFallbackCube,
+            usingFallbackBrdf = dataBrdf == null
         )
     }
 

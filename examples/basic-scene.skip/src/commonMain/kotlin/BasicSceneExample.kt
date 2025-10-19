@@ -23,6 +23,10 @@ import io.kreekt.geometry.primitives.SphereGeometry
 import io.kreekt.material.SimpleMaterial
 import io.kreekt.renderer.Renderer
 import io.kreekt.renderer.RenderSurface
+import io.kreekt.lighting.IBLConfig
+import io.kreekt.lighting.IBLProcessorImpl
+import io.kreekt.lighting.IBLResult
+import io.kreekt.lighting.processEnvironmentForScene
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
@@ -45,6 +49,14 @@ class BasicSceneExample {
     private lateinit var camera: PerspectiveCamera
     private lateinit var renderer: Renderer
     private lateinit var animationMixer: AnimationMixer
+
+    private val iblProcessor = IBLProcessorImpl()
+    private val iblConfig = IBLConfig(
+        irradianceSize = 32,
+        prefilterSize = 128,
+        brdfLutSize = 256,
+        roughnessLevels = 5
+    )
 
     // Scene objects
     private lateinit var rotatingCube: Mesh
@@ -89,6 +101,7 @@ class BasicSceneExample {
         // Setup scene objects
         createSceneObjects()
         setupLighting()
+        setupEnvironmentLighting()
         setupAnimations()
 
         println("✅ Scene initialized successfully!")
@@ -165,6 +178,38 @@ class BasicSceneExample {
         // Basic ambient lighting for the example scene
         // Full light object wrappers are planned for Phase 3+ (see CLAUDE.md - Lighting section)
         println("🔆 Setting up basic lighting...")
+    }
+
+    private suspend fun setupEnvironmentLighting() {
+        println("🌅 Processing HDR environment for image-based lighting...")
+        val hdrResult = iblProcessor.loadHDREnvironment("assets/environments/studio_small.hdr")
+        when (hdrResult) {
+            is IBLResult.Success -> {
+                val iblResult = iblProcessor.processEnvironmentForScene(
+                    hdr = hdrResult.data,
+                    config = iblConfig,
+                    scene = scene
+                )
+                when (iblResult) {
+                    is IBLResult.Success -> {
+                        val maps = iblResult.data
+                        println(
+                            "✅ Applied prefiltered environment (prefilter=${maps.prefilter.size}, " +
+                                "brdf=${maps.brdfLut.width}x${maps.brdfLut.height})"
+                        )
+                        if (maps.brdfLut.width < 512) {
+                            println("   ↳ Vulkan path still runs with a softer BRDF fallback until GPU LUT promotion lands.")
+                        }
+                    }
+                    is IBLResult.Error -> {
+                        println("⚠️ Failed to generate environment maps: ${iblResult.message}")
+                    }
+                }
+            }
+            is IBLResult.Error -> {
+                println("⚠️ Failed to load HDR environment: ${hdrResult.message}")
+            }
+        }
     }
 
     private fun setupAnimations() {

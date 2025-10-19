@@ -42,6 +42,8 @@ import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.renderer.material.MaterialRenderState
 import io.kreekt.renderer.material.requiresBinding
 import io.kreekt.renderer.feature020.*
+import io.kreekt.lighting.ibl.IBLConvolutionProfiler
+import io.kreekt.lighting.ibl.PrefilterMipSelector
 import io.kreekt.renderer.gpu.GpuBackend
 import io.kreekt.renderer.gpu.GpuContext
 import io.kreekt.renderer.gpu.GpuDeviceFactory
@@ -153,6 +155,9 @@ class VulkanRenderer(
     private var lastFrameTime = System.currentTimeMillis()
     private var fpsAccumulator = 0.0
     private var fpsFrameCount = 0
+    private var lastIblMipCount = 0
+    private var lastIblRoughness = 0f
+    private var lastIblHasRealEnvironment = false
 
     private data class CaptureRequest(val outputPath: String)
     private data class CaptureResources(
@@ -414,6 +419,9 @@ class VulkanRenderer(
         val clearColor = determineClearColor(scene)
         var drawCalls = 0
         var triangles = 0
+        var frameHasRealEnvironment = false
+        var frameIblMipCount = 0
+        var frameLastRoughness = 0f
 
         var captureResources: CaptureResources? = null
         val captureRequest = pendingCapture
@@ -467,6 +475,14 @@ class VulkanRenderer(
                     val environmentBinding = drawInfo.environmentBinding
                     val hasEnvironmentSet = environmentBinding != null &&
                         environmentBinding.descriptorSet != VK_NULL_HANDLE
+                    val environmentFallback = environmentBinding?.usingFallbackEnvironment == true ||
+                        environmentBinding?.usingFallbackBrdf == true
+                    if (environmentBinding != null) {
+                        frameIblMipCount = environmentBinding.mipCount
+                        if (!environmentFallback) {
+                            frameHasRealEnvironment = true
+                        }
+                    }
 
                     val descriptorSetLayouts = buildList {
                         add(descriptorSetLayout)
@@ -536,9 +552,17 @@ class VulkanRenderer(
 
                     val prefilterMipCount = (environmentBinding?.mipCount ?: 1).toFloat()
 
+                    val clampedRoughness = when (material) {
+                        is MeshStandardMaterial -> PrefilterMipSelector.clamp01(material.roughness)
+                        else -> 1f
+                    }
+                    if (material is MeshStandardMaterial) {
+                        frameLastRoughness = clampedRoughness
+                    }
+
                     val pbrParams = when (material) {
                         is MeshStandardMaterial -> floatArrayOf(
-                            material.roughness,
+                            clampedRoughness,
                             material.metalness,
                             material.envMapIntensity,
                             prefilterMipCount
@@ -683,6 +707,10 @@ class VulkanRenderer(
 
             frameCount++
         }
+
+        lastIblMipCount = frameIblMipCount
+        lastIblRoughness = frameLastRoughness
+        lastIblHasRealEnvironment = frameHasRealEnvironment
 
         updateStats(frameTime, drawCalls, triangles)
     }
@@ -2296,6 +2324,11 @@ class VulkanRenderer(
             vertexBytes + indexBytes
         }
 
+        val iblMetrics = IBLConvolutionProfiler.snapshot()
+        val iblCpuMs = iblMetrics.prefilterMs + iblMetrics.irradianceMs
+        val statsMipCount = if (lastIblHasRealEnvironment) lastIblMipCount else 0
+        val statsRoughness = if (lastIblHasRealEnvironment) lastIblRoughness else 0f
+
         stats = RenderStats(
             fps = averageFps,
             frameTime = frameTimeMs.toDouble(),
@@ -2303,7 +2336,10 @@ class VulkanRenderer(
             drawCalls = drawCalls,
             textureMemory = 0L,
             bufferMemory = bufferMemory,
-            timestamp = currentTime
+            timestamp = currentTime,
+            iblCpuMs = iblCpuMs,
+            iblPrefilterMipCount = statsMipCount,
+            iblLastRoughness = statsRoughness
         )
 
         if (fpsFrameCount >= 60) {

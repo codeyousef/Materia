@@ -39,7 +39,9 @@ import kotlin.math.max
 internal data class EnvironmentBinding(
     val bindGroup: GpuBindGroup,
     val layout: GpuBindGroupLayout,
-    val mipCount: Int
+    val mipCount: Int,
+    val usingFallbackEnvironment: Boolean = false,
+    val usingFallbackBrdf: Boolean = false
 )
 
 /**

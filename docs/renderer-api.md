@@ -88,8 +88,8 @@ when (val result = renderer.initialize()) {
             renderer.render(scene, camera)
 
             // Get statistics
-            val stats = renderer.getStats()
-            console.log("Draw calls: ${stats.calls}, Triangles: ${stats.triangles}")
+            val stats = renderer.stats
+            console.log("Draw calls: ${stats.drawCalls}, Triangles: ${stats.triangles}")
         }
 
         animate()
@@ -107,14 +107,31 @@ window.addEventListener("unload", {
 
 ### Environment Prefilter Integration
 
-- Set `Scene.environment` to a prefiltered `CubeTexture` (the renderer auto-detects mip chains).
-- Assign `Scene.environmentBrdfLut` with the BRDF lookup returned from the IBL pipeline (see `Scene.applyEnvironmentMaps`).
-- Call `LightingSystem.applyEnvironmentToScene(scene, environmentCube)` after generating IBL assets to wire everything automatically.
+- Use `IBLProcessorImpl.processEnvironmentForScene(hdr, config, scene)` to load, convolve, and apply HDR environments in one suspend call.
+- The helper wires both `Scene.environment` and `Scene.environmentBrdfLut`; inspect the returned `IBLEnvironmentMaps` when you need manual control.
+- `LightingSystem.applyEnvironmentToScene(scene, environmentCube)` remains available when you already have GPU cubemaps (no HDR input).
 - Roughness-driven LOD selection mirrors the CPU path via `PrefilterMipSelector`, ensuring consistent reflections.
 - When no prefiltered cube is available the renderer binds a neutral fallback so Vulkan stays stable (diffuse-only response, zero specular) while WebGPU continues sampling normally.
-- Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; missing BRDF data falls back to a constant approximation (documented in `RenderStats.notes`).
+- Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; when the BRDF LUT fallback is active the renderer reports `iblPrefilterMipCount = 0` in `RenderStats` so parity gaps are visible in telemetry.
 - Specular highlights can appear subtly softer on Vulkan while the fallback BRDF is active; expect to revisit once the GPU LUT generator lands.
 - The new `IBLConvolutionProfiler` captures CPU time for irradiance/prefilter convolutions; the latest values surface through `RenderStats` (`iblCpuMs`).
+- Example entry points (`basic-scene`, `profiling-example`, `voxelcraft`) now invoke `processEnvironmentForScene` so both renderer backends share the same prefiltered cubes and BRDF LUTs by default.
+
+```kotlin
+val processor = IBLProcessorImpl()
+val hdrResult = processor.loadHDREnvironment("assets/environments/studio_small.hdr")
+if (hdrResult is IBLResult.Success) {
+    val iblResult = processor.processEnvironmentForScene(
+        hdr = hdrResult.data,
+        config = IBLConfig(irradianceSize = 32, prefilterSize = 128, brdfLutSize = 256, roughnessLevels = 5),
+        scene = scene
+    )
+    if (iblResult is IBLResult.Success) {
+        val maps = iblResult.data
+        println("Prefilter size: ${maps.prefilter.size}, BRDF LUT: ${maps.brdfLut.width}x${maps.brdfLut.height}")
+    }
+}
+```
 
 ### Profiling IBL Convolution
 
@@ -224,10 +241,10 @@ Sets viewport rectangle.
 - `width: Int` - Viewport width
 - `height: Int` - Viewport height
 
-##### `getStats(): RenderStats`
-Gets rendering statistics.
+##### `stats: RenderStats`
+Read-only rendering statistics captured after the most recent frame.
 
-**Returns:** `RenderStats` with:
+**Fields:** `RenderStats` exposes:
 - `fps: Double` - Average frames per second
 - `frameTime: Double` - Average frame time in milliseconds
 - `triangles: Int` - Triangles rendered this frame
@@ -236,22 +253,19 @@ Gets rendering statistics.
 - `bufferMemory: Long` - Buffer memory usage in bytes
 - `timestamp: Long` - Timestamp when stats were captured
 - `iblCpuMs: Double` - Last CPU time spent in IBL convolution
-- `iblPrefilterMipCount: Int` - Prefilter mip chain used by the renderer
-- `iblLastRoughness: Float` - Roughness value from the most recent PBR draw
+- `iblPrefilterMipCount: Int` - Prefilter mip chain used by the renderer (0 when the neutral fallback is bound)
+- `iblLastRoughness: Float` - Roughness value from the most recent PBR draw sampled against a real prefilter
 
 **Example:**
 ```kotlin
-val stats = renderer.getStats()
+val stats = renderer.stats
 console.log("${stats.fps} FPS | ${stats.drawCalls} draw calls")
 if (stats.iblPrefilterMipCount > 0) {
     console.log("IBL CPU: ${stats.iblCpuMs} ms (mips=${stats.iblPrefilterMipCount})")
 }
 ```
 
-##### `resetStats()`
-Resets statistics counters.
-
-##### `dispose(): RendererResult<Unit>`
+##### `dispose()`
 Disposes renderer and releases GPU resources.
 
 **Example:**
@@ -304,9 +318,9 @@ Automatically caches compiled render pipelines.
 **Cache Statistics:**
 ```kotlin
 // Pipeline cache is managed internally
-// Stats available via renderer.getStats()
-val stats = renderer.getStats()
-console.log("Shaders cached: ${stats.shaders}")
+// Stats available via renderer.stats
+val stats = renderer.stats
+console.log("Draw calls this frame: ${stats.drawCalls}")
 ```
 
 #### Buffer Pooling
@@ -441,9 +455,9 @@ renderer.render(scene, camera)
 
 4. **Monitor Statistics** - Track performance
    ```kotlin
-   val stats = renderer.getStats()
-   if (stats.calls > 100) {
-       console.warn("Too many draw calls: ${stats.calls}")
+   val stats = renderer.stats
+   if (stats.drawCalls > 100) {
+       console.warn("Too many draw calls: ${stats.drawCalls}")
    }
    ```
 
