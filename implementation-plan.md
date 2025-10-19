@@ -114,6 +114,11 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 4. ✅ Vulkan renderer now samples bound albedo textures (normal/environment bindings still TODO); JVM smoke test covers `MeshBasicMaterial` + `Texture2D`, with documented gaps around environment maps and mipmap generation.
 5. ✅ Vulkan shader/material pipeline now perturbs normals using tangent space (falls back gracefully when tangents are absent).
 6. ✅ Texture fidelity: Vulkan path now generates mip levels when supported and respects sampler filtering/wrap modes (no anisotropic filtering yet).
-7. 🚧 Lighting parity: bind and sample environment cube textures (prefilter/BRDF) so PBR materials behave consistently.
-8. 🚧 PBR material support: wire roughness/metalness/ambient occlusion maps and tangent-space lighting into Vulkan shaders with proper descriptor bindings.
-9. 🚧 Validation: add JVM smoke tests covering textured/prefiltered environments and document Vulkan vs WebGPU parity gaps.
+7. ✅ Lighting parity: bind and sample environment cube textures (prefilter/BRDF) so PBR materials behave consistently across Vulkan/WebGPU.
+8. ✅ PBR material support: wire roughness/metalness/ambient occlusion maps and tangent-space lighting into Vulkan shaders with proper descriptor bindings.
+9. 🚧 Validation: broaden coverage (integration smoke, docs) around the new BRDF/environment wiring and highlight any remaining parity deltas.
+
+### Upcoming Tasks
+- 📌 Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs.
+- 📌 Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
+- 📌 Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends.
