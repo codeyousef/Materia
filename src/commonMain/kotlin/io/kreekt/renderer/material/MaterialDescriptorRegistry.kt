@@ -41,6 +41,9 @@ data class MaterialUniformField(
     val offset: Int
 )
 
+internal const val MATERIAL_TEXTURE_GROUP = 1
+internal const val ENVIRONMENT_TEXTURE_GROUP = 2
+
 enum class MaterialUniformType {
     MAT4,
     VEC4
@@ -118,9 +121,6 @@ object MaterialDescriptorRegistry {
     private val defaultsRegistered = atomic(false)
     private val descriptorsByKey = mutableMapOf<String, MaterialDescriptor>()
     private val descriptorsByMaterial = mutableMapOf<KClass<out Material>, MaterialDescriptor>()
-
-    private const val MATERIAL_TEXTURE_GROUP = 1
-    private const val ENVIRONMENT_GROUP = 2
 
     private val BASIC_REQUIRED_ATTRIBUTES = setOf(
         GeometryAttribute.POSITION,
@@ -297,6 +297,20 @@ object MaterialDescriptorRegistry {
 
     private inline fun <T> withLock(block: () -> T): T = atomicSynchronized(lock, block)
 
+    private fun bindingsForGroup(group: Int): List<MaterialBinding> {
+        ensureDefaultsRegistered()
+        return withLock {
+            descriptorsByKey.values
+                .flatMap { descriptor -> descriptor.bindings.filter { it.group == group } }
+                .distinctBy { it.binding to it.type }
+                .sortedBy { it.binding }
+        }
+    }
+
+    fun materialTextureBindingLayout(): List<MaterialBinding> = bindingsForGroup(MATERIAL_TEXTURE_GROUP)
+
+    fun environmentBindingLayout(): List<MaterialBinding> = bindingsForGroup(ENVIRONMENT_TEXTURE_GROUP)
+
     private fun albedoBindings(): List<MaterialBinding> = listOf(
         MaterialBinding(
             name = "albedoTexture",
@@ -396,7 +410,7 @@ object MaterialDescriptorRegistry {
         MaterialBinding(
             name = "prefilterTexture",
             type = MaterialBindingType.TEXTURE_CUBE,
-            group = ENVIRONMENT_GROUP,
+            group = ENVIRONMENT_TEXTURE_GROUP,
             binding = 0,
             source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
             required = true
@@ -404,7 +418,7 @@ object MaterialDescriptorRegistry {
         MaterialBinding(
             name = "prefilterSampler",
             type = MaterialBindingType.SAMPLER,
-            group = ENVIRONMENT_GROUP,
+            group = ENVIRONMENT_TEXTURE_GROUP,
             binding = 1,
             source = MaterialBindingSource.ENVIRONMENT_PREFILTER,
             required = true
@@ -412,7 +426,7 @@ object MaterialDescriptorRegistry {
         MaterialBinding(
             name = "brdfLutTexture",
             type = MaterialBindingType.TEXTURE_2D,
-            group = ENVIRONMENT_GROUP,
+            group = ENVIRONMENT_TEXTURE_GROUP,
             binding = 2,
             source = MaterialBindingSource.ENVIRONMENT_BRDF,
             required = true
@@ -420,7 +434,7 @@ object MaterialDescriptorRegistry {
         MaterialBinding(
             name = "brdfLutSampler",
             type = MaterialBindingType.SAMPLER,
-            group = ENVIRONMENT_GROUP,
+            group = ENVIRONMENT_TEXTURE_GROUP,
             binding = 3,
             source = MaterialBindingSource.ENVIRONMENT_BRDF,
             required = true

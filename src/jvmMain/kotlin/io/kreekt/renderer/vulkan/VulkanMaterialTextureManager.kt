@@ -5,6 +5,7 @@ import io.kreekt.core.scene.Material
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.MeshStandardMaterial
 import io.kreekt.renderer.feature020.OutOfMemoryException
+import io.kreekt.renderer.material.MaterialBinding
 import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.material.MaterialBindingType
 import io.kreekt.renderer.material.MaterialDescriptor
@@ -20,7 +21,8 @@ internal class VulkanMaterialTextureManager(
     private val device: VkDevice,
     private val physicalDevice: VkPhysicalDevice,
     private val commandPool: Long,
-    private val graphicsQueue: VkQueue
+    private val graphicsQueue: VkQueue,
+    private val layoutBindings: List<MaterialBinding>
 ) {
 
     data class MaterialTextureBinding(
@@ -467,7 +469,15 @@ internal class VulkanMaterialTextureManager(
         aoResource: VulkanTextureResource
     ) {
         MemoryStack.stackPush().use { stack ->
-            fun sampledImageInfo(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
+            val resourcesBySource = mapOf(
+                MaterialBindingSource.ALBEDO_MAP to albedoResource,
+                MaterialBindingSource.NORMAL_MAP to normalResource,
+                MaterialBindingSource.ROUGHNESS_MAP to roughnessResource,
+                MaterialBindingSource.METALNESS_MAP to metalnessResource,
+                MaterialBindingSource.AO_MAP to aoResource
+            )
+
+            fun sampled(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
                 val info = VkDescriptorImageInfo.calloc(1, stack)
                 info[0]
                     .sampler(VK_NULL_HANDLE)
@@ -476,7 +486,7 @@ internal class VulkanMaterialTextureManager(
                 return info
             }
 
-            fun samplerInfo(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
+            fun sampler(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
                 val info = VkDescriptorImageInfo.calloc(1, stack)
                 info[0]
                     .sampler(resource.sampler)
@@ -485,33 +495,22 @@ internal class VulkanMaterialTextureManager(
                 return info
             }
 
-            val imageInfos = arrayOf(
-                sampledImageInfo(albedoResource),
-                samplerInfo(albedoResource),
-                sampledImageInfo(normalResource),
-                samplerInfo(normalResource),
-                sampledImageInfo(roughnessResource),
-                samplerInfo(roughnessResource),
-                sampledImageInfo(metalnessResource),
-                samplerInfo(metalnessResource),
-                sampledImageInfo(aoResource),
-                samplerInfo(aoResource)
-            )
+            val writes = VkWriteDescriptorSet.calloc(layoutBindings.size, stack)
+            layoutBindings.forEachIndexed { index, binding ->
+                val resource = resourcesBySource[binding.source] ?: albedoResource
+                val imageInfo = when (binding.type) {
+                    MaterialBindingType.SAMPLER -> sampler(resource)
+                    MaterialBindingType.TEXTURE_2D,
+                    MaterialBindingType.TEXTURE_CUBE -> sampled(resource)
+                }
 
-            val writes = VkWriteDescriptorSet.calloc(imageInfos.size, stack)
-
-            var bindingIndex = 0
-            imageInfos.forEachIndexed { index, info ->
                 writes[index]
                     .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
                     .dstSet(descriptorSet)
-                    .dstBinding(bindingIndex)
+                    .dstBinding(binding.binding)
                     .descriptorCount(1)
-                    .descriptorType(
-                        if (bindingIndex % 2 == 0) VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE else VK_DESCRIPTOR_TYPE_SAMPLER
-                    )
-                    .pImageInfo(info)
-                bindingIndex += 1
+                    .descriptorType(binding.type.toVulkanDescriptorType())
+                    .pImageInfo(imageInfo)
             }
 
             vkUpdateDescriptorSets(device, writes, null)
@@ -563,6 +562,12 @@ internal class VulkanMaterialTextureManager(
         val maxDim = maxOf(texture.width, texture.height)
         if (maxDim <= 0) return 1
         return 1 + log2(maxDim.toDouble()).toInt()
+    }
+
+    private fun MaterialBindingType.toVulkanDescriptorType(): Int = when (this) {
+        MaterialBindingType.TEXTURE_2D,
+        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
     }
 
     private fun supportsLinearFilter(format: Int): Boolean =

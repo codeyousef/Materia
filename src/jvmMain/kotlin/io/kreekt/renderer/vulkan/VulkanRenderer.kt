@@ -10,6 +10,7 @@ package io.kreekt.renderer.vulkan
 
 import io.kreekt.camera.Camera
 import io.kreekt.core.scene.Background
+import io.kreekt.core.scene.Material
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.core.math.Matrix4
@@ -33,10 +34,12 @@ import io.kreekt.renderer.webgpu.ColorWriteMask
 import io.kreekt.renderer.webgpu.BlendFactor
 import io.kreekt.renderer.webgpu.BlendOperation
 import io.kreekt.renderer.*
+import io.kreekt.renderer.material.MaterialBinding
+import io.kreekt.renderer.material.MaterialBindingSource
+import io.kreekt.renderer.material.MaterialBindingType
 import io.kreekt.renderer.material.MaterialDescriptor
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.renderer.material.MaterialRenderState
-import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.material.requiresBinding
 import io.kreekt.renderer.feature020.*
 import io.kreekt.renderer.gpu.GpuBackend
@@ -59,6 +62,7 @@ import org.lwjgl.vulkan.KHRSwapchain.*
 import kotlin.system.measureTimeMillis
 import kotlin.math.roundToInt
 import kotlin.math.max
+import java.util.Locale
 
 /**
  * Vulkan renderer implementation for JVM platform.
@@ -119,6 +123,15 @@ class VulkanRenderer(
 
     private val meshBuffers: MutableMap<Int, VulkanMeshBuffers> = mutableMapOf()
     private var depthStateWarningIssued = false
+
+    private val materialTextureBindingLayout: List<MaterialBinding> =
+        MaterialDescriptorRegistry.materialTextureBindingLayout()
+    private val environmentBindingLayout: List<MaterialBinding> =
+        MaterialDescriptorRegistry.environmentBindingLayout()
+    private val materialBindingLookup: Map<MaterialBindingSource, List<MaterialBinding>> =
+        materialTextureBindingLayout.groupBy { it.source }
+    private val environmentBindingLookup: Map<MaterialBindingSource, List<MaterialBinding>> =
+        environmentBindingLayout.groupBy { it.source }
 
     // Renderer state
     override var backend: BackendType = BackendType.VULKAN
@@ -257,7 +270,8 @@ class VulkanRenderer(
                 vkDevice,
                 vkPhysicalDevice,
                 commandPool,
-                vkQueue
+                vkQueue,
+                materialTextureBindingLayout
             )
             println("T033: Material texture resources ready")
 
@@ -265,7 +279,8 @@ class VulkanRenderer(
                 vkDevice,
                 vkPhysicalDevice,
                 commandPool,
-                vkQueue
+                vkQueue,
+                environmentBindingLayout
             )
             println("T033: Environment resources ready")
 
@@ -433,48 +448,56 @@ class VulkanRenderer(
                     val hasEnvironmentSet = environmentBinding != null &&
                         environmentBinding.descriptorSet != VK_NULL_HANDLE
 
-                    val descriptorSetLayouts = buildList {
-                        add(descriptorSetLayout)
-                        if (hasMaterialSet) add(materialTextureDescriptorSetLayout)
-                        if (hasEnvironmentSet) add(environmentBinding!!.layout)
-                    }.toLongArray()
+                val descriptorSetLayouts = buildList {
+                    add(descriptorSetLayout)
+                    if (hasMaterialSet) add(materialTextureDescriptorSetLayout)
+                    if (hasEnvironmentSet) add(environmentBinding!!.layout)
+                }.toLongArray()
 
-                    val pipelineKey = createPipelineKey(
-                        buffers.vertexLayouts,
-                        materialDescriptor.renderState,
-                        hasMaterialSet,
-                        hasEnvironmentSet
-                    )
-                    val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
-                        warnDepthStateIfNeeded(materialDescriptor.renderState)
-                        val newPipeline = VulkanPipeline(deviceHandle)
-                        if (!newPipeline.createPipeline(
-                                renderPass,
-                                extent.first,
-                                extent.second,
-                                descriptorSetLayouts,
-                                buffers.vertexLayouts,
-                                materialDescriptor.renderState
-                            )
-                        ) {
-                            newPipeline.dispose()
-                            throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout/state")
-                        }
-                        newPipeline
+                val material = drawInfo.mesh.material ?: continue
+
+                val shaderConfig = buildFragmentShaderConfig(
+                    material = material,
+                    descriptor = materialDescriptor,
+                    metadata = buffers.metadata,
+                    hasEnvironmentBinding = hasEnvironmentSet
+                )
+
+                val pipelineKey = createPipelineKey(
+                    buffers.vertexLayouts,
+                    materialDescriptor.renderState,
+                    shaderConfig.features
+                )
+                val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
+                    warnDepthStateIfNeeded(materialDescriptor.renderState)
+                    val newPipeline = VulkanPipeline(deviceHandle)
+                    if (!newPipeline.createPipeline(
+                            renderPass,
+                            extent.first,
+                            extent.second,
+                            descriptorSetLayouts,
+                            buffers.vertexLayouts,
+                            materialDescriptor.renderState,
+                            shaderConfig.source
+                        )
+                    ) {
+                        newPipeline.dispose()
+                        throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout/state")
                     }
+                    newPipeline
+                }
 
-                    if (activePipelineKey != pipelineKey) {
-                        renderPassMgr.bindPipeline(PipelineHandle(pipelineForDraw.getPipelineHandle()))
-                        activePipelineKey = pipelineKey
-                    }
+                if (activePipelineKey != pipelineKey) {
+                    renderPassMgr.bindPipeline(PipelineHandle(pipelineForDraw.getPipelineHandle()))
+                    activePipelineKey = pipelineKey
+                }
 
-                    val modelMatrix = drawInfo.mesh.matrixWorld
-                    val material = drawInfo.mesh.material ?: continue
+                val modelMatrix = drawInfo.mesh.matrixWorld
 
-                    val baseColor = when (material) {
-                        is MeshStandardMaterial -> floatArrayOf(
-                            material.color.r,
-                            material.color.g,
+                val baseColor = when (material) {
+                    is MeshStandardMaterial -> floatArrayOf(
+                        material.color.r,
+                        material.color.g,
                             material.color.b,
                             material.opacity
                         )
@@ -655,13 +678,15 @@ class VulkanRenderer(
                 deviceHandle,
                 physicalDevice!!,
                 commandPool,
-                graphicsQueue!!
+                graphicsQueue!!,
+                materialTextureBindingLayout
             )
             environmentManager = VulkanEnvironmentManager(
                 deviceHandle,
                 physicalDevice!!,
                 commandPool,
-                graphicsQueue!!
+                graphicsQueue!!,
+                environmentBindingLayout
             )
         }
     }
@@ -792,32 +817,23 @@ class VulkanRenderer(
     private fun createMaterialTextureResources() {
         val deviceHandle = device ?: return
 
+        val layoutBindings = materialTextureBindingLayout
+
         if (materialTextureDescriptorSetLayout == VK_NULL_HANDLE) {
             MemoryStack.stackPush().use { stack ->
-                val bindings = VkDescriptorSetLayoutBinding.calloc(10, stack)
+                val bindingsBuffer = VkDescriptorSetLayoutBinding.calloc(layoutBindings.size, stack)
 
-                fun configure(binding: Int, descriptorType: Int) {
-                    bindings[binding]
-                        .binding(binding)
+                layoutBindings.forEachIndexed { index, binding ->
+                    bindingsBuffer[index]
+                        .binding(binding.binding)
                         .descriptorCount(1)
-                        .descriptorType(descriptorType)
+                        .descriptorType(binding.toVulkanDescriptorType())
                         .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
                 }
 
-                configure(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                configure(1, VK_DESCRIPTOR_TYPE_SAMPLER)
-                configure(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                configure(3, VK_DESCRIPTOR_TYPE_SAMPLER)
-                configure(4, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                configure(5, VK_DESCRIPTOR_TYPE_SAMPLER)
-                configure(6, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                configure(7, VK_DESCRIPTOR_TYPE_SAMPLER)
-                configure(8, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                configure(9, VK_DESCRIPTOR_TYPE_SAMPLER)
-
                 val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
-                    .pBindings(bindings)
+                    .pBindings(bindingsBuffer)
 
                 val pLayout = stack.mallocLong(1)
                 val result = vkCreateDescriptorSetLayout(deviceHandle, layoutInfo, null, pLayout)
@@ -828,15 +844,25 @@ class VulkanRenderer(
             }
         }
 
-        if (materialTextureDescriptorPool == VK_NULL_HANDLE) {
+        if (materialTextureDescriptorPool == VK_NULL_HANDLE && layoutBindings.isNotEmpty()) {
             MemoryStack.stackPush().use { stack ->
-                val poolSizes = VkDescriptorPoolSize.calloc(2, stack)
-                poolSizes[0]
-                    .type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 5)
-                poolSizes[1]
-                    .type(VK_DESCRIPTOR_TYPE_SAMPLER)
-                    .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * 5)
+                val sampledImageCount = layoutBindings.count { it.type != MaterialBindingType.SAMPLER }
+                val samplerCount = layoutBindings.count { it.type == MaterialBindingType.SAMPLER }
+                val poolSizeCount = (if (sampledImageCount > 0) 1 else 0) + (if (samplerCount > 0) 1 else 0)
+
+                val poolSizes = VkDescriptorPoolSize.calloc(poolSizeCount, stack)
+                var poolIndex = 0
+                if (sampledImageCount > 0) {
+                    poolSizes[poolIndex]
+                        .type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                        .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * sampledImageCount)
+                    poolIndex += 1
+                }
+                if (samplerCount > 0) {
+                    poolSizes[poolIndex]
+                        .type(VK_DESCRIPTOR_TYPE_SAMPLER)
+                        .descriptorCount(MAX_MATERIAL_TEXTURE_SETS * samplerCount)
+                }
 
                 val poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
@@ -1400,11 +1426,24 @@ class VulkanRenderer(
         }
     }
 
+    private data class MaterialPipelineFeatures(
+        val usesAlbedoMap: Boolean,
+        val usesNormalMap: Boolean,
+        val usesRoughnessMap: Boolean,
+        val usesMetalnessMap: Boolean,
+        val usesAmbientOcclusionMap: Boolean,
+        val usesEnvironmentMaps: Boolean
+    )
+
+    private data class FragmentShaderConfig(
+        val source: String,
+        val features: MaterialPipelineFeatures
+    )
+
     private data class PipelineCacheKey(
         val vertexLayouts: List<VertexLayoutSignature>,
         val renderState: RenderStateSignature,
-        val usesMaterialTextures: Boolean,
-        val usesEnvironment: Boolean
+        val materialFeatures: MaterialPipelineFeatures
     )
 
     private data class VertexLayoutSignature(
@@ -1446,8 +1485,7 @@ class VulkanRenderer(
     private fun createPipelineKey(
         vertexLayouts: List<VertexBufferLayout>,
         renderState: MaterialRenderState,
-        usesMaterialTextures: Boolean,
-        usesEnvironment: Boolean
+        features: MaterialPipelineFeatures
     ): PipelineCacheKey {
         val layoutSignature = vertexLayouts.map { layout ->
             VertexLayoutSignature(
@@ -1489,7 +1527,7 @@ class VulkanRenderer(
             )
         )
 
-        return PipelineCacheKey(layoutSignature, renderSignature, usesMaterialTextures, usesEnvironment)
+        return PipelineCacheKey(layoutSignature, renderSignature, features)
     }
 
     private fun warnDepthStateIfNeeded(renderState: MaterialRenderState) {
@@ -1497,6 +1535,256 @@ class VulkanRenderer(
             println("Warning: Depth testing requested but VulkanRenderer currently lacks depth attachments; depthTest/depthWrite are ignored.")
             depthStateWarningIssued = true
         }
+    }
+
+    private fun MaterialBinding.toVulkanDescriptorType(): Int = when (type) {
+        MaterialBindingType.TEXTURE_2D,
+        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
+    }
+
+    private data class BindingPair(
+        val texture: MaterialBinding,
+        val sampler: MaterialBinding
+    )
+
+    private fun bindingPair(
+        lookup: Map<MaterialBindingSource, List<MaterialBinding>>,
+        source: MaterialBindingSource
+    ): BindingPair? {
+        val entries = lookup[source] ?: return null
+        val texture = entries.firstOrNull { it.type != MaterialBindingType.SAMPLER }
+        val sampler = entries.firstOrNull { it.type == MaterialBindingType.SAMPLER }
+        return if (texture != null && sampler != null) BindingPair(texture, sampler) else null
+    }
+
+    private fun MaterialBinding.uniformName(): String {
+        if (name.isEmpty()) return "uBinding${binding}"
+        val first = name.first()
+        val capitalized = if (first.isLowerCase()) {
+            first.titlecase(Locale.ROOT) + name.substring(1)
+        } else {
+            name
+        }
+        return "u$capitalized"
+    }
+
+    private fun BindingPair.samplerRef(): String {
+        val ctor = when (texture.type) {
+            MaterialBindingType.TEXTURE_CUBE -> "samplerCube"
+            MaterialBindingType.TEXTURE_2D -> "sampler2D"
+            MaterialBindingType.SAMPLER -> "sampler2D"
+        }
+        return "$ctor(${texture.uniformName()}, ${sampler.uniformName()})"
+    }
+
+    private fun BindingPair.textureSample(coord: String): String = "texture(${samplerRef()}, $coord)"
+
+    private fun MaterialBinding.glslType(): String = when (type) {
+        MaterialBindingType.TEXTURE_2D -> "texture2D"
+        MaterialBindingType.TEXTURE_CUBE -> "textureCube"
+        MaterialBindingType.SAMPLER -> "sampler"
+    }
+
+    private fun composeFragmentShader(
+        descriptor: MaterialDescriptor,
+        features: MaterialPipelineFeatures,
+        hasUv: Boolean,
+        albedoPair: BindingPair?,
+        normalPair: BindingPair?,
+        roughnessPair: BindingPair?,
+        metalnessPair: BindingPair?,
+        aoPair: BindingPair?,
+        prefilterPair: BindingPair?,
+        brdfPair: BindingPair?
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine("#version 450")
+        sb.appendLine("layout(location = 0) in vec3 vColor;")
+        sb.appendLine("layout(location = 1) in vec2 vUV;")
+        sb.appendLine("layout(location = 2) in vec3 vNormal;")
+        sb.appendLine("layout(location = 3) in vec3 vTangent;")
+        sb.appendLine("layout(location = 4) in vec3 vBitangent;")
+        sb.appendLine("layout(location = 5) in vec3 vWorldPos;")
+        sb.appendLine()
+        sb.appendLine("layout(location = 0) out vec4 outColor;")
+        sb.appendLine()
+        val uniformBlock = descriptor.uniformBlock
+        sb.appendLine("layout(set = ${uniformBlock.group}, binding = ${uniformBlock.binding}) uniform UniformBufferObject {")
+        sb.appendLine("    mat4 uProjection;")
+        sb.appendLine("    mat4 uView;")
+        sb.appendLine("    mat4 uModel;")
+        sb.appendLine("    vec4 uBaseColor;")
+        sb.appendLine("    vec4 uPbrParams;")
+        sb.appendLine("    vec4 uCameraPosition;")
+        sb.appendLine("} ubo;")
+        sb.appendLine()
+
+        materialTextureBindingLayout.sortedBy { it.binding }.forEach { binding ->
+            sb.appendLine("layout(set = ${binding.group}, binding = ${binding.binding}) uniform ${binding.glslType()} ${binding.uniformName()};")
+        }
+        if (environmentBindingLayout.isNotEmpty()) {
+            environmentBindingLayout.sortedBy { it.binding }.forEach { binding ->
+                sb.appendLine("layout(set = ${binding.group}, binding = ${binding.binding}) uniform ${binding.glslType()} ${binding.uniformName()};")
+            }
+        }
+        sb.appendLine()
+        sb.appendLine("float roughnessToMip(float roughness, float mipCount) {")
+        sb.appendLine("    if (mipCount <= 1.0) {")
+        sb.appendLine("        return 0.0;")
+        sb.appendLine("    }")
+        sb.appendLine("    float clamped = clamp(roughness, 0.0, 1.0);")
+        sb.appendLine("    float perceptual = clamped * clamped;")
+        sb.appendLine("    float maxLevel = mipCount - 1.0;")
+        sb.appendLine("    return min(maxLevel, perceptual * maxLevel);")
+        sb.appendLine("}")
+        sb.appendLine()
+        if (features.usesNormalMap && normalPair != null) {
+            sb.appendLine("vec3 applyNormalMap(vec3 normal, vec3 tangent, vec3 bitangent) {")
+            sb.appendLine("    vec3 mapped = ${normalPair.textureSample("vUV")}.xyz * 2.0 - vec3(1.0);")
+            sb.appendLine("    mat3 tbn = mat3(normalize(tangent), normalize(bitangent), normalize(normal));")
+            sb.appendLine("    return normalize(tbn * mapped);")
+            sb.appendLine("}")
+            sb.appendLine()
+        }
+
+        val uvCoord = if (hasUv) "vUV" else "vec2(0.0, 0.0)"
+        val albedoSampleExpr = albedoPair?.textureSample(uvCoord)
+        val roughnessSampleExpr = roughnessPair?.textureSample(uvCoord)?.let { "$it.r" }
+        val metalnessSampleExpr = metalnessPair?.textureSample(uvCoord)?.let { "$it.r" }
+        val aoSampleExpr = aoPair?.textureSample(uvCoord)?.let { "$it.r" }
+
+        sb.appendLine("void main() {")
+        sb.appendLine("    vec4 albedoSample = vec4(1.0);")
+        if (features.usesAlbedoMap && albedoSampleExpr != null) {
+            sb.appendLine("    albedoSample = $albedoSampleExpr;")
+        }
+        sb.appendLine("    vec3 baseColor = clamp(ubo.uBaseColor.rgb * vColor * albedoSample.rgb, 0.0, 1.0);")
+        sb.appendLine("    float alpha = clamp(ubo.uBaseColor.a * albedoSample.a, 0.0, 1.0);")
+        sb.appendLine("    vec3 normal = normalize(vNormal);")
+        sb.appendLine("    vec3 tangent = normalize(vTangent);")
+        sb.appendLine("    vec3 bitangent = normalize(vBitangent);")
+        if (features.usesNormalMap && normalPair != null) {
+            sb.appendLine("    vec3 perturbedNormal = applyNormalMap(normal, tangent, bitangent);")
+        } else {
+            sb.appendLine("    vec3 perturbedNormal = normal;")
+        }
+
+        if (features.usesRoughnessMap && roughnessSampleExpr != null) {
+            sb.appendLine("    float roughness = clamp(ubo.uPbrParams.x * $roughnessSampleExpr, 0.045, 1.0);")
+        } else {
+            sb.appendLine("    float roughness = clamp(ubo.uPbrParams.x, 0.045, 1.0);")
+        }
+
+        if (features.usesMetalnessMap && metalnessSampleExpr != null) {
+            sb.appendLine("    float metalness = clamp(ubo.uPbrParams.y * $metalnessSampleExpr, 0.0, 1.0);")
+        } else {
+            sb.appendLine("    float metalness = clamp(ubo.uPbrParams.y, 0.0, 1.0);")
+        }
+
+        sb.appendLine("    vec3 viewDir = normalize(ubo.uCameraPosition.xyz - vWorldPos);")
+        sb.appendLine("    vec3 specular = vec3(0.0);")
+        if (features.usesEnvironmentMaps && prefilterPair != null && brdfPair != null) {
+            sb.appendLine("    float envIntensity = ubo.uPbrParams.z;")
+            sb.appendLine("    float mipCount = ubo.uPbrParams.w;")
+            sb.appendLine("    vec3 reflection = vec3(0.0);")
+            sb.appendLine("    float NdotV = 0.0;")
+            sb.appendLine("    if (length(viewDir) > 0.0) {")
+            sb.appendLine("        vec3 R = reflect(-viewDir, perturbedNormal);")
+            sb.appendLine("        float lod = roughnessToMip(roughness, mipCount);")
+            sb.appendLine("        reflection = textureLod(${prefilterPair.samplerRef()}, R, lod).rgb;")
+            sb.appendLine("        NdotV = clamp(dot(perturbedNormal, viewDir), 0.0, 1.0);")
+            sb.appendLine("    }")
+            sb.appendLine("    vec3 F0 = mix(vec3(0.04), baseColor, metalness);")
+            sb.appendLine("    vec2 brdf = texture(${brdfPair.samplerRef()}, vec2(NdotV, roughness)).rg;")
+            sb.appendLine("    specular = reflection * (F0 * brdf.x + vec3(brdf.y)) * envIntensity;")
+        } else {
+            sb.appendLine("    float NdotV = clamp(dot(perturbedNormal, viewDir), 0.0, 1.0);")
+        }
+
+        sb.appendLine("    vec3 diffuse = baseColor * (1.0 - metalness);")
+        val aoTerm = if (features.usesAmbientOcclusionMap && aoSampleExpr != null) aoSampleExpr else "1.0"
+        sb.appendLine("    float ao = clamp($aoTerm * ubo.uCameraPosition.w, 0.0, 1.0);")
+        sb.appendLine("    vec3 color = clamp((diffuse + specular) * ao, 0.0, 1.0);")
+        sb.appendLine("    outColor = vec4(color, alpha);")
+        sb.appendLine("}")
+
+        return sb.toString()
+    }
+
+    private fun buildFragmentShaderConfig(
+        material: Material,
+        descriptor: MaterialDescriptor,
+        metadata: GeometryMetadata,
+        hasEnvironmentBinding: Boolean
+    ): FragmentShaderConfig {
+        val hasUv = metadata.bindingFor(GeometryAttribute.UV0) != null
+        val hasTangent = metadata.bindingFor(GeometryAttribute.TANGENT) != null
+
+        fun descriptorHas(source: MaterialBindingSource, type: MaterialBindingType) =
+            descriptor.bindings.any { it.source == source && it.type == type }
+
+        val albedoPair = bindingPair(materialBindingLookup, MaterialBindingSource.ALBEDO_MAP)
+        val usesAlbedoMap = albedoPair != null && descriptorHas(
+            MaterialBindingSource.ALBEDO_MAP,
+            MaterialBindingType.TEXTURE_2D
+        ) && hasUv && when (material) {
+            is MeshBasicMaterial -> material.map != null
+            is MeshStandardMaterial -> material.map != null
+            else -> false
+        }
+
+        val normalPair = bindingPair(materialBindingLookup, MaterialBindingSource.NORMAL_MAP)
+        val usesNormalMap = normalPair != null && descriptorHas(
+            MaterialBindingSource.NORMAL_MAP,
+            MaterialBindingType.TEXTURE_2D
+        ) && hasUv && hasTangent && material is MeshStandardMaterial && material.normalMap != null
+
+        val roughnessPair = bindingPair(materialBindingLookup, MaterialBindingSource.ROUGHNESS_MAP)
+        val usesRoughnessMap = roughnessPair != null && descriptorHas(
+            MaterialBindingSource.ROUGHNESS_MAP,
+            MaterialBindingType.TEXTURE_2D
+        ) && hasUv && material is MeshStandardMaterial && material.roughnessMap != null
+
+        val metalnessPair = bindingPair(materialBindingLookup, MaterialBindingSource.METALNESS_MAP)
+        val usesMetalnessMap = metalnessPair != null && descriptorHas(
+            MaterialBindingSource.METALNESS_MAP,
+            MaterialBindingType.TEXTURE_2D
+        ) && hasUv && material is MeshStandardMaterial && material.metalnessMap != null
+
+        val aoPair = bindingPair(materialBindingLookup, MaterialBindingSource.AO_MAP)
+        val usesAoMap = aoPair != null && descriptorHas(
+            MaterialBindingSource.AO_MAP,
+            MaterialBindingType.TEXTURE_2D
+        ) && hasUv && material is MeshStandardMaterial && material.aoMap != null
+
+        val prefilterPair = bindingPair(environmentBindingLookup, MaterialBindingSource.ENVIRONMENT_PREFILTER)
+        val brdfPair = bindingPair(environmentBindingLookup, MaterialBindingSource.ENVIRONMENT_BRDF)
+        val usesEnvironment = hasEnvironmentBinding && prefilterPair != null && brdfPair != null
+
+        val features = MaterialPipelineFeatures(
+            usesAlbedoMap = usesAlbedoMap,
+            usesNormalMap = usesNormalMap,
+            usesRoughnessMap = usesRoughnessMap,
+            usesMetalnessMap = usesMetalnessMap,
+            usesAmbientOcclusionMap = usesAoMap,
+            usesEnvironmentMaps = usesEnvironment
+        )
+
+        val fragmentSource = composeFragmentShader(
+            descriptor = descriptor,
+            features = features,
+            hasUv = hasUv,
+            albedoPair = albedoPair,
+            normalPair = normalPair,
+            roughnessPair = roughnessPair,
+            metalnessPair = metalnessPair,
+            aoPair = aoPair,
+            prefilterPair = prefilterPair,
+            brdfPair = brdfPair
+        )
+
+        return FragmentShaderConfig(fragmentSource, features)
     }
 
     private fun updateStats(frameTimeMs: Long, drawCalls: Int, triangleCount: Int) {

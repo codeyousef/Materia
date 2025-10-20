@@ -7,6 +7,9 @@ import io.kreekt.renderer.CubeTextureImpl
 import io.kreekt.renderer.Texture2D
 import io.kreekt.renderer.TextureFilter
 import io.kreekt.renderer.TextureFormat
+import io.kreekt.renderer.material.MaterialBinding
+import io.kreekt.renderer.material.MaterialBindingSource
+import io.kreekt.renderer.material.MaterialBindingType
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import org.lwjgl.vulkan.VK12.*
@@ -18,7 +21,8 @@ internal class VulkanEnvironmentManager(
     private val device: VkDevice,
     private val physicalDevice: VkPhysicalDevice,
     private val commandPool: Long,
-    private val graphicsQueue: VkQueue
+    private val graphicsQueue: VkQueue,
+    private val bindingLayout: List<MaterialBinding>
 ) {
 
     data class EnvironmentBinding(
@@ -197,20 +201,15 @@ internal class VulkanEnvironmentManager(
 
     private fun createDescriptorSetLayout() {
         MemoryStack.stackPush().use { stack ->
-            val bindings = VkDescriptorSetLayoutBinding.calloc(4, stack)
+            val bindings = VkDescriptorSetLayoutBinding.calloc(bindingLayout.size, stack)
 
-            fun configure(binding: Int, descriptorType: Int) {
-                bindings[binding]
-                    .binding(binding)
+            bindingLayout.forEachIndexed { index, binding ->
+                bindings[index]
+                    .binding(binding.binding)
                     .descriptorCount(1)
-                    .descriptorType(descriptorType)
+                    .descriptorType(binding.type.toVulkanDescriptorType())
                     .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)
             }
-
-            configure(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-            configure(1, VK_DESCRIPTOR_TYPE_SAMPLER)
-            configure(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-            configure(3, VK_DESCRIPTOR_TYPE_SAMPLER)
 
             val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
@@ -226,13 +225,23 @@ internal class VulkanEnvironmentManager(
 
     private fun createDescriptorPool() {
         MemoryStack.stackPush().use { stack ->
-            val poolSizes = VkDescriptorPoolSize.calloc(2, stack)
-            poolSizes[0]
-                .type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                .descriptorCount(MAX_ENV_DESCRIPTOR_SETS * 2)
-            poolSizes[1]
-                .type(VK_DESCRIPTOR_TYPE_SAMPLER)
-                .descriptorCount(MAX_ENV_DESCRIPTOR_SETS * 2)
+            val sampledCount = bindingLayout.count { it.type != MaterialBindingType.SAMPLER }
+            val samplerCount = bindingLayout.count { it.type == MaterialBindingType.SAMPLER }
+            val poolSizeCount = (if (sampledCount > 0) 1 else 0) + (if (samplerCount > 0) 1 else 0)
+
+            val poolSizes = VkDescriptorPoolSize.calloc(poolSizeCount, stack)
+            var poolIndex = 0
+            if (sampledCount > 0) {
+                poolSizes[poolIndex]
+                    .type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                    .descriptorCount(MAX_ENV_DESCRIPTOR_SETS * sampledCount)
+                poolIndex += 1
+            }
+            if (samplerCount > 0) {
+                poolSizes[poolIndex]
+                    .type(VK_DESCRIPTOR_TYPE_SAMPLER)
+                    .descriptorCount(MAX_ENV_DESCRIPTOR_SETS * samplerCount)
+            }
 
             val poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO)
@@ -410,55 +419,65 @@ internal class VulkanEnvironmentManager(
 
     private fun updateDescriptorSet(descriptorSet: Long, cube: CubeResource, brdf: BrdfResource) {
         MemoryStack.stackPush().use { stack ->
-            val prefilterImageInfo = VkDescriptorImageInfo.calloc(1, stack)
-            prefilterImageInfo[0]
-                .imageView(cube.view)
-                .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                .sampler(VK_NULL_HANDLE)
+            fun sampledCube(resource: CubeResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .imageView(resource.view)
+                    .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                    .sampler(VK_NULL_HANDLE)
+                return info
+            }
 
-            val prefilterSamplerInfo = VkDescriptorImageInfo.calloc(1, stack)
-            prefilterSamplerInfo[0]
-                .sampler(cube.sampler)
-                .imageView(VK_NULL_HANDLE)
-                .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+            fun sampledBrdf(resource: BrdfResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .imageView(resource.view)
+                    .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                    .sampler(VK_NULL_HANDLE)
+                return info
+            }
 
-            val brdfImageInfo = VkDescriptorImageInfo.calloc(1, stack)
-            brdfImageInfo[0]
-                .imageView(brdf.view)
-                .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                .sampler(VK_NULL_HANDLE)
+            fun samplerCube(resource: CubeResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .sampler(resource.sampler)
+                    .imageView(VK_NULL_HANDLE)
+                    .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                return info
+            }
 
-            val brdfSamplerInfo = VkDescriptorImageInfo.calloc(1, stack)
-            brdfSamplerInfo[0]
-                .sampler(brdf.sampler)
-                .imageView(VK_NULL_HANDLE)
-                .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+            fun samplerBrdf(resource: BrdfResource): VkDescriptorImageInfo.Buffer {
+                val info = VkDescriptorImageInfo.calloc(1, stack)
+                info[0]
+                    .sampler(resource.sampler)
+                    .imageView(VK_NULL_HANDLE)
+                    .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                return info
+            }
 
-            val writes = VkWriteDescriptorSet.calloc(4, stack)
-            writes[0]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(0)
-                .descriptorType(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                .pImageInfo(prefilterImageInfo)
-            writes[1]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(1)
-                .descriptorType(VK_DESCRIPTOR_TYPE_SAMPLER)
-                .pImageInfo(prefilterSamplerInfo)
-            writes[2]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(2)
-                .descriptorType(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                .pImageInfo(brdfImageInfo)
-            writes[3]
-                .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
-                .dstSet(descriptorSet)
-                .dstBinding(3)
-                .descriptorType(VK_DESCRIPTOR_TYPE_SAMPLER)
-                .pImageInfo(brdfSamplerInfo)
+            val writes = VkWriteDescriptorSet.calloc(bindingLayout.size, stack)
+            bindingLayout.forEachIndexed { index, binding ->
+                val descriptorType = binding.type.toVulkanDescriptorType()
+                val imageInfo = when (binding.source) {
+                    MaterialBindingSource.ENVIRONMENT_PREFILTER -> when (binding.type) {
+                        MaterialBindingType.SAMPLER -> samplerCube(cube)
+                        else -> sampledCube(cube)
+                    }
+                    MaterialBindingSource.ENVIRONMENT_BRDF -> when (binding.type) {
+                        MaterialBindingType.SAMPLER -> samplerBrdf(brdf)
+                        else -> sampledBrdf(brdf)
+                    }
+                    else -> throw IllegalStateException("Unsupported environment binding source: ${binding.source}")
+                }
+
+                writes[index]
+                    .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
+                    .dstSet(descriptorSet)
+                    .dstBinding(binding.binding)
+                    .descriptorType(descriptorType)
+                    .descriptorCount(1)
+                    .pImageInfo(imageInfo)
+            }
 
             vkUpdateDescriptorSets(device, writes, null)
         }
@@ -739,6 +758,12 @@ internal class VulkanEnvironmentManager(
                 sampler = sampler
             )
         }
+    }
+
+    private fun MaterialBindingType.toVulkanDescriptorType(): Int = when (this) {
+        MaterialBindingType.TEXTURE_2D,
+        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
     }
 
     private fun ensureFallbackCube(): CubeTextureImpl {

@@ -50,8 +50,8 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - Build shader registry and module cache keyed per material configuration.
 - Define material descriptors (uniforms, textures, defines, blending states).
 - Introduce node-based material graph with code generation for both backends.
-- **Active:** Wire WebGPU texture sampling (albedo, normal) through `FRAGMENT_BINDINGS`/`FRAGMENT_INIT_EXTRA` overrides and shared descriptor metadata.
-- **Up next:** Reflect texture bindings into Vulkan/SPIR-V material pipelines once layout negotiation is mirrored.
+- ✅ Wire WebGPU texture sampling (albedo, normal) through `FRAGMENT_BINDINGS`/`FRAGMENT_INIT_EXTRA` overrides and shared descriptor metadata.
+- ✅ Reflect texture bindings into Vulkan/SPIR-V material pipelines once layout negotiation is mirrored.
 
 ### M3. Geometry & Attribute Pipeline (In Progress)
 - Implement geometry builder that maps Three.js BufferGeometry semantics to GPU buffers.
@@ -121,4 +121,4 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 ### Upcoming Tasks
 - ✅ Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs (see `examples/common-backend/EnvironmentScene.kt`).
 - ✅ Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
-- 📌 Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends.
+- ✅ Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends (see `src/jvmTest/kotlin/io/kreekt/lighting/HeadsetEnvironmentRegressionTest.kt`).
