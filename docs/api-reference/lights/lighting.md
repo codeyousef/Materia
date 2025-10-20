@@ -466,12 +466,12 @@ val envMap = CubeTextureLoader().load(arrayOf(
     "pz.jpg", "nz.jpg"
 ))
 
-// Set as scene environment
-scene.environment = envMap
+// Push prefiltered cube + BRDF LUT into the scene
+val lighting = DefaultLightingSystem()
+lighting.applyEnvironmentToScene(scene, envMap)
 
-// Materials will use IBL automatically
+// Materials pick up IBL automatically
 val material = MeshStandardMaterial().apply {
-    envMap = envMap
     envMapIntensity = 1f
 }
 ```
@@ -483,8 +483,13 @@ val material = MeshStandardMaterial().apply {
 val hdrLoader = HDRCubeTextureLoader()
 val hdrEnvMap = hdrLoader.load("environment.hdr")
 
-scene.environment = hdrEnvMap
 scene.background = Background.Texture(hdrEnvMap)
+
+suspend fun configureEnvironment(scene: Scene) {
+    val processor = IBLProcessorImpl()
+    val config = IBLConfig(prefilterSize = 256, brdfLutSize = 512)
+    processor.processEnvironmentForScene(hdrEnvMap, config, scene)
+}
 ```
 
 ---
