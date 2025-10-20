@@ -204,10 +204,16 @@ val renderer = createRendererFromBackend(backendHandle)
     COMPUTE: Native
     RAY_TRACING: Emulated
     XR_SURFACE: Missing
-✅ WebGPU backend initialized!
+ ✅ WebGPU backend initialized!
   Init Time: 180ms
   Within Budget: true (2000ms limit)
 ```
+
+### Environment Scene Demo (`examples/common-backend/EnvironmentScene.kt`)
+
+- Demonstrates the new image-based lighting helper in isolation.
+- Generates a gradient sky cube and calls `DefaultLightingSystem.applyEnvironmentToScene(scene, cube)` so the scene automatically gets the prefilter map and BRDF LUT.
+- Logs a summary showing the cube size and BRDF status, making it easy to verify the environment plumbing before integrating into a full renderer.
 
 ## Benefits of New Backend System
 
