@@ -1435,7 +1435,8 @@ class VulkanRenderer(
         val usesMetalnessMap: Boolean,
         val usesAmbientOcclusionMap: Boolean,
         val usesEnvironmentMaps: Boolean,
-        val usesInstancing: Boolean
+        val usesInstancing: Boolean,
+        val usesSecondaryUv: Boolean
     )
 
     private data class ShaderProgramConfig(
@@ -1601,11 +1602,13 @@ class VulkanRenderer(
         val colorBinding = metadata.bindingFor(GeometryAttribute.COLOR)
         val tangentBinding = metadata.bindingFor(GeometryAttribute.TANGENT)
         val uvBinding = metadata.bindingFor(GeometryAttribute.UV0)
+        val uv2Binding = metadata.bindingFor(GeometryAttribute.UV1)
 
         val hasNormalAttr = normalBinding != null
         val hasColorAttr = colorBinding != null
         val hasTangentAttr = tangentBinding != null
         val hasUvAttr = uvBinding != null
+        val hasUv2Attr = uv2Binding != null
 
         val declaredLocations = mutableSetOf(positionBinding.location)
         val instanceAttributeNames = mutableListOf<String>()
@@ -1630,6 +1633,9 @@ class VulkanRenderer(
             }
             if (hasUvAttr) {
                 declareInput(this, uvBinding!!.location, "vec2", "inUV")
+            }
+            if (hasUv2Attr) {
+                declareInput(this, uv2Binding!!.location, "vec2", "inUV2")
             }
 
             if (features.usesInstancing) {
@@ -1656,6 +1662,7 @@ class VulkanRenderer(
             appendLine("layout(location = 3) out vec3 vTangent;")
             appendLine("layout(location = 4) out vec3 vBitangent;")
             appendLine("layout(location = 5) out vec3 vWorldPos;")
+            appendLine("layout(location = 6) out vec2 vUV2;")
             appendLine()
             appendLine("layout(set = 0, binding = 0) uniform UniformBufferObject {")
             appendLine("    mat4 uProjection;")
@@ -1707,6 +1714,7 @@ class VulkanRenderer(
             )
             appendLine("    vColor = vertexColor;")
             appendLine("    vUV = uv;")
+            appendLine("    vUV2 = ${if (hasUv2Attr) "inUV2" else "uv"};")
             appendLine("    vNormal = normal;")
             appendLine("    vTangent = tangent;")
             appendLine("    vBitangent = bitangent;")
@@ -1746,6 +1754,9 @@ class VulkanRenderer(
         sb.appendLine("layout(location = 3) in vec3 vTangent;")
         sb.appendLine("layout(location = 4) in vec3 vBitangent;")
         sb.appendLine("layout(location = 5) in vec3 vWorldPos;")
+        if (features.usesSecondaryUv) {
+            sb.appendLine("layout(location = 6) in vec2 vUV2;")
+        }
         sb.appendLine()
         sb.appendLine("layout(location = 0) out vec4 outColor;")
         sb.appendLine()
@@ -1789,10 +1800,11 @@ class VulkanRenderer(
         }
 
         val uvCoord = if (hasUv) "vUV" else "vec2(0.0, 0.0)"
+        val secondaryUvCoord = if (features.usesSecondaryUv) "vUV2" else uvCoord
         val albedoSampleExpr = albedoPair?.textureSample(uvCoord)
         val roughnessSampleExpr = roughnessPair?.textureSample(uvCoord)?.let { "$it.r" }
         val metalnessSampleExpr = metalnessPair?.textureSample(uvCoord)?.let { "$it.r" }
-        val aoSampleExpr = aoPair?.textureSample(uvCoord)?.let { "$it.r" }
+        val aoSampleExpr = aoPair?.textureSample(secondaryUvCoord)?.let { "$it.r" }
 
         sb.appendLine("void main() {")
         sb.appendLine("    vec4 albedoSample = vec4(1.0);")
@@ -1860,6 +1872,7 @@ class VulkanRenderer(
         hasEnvironmentBinding: Boolean
     ): ShaderProgramConfig {
         val hasUv = metadata.bindingFor(GeometryAttribute.UV0) != null
+        val hasUv2 = metadata.bindingFor(GeometryAttribute.UV1) != null
         val hasTangent = metadata.bindingFor(GeometryAttribute.TANGENT) != null
 
         fun descriptorHas(source: MaterialBindingSource, type: MaterialBindingType) =
@@ -1910,7 +1923,8 @@ class VulkanRenderer(
             usesMetalnessMap = usesMetalnessMap,
             usesAmbientOcclusionMap = usesAoMap,
             usesEnvironmentMaps = usesEnvironment,
-            usesInstancing = metadata.isInstanced
+            usesInstancing = metadata.isInstanced,
+            usesSecondaryUv = hasUv2
         )
 
         val vertexSource = composeVertexShader(
