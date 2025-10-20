@@ -16,6 +16,12 @@
 
 **KreeKt** enables developers to create stunning 3D graphics applications with a familiar Three.js-inspired API, deployable across all major platforms from a single codebase.
 
+## 🔄 What Changed
+
+- Added `kreekt-examples-common` with shared HUD, camera rail, and runner helpers for showcase scenes.
+- Introduced the **Embedding Galaxy** example highlighting query shockwaves across 20k instanced points (JVM + JS).
+- Introduced the **Force Graph Re-rank** example with TF-IDF vs semantic weighting toggle and baked force-layouts.
+
 ### 🎯 **Core Capabilities**
 - 🔹 **Unified 3D API** - Write once, run everywhere with Three.js-compatible patterns
 - 🔹 **Modern Rendering** - WebGPU-first with WebGL2/Vulkan fallbacks

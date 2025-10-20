@@ -117,6 +117,16 @@ internal object VulkanBootstrap {
             extensions += KHRPortabilityEnumeration.VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
         }
 
+        val glfwExtensions = org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions()
+            ?: throw IllegalStateException("GLFW did not provide required Vulkan instance extensions")
+
+        for (i in 0 until glfwExtensions.capacity()) {
+            val name = glfwExtensions.getStringUTF8(i)
+            if (!extensions.contains(name)) {
+                extensions += name
+            }
+        }
+
         val ppExtensions = if (extensions.isNotEmpty()) {
             val buffer = stack.mallocPointer(extensions.size)
             extensions.forEachIndexed { index, name ->

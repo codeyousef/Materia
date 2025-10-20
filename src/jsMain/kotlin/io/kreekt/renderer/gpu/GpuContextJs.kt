@@ -25,6 +25,7 @@ import io.kreekt.renderer.webgpu.GPUTextureDescriptor
 import io.kreekt.renderer.webgpu.GPUTextureView
 import io.kreekt.renderer.gpu.GpuTextureViewDescriptor
 import io.kreekt.renderer.webgpu.WebGPUDetector
+import kotlinx.coroutines.await
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -249,13 +250,17 @@ actual object GpuDeviceFactory {
             adapterOptions.forceFallbackAdapter = true
         }
 
-        val adapter = gpu.requestAdapter(adapterOptions).awaitPromise()
+        val adapterPromise = gpu.requestAdapter(adapterOptions) as? Promise<GPUAdapter?>
+            ?: error("WebGPU adapter request did not return a promise")
+        val adapter = adapterPromise.await()
             ?: error("Failed to acquire a WebGPU adapter")
 
         val deviceDescriptor = js("({})").unsafeCast<GPUDeviceDescriptor>()
         config.label?.let { deviceDescriptor.label = it }
 
-        val device = adapter.requestDevice(deviceDescriptor).awaitPromise()
+        val devicePromise = adapter.requestDevice(deviceDescriptor) as? Promise<GPUDevice>
+            ?: error("WebGPU device request did not return a promise")
+        val device = devicePromise.await()
         val queue = device.queue
 
         val info = extractAdapterInfo(adapter)

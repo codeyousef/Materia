@@ -9,6 +9,8 @@ import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.BufferAttribute
 import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.points.Points
+import io.kreekt.points.PointsMaterial
 import io.kreekt.renderer.BackendType
 import io.kreekt.renderer.DepthFormat
 import io.kreekt.renderer.PowerPreference
@@ -18,6 +20,7 @@ import io.kreekt.renderer.RendererCapabilities
 import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.RendererInitializationException
 import io.kreekt.renderer.TextureFormat
+import io.kreekt.geometry.InstancedPointsGeometry
 import kotlinx.browser.window
 import org.khronos.webgl.ArrayBufferView
 import org.khronos.webgl.Float32Array
@@ -77,6 +80,7 @@ class WebGLRenderer(
     private var fragmentShader: org.khronos.webgl.WebGLShader? = null
     private var positionLocation: Int = -1
     private var colorLocation: Int = -1
+    private var sizeLocation: Int = -1
     private var mvpLocation: WebGLUniformLocation? = null
 
     private var rendererCapabilities: RendererCapabilities = RendererCapabilities(backend = BackendType.WEBGL)
@@ -136,11 +140,20 @@ class WebGLRenderer(
         visitedIds.clear()
 
         scene.traverseVisible { node ->
-            if (node is Mesh && node.visible) {
-                val buffers = prepareMeshBuffers(node) ?: return@traverseVisible
-                visitedIds.add(node.id)
-                triangles += drawMesh(node, buffers, viewProjectionMatrix)
-                drawCalls++
+            when {
+                node is Mesh && node.visible -> {
+                    val buffers = prepareMeshBuffers(node) ?: return@traverseVisible
+                    visitedIds.add(node.id)
+                    triangles += drawMesh(node, buffers, viewProjectionMatrix)
+                    drawCalls++
+                }
+
+                node is Points && node.visible -> {
+                    val buffers = preparePointsBuffers(node) ?: return@traverseVisible
+                    visitedIds.add(node.id)
+                    triangles += drawPoints(node, buffers, viewProjectionMatrix)
+                    drawCalls++
+                }
             }
         }
 
@@ -185,8 +198,39 @@ class WebGLRenderer(
 
     private fun setupContext(config: RendererConfig) {
         val attributes = buildContextAttributes(config)
-        val webgl2 = canvas.getContext("webgl2", attributes) as? WebGLRenderingContext
-        val obtainedContext = webgl2 ?: canvas.getContext("webgl", attributes) as? WebGLRenderingContext
+        var candidate = tryGetContext("webgl2", attributes)
+        var obtainedContext = candidate.context
+        var webgl2Active = candidate.isWebGL2
+
+        if (obtainedContext == null) {
+            candidate = tryGetContext("webgl2", null)
+            obtainedContext = candidate.context
+            webgl2Active = candidate.isWebGL2
+        }
+
+        if (obtainedContext == null) {
+            candidate = tryGetContext("webgl", attributes)
+            obtainedContext = candidate.context
+            webgl2Active = candidate.isWebGL2
+        }
+
+        if (obtainedContext == null) {
+            candidate = tryGetContext("webgl", null)
+            obtainedContext = candidate.context
+            webgl2Active = candidate.isWebGL2
+        }
+
+        if (obtainedContext == null) {
+            candidate = tryGetContext("experimental-webgl", attributes)
+            obtainedContext = candidate.context
+            webgl2Active = candidate.isWebGL2
+        }
+
+        if (obtainedContext == null) {
+            candidate = tryGetContext("experimental-webgl", null)
+            obtainedContext = candidate.context
+            webgl2Active = candidate.isWebGL2
+        }
 
         if (obtainedContext == null) {
             throw RendererInitializationException.SurfaceCreationFailedException(
@@ -196,7 +240,7 @@ class WebGLRenderer(
         }
 
         gl = obtainedContext
-        isWebGL2Context = webgl2 != null
+        isWebGL2Context = webgl2Active
         supportsUint32Indices = isWebGL2Context || gl.getExtension("OES_element_index_uint") != null
         anisotropyExtension = gl.getExtension("EXT_texture_filter_anisotropic")
     }
@@ -205,11 +249,13 @@ class WebGLRenderer(
         val vertexSource = """
             attribute vec3 aPosition;
             attribute vec3 aColor;
+            attribute float aSize;
             uniform mat4 uMVP;
             varying vec3 vColor;
             void main() {
                 vColor = aColor;
                 gl_Position = uMVP * vec4(aPosition, 1.0);
+                gl_PointSize = aSize;
             }
         """.trimIndent()
 
@@ -246,6 +292,7 @@ class WebGLRenderer(
 
         positionLocation = gl.getAttribLocation(linkedProgram, "aPosition")
         colorLocation = gl.getAttribLocation(linkedProgram, "aColor")
+        sizeLocation = gl.getAttribLocation(linkedProgram, "aSize")
         mvpLocation = gl.getUniformLocation(linkedProgram, "uMVP")
     }
 
@@ -270,6 +317,9 @@ class WebGLRenderer(
         gl.useProgram(program)
         gl.enableVertexAttribArray(positionLocation)
         gl.enableVertexAttribArray(colorLocation)
+        if (sizeLocation >= 0) {
+            gl.enableVertexAttribArray(sizeLocation)
+        }
     }
 
     private fun queryCapabilities(): RendererCapabilities {
@@ -437,10 +487,66 @@ class WebGLRenderer(
         return buffers
     }
 
+    private fun preparePointsBuffers(points: Points): MeshBuffers? {
+        val geometry = points.geometry
+        val materialColor = (points.material as? PointsMaterial)?.color ?: Color.WHITE
+        val defaultSize = (points.material as? PointsMaterial)?.size ?: 1f
+
+        val instancedPosition = geometry.getInstancedAttribute(InstancedPointsGeometry.POSITION_ATTRIBUTE)
+        val vertexCount: Int
+        val vertexData: VertexData
+
+        if (instancedPosition != null) {
+            vertexCount = instancedPosition.count
+            if (vertexCount == 0) return null
+            val instancedColor = geometry.getInstancedAttribute(InstancedPointsGeometry.COLOR_ATTRIBUTE)
+            val instancedSize = geometry.getInstancedAttribute(InstancedPointsGeometry.SIZE_ATTRIBUTE)
+            vertexData = buildPointsVertexData(instancedPosition, instancedColor, instancedSize, materialColor, defaultSize)
+        } else {
+            val positionAttribute = geometry.getAttribute("position") ?: return null
+            vertexCount = positionAttribute.count
+            if (vertexCount == 0) return null
+            val colorAttribute = geometry.getAttribute("color")
+            vertexData = buildVertexData(positionAttribute, colorAttribute, materialColor)
+        }
+
+        val existing = meshBuffers[points.id]
+        val vertexBuffer = existing?.vertexBuffer ?: gl.createBuffer()
+            ?: throw RendererInitializationException.DeviceCreationFailedException(
+                backend = BackendType.WEBGL,
+                adapterInfo = "WebGL",
+                reason = "gl.createBuffer returned null"
+            )
+
+        gl.bindBuffer(ARRAY_BUFFER, vertexBuffer)
+        gl.bufferData(ARRAY_BUFFER, vertexData.array, STATIC_DRAW)
+
+        existing?.indexBuffer?.let { gl.deleteBuffer(it) }
+
+        val buffers = MeshBuffers(
+            vertexBuffer = vertexBuffer,
+            indexBuffer = null,
+            vertexByteSize = vertexData.byteSize,
+            vertexCount = vertexCount,
+            indexByteSize = 0,
+            indexCount = 0,
+            usesUint32 = false,
+            drawMode = POINTS,
+            triangles = vertexCount
+        )
+
+        meshBuffers[points.id] = buffers
+        gl.bindBuffer(ARRAY_BUFFER, null)
+        return buffers
+    }
+
     private fun drawMesh(mesh: Mesh, buffers: MeshBuffers, viewProjection: Matrix4): Int {
         gl.bindBuffer(ARRAY_BUFFER, buffers.vertexBuffer)
         gl.vertexAttribPointer(positionLocation, POSITION_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, 0)
         gl.vertexAttribPointer(colorLocation, COLOR_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, COLOR_OFFSET_BYTES)
+        if (sizeLocation >= 0) {
+            gl.vertexAttribPointer(sizeLocation, SIZE_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, SIZE_OFFSET_BYTES)
+        }
 
         if (buffers.indexBuffer != null && buffers.indexCount > 0) {
             gl.bindBuffer(ELEMENT_ARRAY_BUFFER, buffers.indexBuffer)
@@ -469,6 +575,27 @@ class WebGLRenderer(
         mesh.onAfterRender?.invoke(mesh)
 
         return buffers.triangles
+    }
+
+    private fun drawPoints(points: Points, buffers: MeshBuffers, viewProjection: Matrix4): Int {
+        gl.bindBuffer(ARRAY_BUFFER, buffers.vertexBuffer)
+        gl.vertexAttribPointer(positionLocation, POSITION_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, 0)
+        gl.vertexAttribPointer(colorLocation, COLOR_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, COLOR_OFFSET_BYTES)
+        if (sizeLocation >= 0) {
+            gl.vertexAttribPointer(sizeLocation, SIZE_COMPONENTS, FLOAT, false, VERTEX_STRIDE_BYTES, SIZE_OFFSET_BYTES)
+        }
+
+        gl.bindBuffer(ELEMENT_ARRAY_BUFFER, null)
+
+        modelViewProjectionMatrix.multiplyMatrices(viewProjection, points.matrixWorld)
+        fillMatrixBuffer(modelViewProjectionMatrix.elements, matrixBuffer)
+        gl.uniformMatrix4fv(mvpLocation, false, matrixBuffer)
+
+        points.onBeforeRender?.invoke(points)
+        gl.drawArrays(POINTS, 0, buffers.vertexCount)
+        points.onAfterRender?.invoke(points)
+
+        return buffers.vertexCount
     }
 
     private fun releaseUnusedBuffers() {
@@ -508,6 +635,42 @@ class WebGLRenderer(
                 vertexArray.put(writeIndex++, materialColor.g)
                 vertexArray.put(writeIndex++, materialColor.b)
             }
+            vertexArray.put(writeIndex++, 1f)
+        }
+
+        return VertexData(vertexArray, vertexCount * COMPONENTS_PER_VERTEX * BYTES_PER_FLOAT)
+    }
+
+    private fun buildPointsVertexData(
+        positions: BufferAttribute,
+        colors: BufferAttribute?,
+        sizes: BufferAttribute?,
+        materialColor: Color,
+        defaultSize: Float
+    ): VertexData {
+        val vertexCount = positions.count
+        val vertexArray = Float32Array(vertexCount * COMPONENTS_PER_VERTEX)
+        var writeIndex = 0
+
+        val useColorAttribute = colors != null && colors.itemSize >= COLOR_COMPONENTS
+        for (i in 0 until vertexCount) {
+            vertexArray.put(writeIndex++, positions.getX(i))
+            vertexArray.put(writeIndex++, positions.getY(i))
+            vertexArray.put(writeIndex++, positions.getZ(i))
+
+            if (useColorAttribute) {
+                val source = colors!!
+                vertexArray.put(writeIndex++, source.getX(i))
+                vertexArray.put(writeIndex++, source.getY(i))
+                vertexArray.put(writeIndex++, source.getZ(i))
+            } else {
+                vertexArray.put(writeIndex++, materialColor.r)
+                vertexArray.put(writeIndex++, materialColor.g)
+                vertexArray.put(writeIndex++, materialColor.b)
+            }
+
+            val sizeValue = sizes?.getX(i) ?: defaultSize
+            vertexArray.put(writeIndex++, sizeValue.coerceAtLeast(1f))
         }
 
         return VertexData(vertexArray, vertexCount * COMPONENTS_PER_VERTEX * BYTES_PER_FLOAT)
@@ -631,6 +794,23 @@ class WebGLRenderer(
         return obj
     }
 
+    private data class ContextCandidate(val context: WebGLRenderingContext?, val isWebGL2: Boolean)
+
+    private fun tryGetContext(type: String, attributes: dynamic): ContextCandidate {
+        return try {
+            val raw = if (attributes != null) canvas.getContext(type, attributes) else canvas.getContext(type)
+            val context = when (raw) {
+                null -> null
+                is WebGLRenderingContext -> raw
+                else -> raw.unsafeCast<WebGLRenderingContext?>()
+            }
+            val isWebGL2 = raw != null && js("typeof WebGL2RenderingContext !== 'undefined' && raw instanceof WebGL2RenderingContext").unsafeCast<Boolean>()
+            ContextCandidate(context, isWebGL2)
+        } catch (_: Throwable) {
+            ContextCandidate(null, false)
+        }
+    }
+
     private fun Float32Array.put(index: Int, value: Float) {
         asDynamic()[index] = value
     }
@@ -670,10 +850,12 @@ class WebGLRenderer(
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
-        private const val COMPONENTS_PER_VERTEX = POSITION_COMPONENTS + COLOR_COMPONENTS
+        private const val SIZE_COMPONENTS = 1
+        private const val COMPONENTS_PER_VERTEX = POSITION_COMPONENTS + COLOR_COMPONENTS + SIZE_COMPONENTS
         private const val BYTES_PER_FLOAT = 4
         private const val VERTEX_STRIDE_BYTES = COMPONENTS_PER_VERTEX * BYTES_PER_FLOAT
         private const val COLOR_OFFSET_BYTES = POSITION_COMPONENTS * BYTES_PER_FLOAT
+        private const val SIZE_OFFSET_BYTES = (POSITION_COMPONENTS + COLOR_COMPONENTS) * BYTES_PER_FLOAT
         private const val MAX_UNSIGNED_SHORT = 65535
         private const val UNSIGNED_INT = 0x1405
         private const val MAX_SAMPLES_CONST = 0x8D57

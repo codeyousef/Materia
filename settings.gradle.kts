@@ -44,6 +44,11 @@ rootProject.name = "kreekt"
 // Validation module
 include(":kreekt-validation")
 
+// Example utilities
+include(":kreekt-examples-common")
+
 // Example projects
 include(":examples:basic-scene")
 include(":examples:voxelcraft")
+include(":examples:embedding-galaxy")
+include(":examples:force-graph-rerank")

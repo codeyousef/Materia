@@ -53,8 +53,12 @@ import io.kreekt.renderer.gpu.unwrapDescriptorPool
 import io.kreekt.renderer.gpu.unwrapHandle
 import io.kreekt.renderer.gpu.unwrapInstance
 import io.kreekt.renderer.gpu.unwrapPhysicalHandle
+import java.awt.image.BufferedImage
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.imageio.ImageIO
+import org.lwjgl.system.MemoryUtil
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.vulkan.*
 import org.lwjgl.vulkan.VK12.*
@@ -149,6 +153,17 @@ class VulkanRenderer(
     private var lastFrameTime = System.currentTimeMillis()
     private var fpsAccumulator = 0.0
     private var fpsFrameCount = 0
+
+    private data class CaptureRequest(val outputPath: String)
+    private data class CaptureResources(
+        val buffer: Long,
+        val memory: Long,
+        val width: Int,
+        val height: Int,
+        val outputPath: String
+    )
+
+    private var pendingCapture: CaptureRequest? = null
 
     // T033: Debug flag for verbose frame logging (default off to avoid spam)
     var enableFrameLogging: Boolean = false
@@ -400,6 +415,10 @@ class VulkanRenderer(
         var drawCalls = 0
         var triangles = 0
 
+        var captureResources: CaptureResources? = null
+        val captureRequest = pendingCapture
+        pendingCapture = null
+
         val frameTime = measureTimeMillis {
             val image = try {
                 swapchain.acquireNextImage()
@@ -590,6 +609,30 @@ class VulkanRenderer(
 
                 renderPassMgr.endRenderPass()
 
+                if (captureRequest != null) {
+                    val (captureWidth, captureHeight) = swapchain.getExtent()
+                    val imageHandle = (image.handle as? Long)
+                    val resources = if (imageHandle != null) {
+                        createCaptureResources(captureWidth, captureHeight, captureRequest.outputPath)
+                    } else {
+                        println("[VulkanRenderer] Swapchain image handle unavailable; skipping screenshot")
+                        null
+                    }
+                    if (resources != null) {
+                        recordImageCopy(
+                            command,
+                            stack,
+                            imageHandle!!,
+                            resources.buffer,
+                            captureWidth,
+                            captureHeight
+                        )
+                        captureResources = resources
+                    } else {
+                        println("[VulkanRenderer] Failed to allocate capture resources; skipping screenshot")
+                    }
+                }
+
                 val endResult = vkEndCommandBuffer(command)
                 if (endResult != VK_SUCCESS) {
                     throw RuntimeException("Failed to record command buffer: VkResult=$endResult")
@@ -610,6 +653,13 @@ class VulkanRenderer(
                 val submitResult = vkQueueSubmit(queue, submitInfo, VK_NULL_HANDLE)
                 if (submitResult != VK_SUCCESS) {
                     throw RuntimeException("Failed to submit draw command buffer: VkResult=$submitResult")
+                }
+
+                captureResources?.let { capture ->
+                    vkQueueWaitIdle(queue)
+                    writeCaptureToFile(deviceHandle, capture)
+                    destroyCaptureResources(deviceHandle, capture)
+                    captureResources = null
                 }
 
                 val presentInfo = org.lwjgl.vulkan.VkPresentInfoKHR.calloc(stack)
@@ -1172,9 +1222,216 @@ class VulkanRenderer(
         println("T033: Vulkan renderer disposal completed")
     }
 
+    fun requestFrameCapture(outputPath: String) {
+        pendingCapture = CaptureRequest(outputPath)
+    }
+
     // Note: getStats() removed - use 'stats' property directly to avoid JVM signature clash
 
     // === Private Helper Methods ===
+
+    private fun createCaptureResources(width: Int, height: Int, outputPath: String): CaptureResources? {
+        val deviceHandle = device ?: return null
+        val physicalHandle = physicalDevice ?: return null
+        val bufferSize = width.toLong() * height.toLong() * 4L
+
+        return try {
+            MemoryStack.stackPush().use { stack ->
+                val bufferInfo = VkBufferCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
+                    .size(bufferSize)
+                    .usage(VK_BUFFER_USAGE_TRANSFER_DST_BIT)
+                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+
+                val pBuffer = stack.mallocLong(1)
+                val createResult = vkCreateBuffer(deviceHandle, bufferInfo, null, pBuffer)
+                if (createResult != VK_SUCCESS) {
+                    println("[VulkanRenderer] Failed to create capture buffer: VkResult=$createResult")
+                    return null
+                }
+                val buffer = pBuffer[0]
+
+                val memRequirements = VkMemoryRequirements.malloc(stack)
+                vkGetBufferMemoryRequirements(deviceHandle, buffer, memRequirements)
+
+                val memoryTypeIndex = findMemoryType(
+                    physicalHandle,
+                    memRequirements.memoryTypeBits(),
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT or VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+                )
+
+                val allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                    .allocationSize(memRequirements.size())
+                    .memoryTypeIndex(memoryTypeIndex)
+
+                val pMemory = stack.mallocLong(1)
+                val allocResult = vkAllocateMemory(deviceHandle, allocInfo, null, pMemory)
+                if (allocResult != VK_SUCCESS) {
+                    println("[VulkanRenderer] Failed to allocate capture memory: VkResult=$allocResult")
+                    vkDestroyBuffer(deviceHandle, buffer, null)
+                    return null
+                }
+                val memory = pMemory[0]
+
+                vkBindBufferMemory(deviceHandle, buffer, memory, 0)
+
+                CaptureResources(
+                    buffer = buffer,
+                    memory = memory,
+                    width = width,
+                    height = height,
+                    outputPath = outputPath
+                )
+            }
+        } catch (e: Exception) {
+            println("[VulkanRenderer] Exception during capture allocation: ${e.message}")
+            null
+        }
+    }
+
+    private fun recordImageCopy(
+        command: VkCommandBuffer,
+        stack: MemoryStack,
+        imageHandle: Long,
+        bufferHandle: Long,
+        width: Int,
+        height: Int
+    ) {
+        val barrierToTransfer = VkImageMemoryBarrier.calloc(1, stack)
+            .sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
+            .oldLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            .newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .image(imageHandle)
+            .subresourceRange(
+                VkImageSubresourceRange.calloc(stack)
+                    .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                    .baseMipLevel(0)
+                    .levelCount(1)
+                    .baseArrayLayer(0)
+                    .layerCount(1)
+            )
+            .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+            .dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT)
+
+        vkCmdPipelineBarrier(
+            command,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            null,
+            null,
+            barrierToTransfer
+        )
+
+        val region = VkBufferImageCopy.calloc(1, stack)
+            .bufferOffset(0)
+            .bufferRowLength(0)
+            .bufferImageHeight(0)
+            .imageSubresource(
+                VkImageSubresourceLayers.calloc(stack)
+                    .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                    .mipLevel(0)
+                    .baseArrayLayer(0)
+                    .layerCount(1)
+            )
+            .imageOffset(VkOffset3D.calloc(stack).set(0, 0, 0))
+            .imageExtent(VkExtent3D.calloc(stack).set(width, height, 1))
+
+        vkCmdCopyImageToBuffer(
+            command,
+            imageHandle,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            bufferHandle,
+            region
+        )
+
+        val barrierToPresent = VkImageMemoryBarrier.calloc(1, stack)
+            .sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
+            .oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .image(imageHandle)
+            .subresourceRange(
+                VkImageSubresourceRange.calloc(stack)
+                    .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                    .baseMipLevel(0)
+                    .levelCount(1)
+                    .baseArrayLayer(0)
+                    .layerCount(1)
+            )
+            .srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT)
+            .dstAccessMask(0)
+
+        vkCmdPipelineBarrier(
+            command,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0,
+            null,
+            null,
+            barrierToPresent
+        )
+    }
+
+    private fun writeCaptureToFile(deviceHandle: VkDevice, capture: CaptureResources) {
+        val bufferSize = capture.width * capture.height * 4
+        MemoryStack.stackPush().use { stack ->
+            val ppData = stack.mallocPointer(1)
+            vkMapMemory(deviceHandle, capture.memory, 0, bufferSize.toLong(), 0, ppData)
+            val data = MemoryUtil.memByteBuffer(ppData[0], bufferSize)
+            val image = BufferedImage(capture.width, capture.height, BufferedImage.TYPE_INT_ARGB)
+
+            val rowStride = capture.width * 4
+            for (y in 0 until capture.height) {
+                val srcRow = capture.height - 1 - y
+                val rowStart = srcRow * rowStride
+                for (x in 0 until capture.width) {
+                    val idx = rowStart + x * 4
+                    val b = data.get(idx).toInt() and 0xFF
+                    val g = data.get(idx + 1).toInt() and 0xFF
+                    val r = data.get(idx + 2).toInt() and 0xFF
+                    val a = data.get(idx + 3).toInt() and 0xFF
+                    val argb = (a shl 24) or (r shl 16) or (g shl 8) or b
+                    image.setRGB(x, y, argb)
+                }
+            }
+
+            vkUnmapMemory(deviceHandle, capture.memory)
+            val outputFile = File(capture.outputPath)
+            outputFile.parentFile?.mkdirs()
+            ImageIO.write(image, "PNG", outputFile)
+            println("[VulkanRenderer] Screenshot saved to ${outputFile.absolutePath}")
+        }
+    }
+
+    private fun destroyCaptureResources(deviceHandle: VkDevice, capture: CaptureResources) {
+        vkDestroyBuffer(deviceHandle, capture.buffer, null)
+        vkFreeMemory(deviceHandle, capture.memory, null)
+    }
+
+    private fun findMemoryType(
+        physicalHandle: VkPhysicalDevice,
+        typeFilter: Int,
+        properties: Int
+    ): Int {
+        MemoryStack.stackPush().use { stack ->
+            val memProperties = VkPhysicalDeviceMemoryProperties.malloc(stack)
+            vkGetPhysicalDeviceMemoryProperties(physicalHandle, memProperties)
+
+            for (i in 0 until memProperties.memoryTypeCount()) {
+                val isSupported = typeFilter and (1 shl i) != 0
+                val hasProperties = memProperties.memoryTypes(i).propertyFlags() and properties == properties
+                if (isSupported && hasProperties) {
+                    return i
+                }
+            }
+            throw RuntimeException("Failed to find suitable memory type")
+        }
+    }
 
     private fun createInstance(enableValidation: Boolean): VkInstance? {
         return MemoryStack.stackPush().use { stack ->
