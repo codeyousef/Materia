@@ -57,7 +57,7 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - Implement geometry builder that maps Three.js BufferGeometry semantics to GPU buffers.
 - Support interleaved and deinterleaved layouts, instanced attributes, morph targets, skeletal weights.
 - Add buffer suballocation and orphaning strategies for dynamic attributes.
-- **Next:** Surface GeometryMetadata + attribute requirements to Vulkan vertex input layouts and harmonise WebGPU/Vulkan pipeline selection.
+- ✅ Surface GeometryMetadata + attribute requirements to Vulkan vertex input layouts and harmonise WebGPU/Vulkan pipeline selection.
 
 ### M4. Render Loop & Scene Management
 - Scene traversal identical to Three.js (layers, visibility, frustum culling).

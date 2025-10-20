@@ -48,12 +48,13 @@ class VulkanPipeline(
         descriptorSetLayouts: LongArray,
         vertexLayouts: List<VertexBufferLayout>,
         renderState: MaterialRenderState,
+        vertexSource: String,
         fragmentSource: String
     ): Boolean {
         dispose()
 
         return try {
-            val vertexSpv = compileShader(VERTEX_SHADER_SOURCE, Shaderc.shaderc_glsl_vertex_shader, "triangle.vert")
+            val vertexSpv = compileShader(vertexSource, Shaderc.shaderc_glsl_vertex_shader, "triangle.vert")
             val fragmentSpv = compileShader(fragmentSource, Shaderc.shaderc_glsl_fragment_shader, "triangle.frag")
 
             vertexShaderModule = createShaderModule(vertexSpv)
@@ -346,62 +347,5 @@ class VulkanPipeline(
         BlendOperation.REVERSE_SUBTRACT -> VK_BLEND_OP_REVERSE_SUBTRACT
         BlendOperation.MIN -> VK_BLEND_OP_MIN
         BlendOperation.MAX -> VK_BLEND_OP_MAX
-    }
-
-    companion object {
-        private const val POSITION_COMPONENTS = 3
-        private const val COLOR_COMPONENTS = 3
-
-        private const val VERTEX_SHADER_SOURCE = """
-            #version 450
-            layout(location = 0) in vec3 inPosition;
-            layout(location = 1) in vec3 inNormal;
-            layout(location = 2) in vec3 inColor;
-            layout(location = 3) in vec4 inTangent;
-            layout(location = 4) in vec2 inUV;
-
-            layout(location = 0) out vec3 vColor;
-            layout(location = 1) out vec2 vUV;
-            layout(location = 2) out vec3 vNormal;
-            layout(location = 3) out vec3 vTangent;
-            layout(location = 4) out vec3 vBitangent;
-            layout(location = 5) out vec3 vWorldPos;
-
-            layout(set = 0, binding = 0) uniform UniformBufferObject {
-                mat4 uProjection;
-                mat4 uView;
-                mat4 uModel;
-                vec4 uBaseColor;
-                vec4 uPbrParams;
-                vec4 uCameraPosition;
-            } ubo;
-
-            void main() {
-                vec4 worldPosition = ubo.uModel * vec4(inPosition, 1.0);
-                gl_Position = ubo.uProjection * ubo.uView * worldPosition;
-
-                mat3 normalMatrix = transpose(inverse(mat3(ubo.uModel)));
-                vec3 normal = normalize(normalMatrix * inNormal);
-
-                vec3 tangent = inTangent.xyz;
-                float tangentLen = length(tangent);
-                if (tangentLen < 1e-5) {
-                    vec3 up = abs(normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-                    tangent = normalize(cross(up, normal));
-                } else {
-                    tangent /= tangentLen;
-                }
-                float handedness = tangentLen < 1e-5 ? 1.0 : (inTangent.w == 0.0 ? 1.0 : inTangent.w);
-                vec3 bitangent = normalize(cross(normal, tangent)) * handedness;
-
-                vColor = inColor;
-                vUV = inUV;
-                vNormal = normal;
-                vTangent = tangent;
-                vBitangent = bitangent;
-                vWorldPos = worldPosition.xyz;
-            }
-        """
-
     }
 }

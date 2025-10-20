@@ -448,44 +448,46 @@ class VulkanRenderer(
                     val hasEnvironmentSet = environmentBinding != null &&
                         environmentBinding.descriptorSet != VK_NULL_HANDLE
 
-                val descriptorSetLayouts = buildList {
-                    add(descriptorSetLayout)
-                    if (hasMaterialSet) add(materialTextureDescriptorSetLayout)
-                    if (hasEnvironmentSet) add(environmentBinding!!.layout)
-                }.toLongArray()
+                    val descriptorSetLayouts = buildList {
+                        add(descriptorSetLayout)
+                        if (hasMaterialSet) add(materialTextureDescriptorSetLayout)
+                        if (hasEnvironmentSet) add(environmentBinding!!.layout)
+                    }.toLongArray()
 
-                val material = drawInfo.mesh.material ?: continue
+                    val material = drawInfo.mesh.material ?: continue
 
-                val shaderConfig = buildFragmentShaderConfig(
-                    material = material,
-                    descriptor = materialDescriptor,
-                    metadata = buffers.metadata,
-                    hasEnvironmentBinding = hasEnvironmentSet
-                )
+                    val shaderConfig = buildShaderProgramConfig(
+                        material = material,
+                        descriptor = materialDescriptor,
+                        metadata = buffers.metadata,
+                        vertexLayouts = buffers.vertexLayouts,
+                        hasEnvironmentBinding = hasEnvironmentSet
+                    )
 
-                val pipelineKey = createPipelineKey(
-                    buffers.vertexLayouts,
-                    materialDescriptor.renderState,
-                    shaderConfig.features
-                )
-                val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
-                    warnDepthStateIfNeeded(materialDescriptor.renderState)
-                    val newPipeline = VulkanPipeline(deviceHandle)
-                    if (!newPipeline.createPipeline(
-                            renderPass,
-                            extent.first,
-                            extent.second,
-                            descriptorSetLayouts,
-                            buffers.vertexLayouts,
-                            materialDescriptor.renderState,
-                            shaderConfig.source
-                        )
-                    ) {
-                        newPipeline.dispose()
-                        throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout/state")
+                    val pipelineKey = createPipelineKey(
+                        buffers.vertexLayouts,
+                        materialDescriptor.renderState,
+                        shaderConfig.features
+                    )
+                    val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
+                        warnDepthStateIfNeeded(materialDescriptor.renderState)
+                        val newPipeline = VulkanPipeline(deviceHandle)
+                        if (!newPipeline.createPipeline(
+                                renderPass,
+                                extent.first,
+                                extent.second,
+                                descriptorSetLayouts,
+                                buffers.vertexLayouts,
+                                materialDescriptor.renderState,
+                                shaderConfig.vertexSource,
+                                shaderConfig.fragmentSource
+                            )
+                        ) {
+                            newPipeline.dispose()
+                            throw RuntimeException("Failed to create Vulkan graphics pipeline for vertex layout/state")
+                        }
+                        newPipeline
                     }
-                    newPipeline
-                }
 
                 if (activePipelineKey != pipelineKey) {
                     renderPassMgr.bindPipeline(PipelineHandle(pipelineForDraw.getPipelineHandle()))
@@ -1432,11 +1434,13 @@ class VulkanRenderer(
         val usesRoughnessMap: Boolean,
         val usesMetalnessMap: Boolean,
         val usesAmbientOcclusionMap: Boolean,
-        val usesEnvironmentMaps: Boolean
+        val usesEnvironmentMaps: Boolean,
+        val usesInstancing: Boolean
     )
 
-    private data class FragmentShaderConfig(
-        val source: String,
+    private data class ShaderProgramConfig(
+        val vertexSource: String,
+        val fragmentSource: String,
         val features: MaterialPipelineFeatures
     )
 
@@ -1586,6 +1590,142 @@ class VulkanRenderer(
         MaterialBindingType.SAMPLER -> "sampler"
     }
 
+    private fun composeVertexShader(
+        metadata: GeometryMetadata,
+        vertexLayouts: List<VertexBufferLayout>,
+        features: MaterialPipelineFeatures
+    ): String {
+        val positionBinding = metadata.bindingFor(GeometryAttribute.POSITION)
+            ?: error("Geometry metadata missing POSITION binding")
+        val normalBinding = metadata.bindingFor(GeometryAttribute.NORMAL)
+        val colorBinding = metadata.bindingFor(GeometryAttribute.COLOR)
+        val tangentBinding = metadata.bindingFor(GeometryAttribute.TANGENT)
+        val uvBinding = metadata.bindingFor(GeometryAttribute.UV0)
+
+        val hasNormalAttr = normalBinding != null
+        val hasColorAttr = colorBinding != null
+        val hasTangentAttr = tangentBinding != null
+        val hasUvAttr = uvBinding != null
+
+        val declaredLocations = mutableSetOf(positionBinding.location)
+        val instanceAttributeNames = mutableListOf<String>()
+
+        fun declareInput(builder: StringBuilder, location: Int, glslType: String, name: String) {
+            if (declaredLocations.add(location)) {
+                builder.appendLine("layout(location = $location) in $glslType $name;")
+            }
+        }
+
+        return buildString {
+            appendLine("#version 450")
+            appendLine("layout(location = ${positionBinding.location}) in vec3 inPosition;")
+            if (hasNormalAttr) {
+                declareInput(this, normalBinding!!.location, "vec3", "inNormal")
+            }
+            if (hasColorAttr) {
+                declareInput(this, colorBinding!!.location, "vec3", "inColor")
+            }
+            if (hasTangentAttr) {
+                declareInput(this, tangentBinding!!.location, "vec4", "inTangent")
+            }
+            if (hasUvAttr) {
+                declareInput(this, uvBinding!!.location, "vec2", "inUV")
+            }
+
+            if (features.usesInstancing) {
+                val instanceAttributes = vertexLayouts
+                    .filter { it.stepMode == VertexStepMode.INSTANCE }
+                    .flatMap { it.attributes }
+                    .sortedBy { it.shaderLocation }
+
+                var index = 0
+                instanceAttributes.forEach { attr ->
+                    val location = attr.shaderLocation
+                    if (!declaredLocations.contains(location)) {
+                        val name = "inInstanceAttr${index++}"
+                        declareInput(this, location, glslTypeForVertex(attr.format), name)
+                        instanceAttributeNames += name
+                    }
+                }
+            }
+
+            appendLine()
+            appendLine("layout(location = 0) out vec3 vColor;")
+            appendLine("layout(location = 1) out vec2 vUV;")
+            appendLine("layout(location = 2) out vec3 vNormal;")
+            appendLine("layout(location = 3) out vec3 vTangent;")
+            appendLine("layout(location = 4) out vec3 vBitangent;")
+            appendLine("layout(location = 5) out vec3 vWorldPos;")
+            appendLine()
+            appendLine("layout(set = 0, binding = 0) uniform UniformBufferObject {")
+            appendLine("    mat4 uProjection;")
+            appendLine("    mat4 uView;")
+            appendLine("    mat4 uModel;")
+            appendLine("    vec4 uBaseColor;")
+            appendLine("    vec4 uPbrParams;")
+            appendLine("    vec4 uCameraPosition;")
+            appendLine("} ubo;")
+            appendLine()
+            appendLine("void main() {")
+            if (features.usesInstancing) {
+                val identityColumns = listOf(
+                    "vec4(1.0, 0.0, 0.0, 0.0)",
+                    "vec4(0.0, 1.0, 0.0, 0.0)",
+                    "vec4(0.0, 0.0, 1.0, 0.0)",
+                    "vec4(0.0, 0.0, 0.0, 1.0)"
+                )
+                val columns = (0 until 4).map { index -> instanceAttributeNames.getOrNull(index) ?: identityColumns[index] }
+                appendLine("    mat4 instanceMatrix = mat4(${columns.joinToString(", ")});")
+                appendLine("    mat4 modelMatrix = ubo.uModel * instanceMatrix;")
+            } else {
+                appendLine("    mat4 modelMatrix = ubo.uModel;")
+            }
+            appendLine("    vec4 worldPosition = modelMatrix * vec4(inPosition, 1.0);")
+            appendLine("    gl_Position = ubo.uProjection * ubo.uView * worldPosition;")
+            appendLine("    mat3 normalMatrix = transpose(inverse(mat3(modelMatrix)));")
+            appendLine(
+                "    vec3 normal = normalize(normalMatrix * ${
+                    if (hasNormalAttr) "inNormal" else "vec3(0.0, 0.0, 1.0)"
+                });"
+            )
+            appendLine("    if (length(normal) < 1e-5) normal = vec3(0.0, 0.0, 1.0);")
+            if (hasTangentAttr) {
+                appendLine("    vec3 tangent = normalize(normalMatrix * inTangent.xyz);")
+                appendLine("    float handedness = inTangent.w == 0.0 ? 1.0 : inTangent.w;")
+                appendLine("    vec3 bitangent = normalize(cross(normal, tangent)) * handedness;")
+            } else {
+                appendLine("    vec3 up = abs(normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);")
+                appendLine("    vec3 tangent = normalize(cross(up, normal));")
+                appendLine("    float handedness = 1.0;")
+                appendLine("    vec3 bitangent = normalize(cross(normal, tangent)) * handedness;")
+            }
+            appendLine(
+                "    vec3 vertexColor = ${if (hasColorAttr) "inColor" else "vec3(1.0, 1.0, 1.0)"};"
+            )
+            appendLine(
+                "    vec2 uv = ${if (hasUvAttr) "inUV" else "vec2(0.0, 0.0)"};"
+            )
+            appendLine("    vColor = vertexColor;")
+            appendLine("    vUV = uv;")
+            appendLine("    vNormal = normal;")
+            appendLine("    vTangent = tangent;")
+            appendLine("    vBitangent = bitangent;")
+            appendLine("    vWorldPos = worldPosition.xyz;")
+            appendLine("}")
+        }
+    }
+
+    private fun glslTypeForVertex(format: VertexFormat): String = when (format) {
+        VertexFormat.FLOAT32 -> "float"
+        VertexFormat.FLOAT32X2 -> "vec2"
+        VertexFormat.FLOAT32X3 -> "vec3"
+        VertexFormat.FLOAT32X4 -> "vec4"
+        VertexFormat.UINT32 -> "uint"
+        VertexFormat.UINT32X2 -> "uvec2"
+        VertexFormat.UINT32X3 -> "uvec3"
+        VertexFormat.UINT32X4 -> "uvec4"
+    }
+
     private fun composeFragmentShader(
         descriptor: MaterialDescriptor,
         features: MaterialPipelineFeatures,
@@ -1712,12 +1852,13 @@ class VulkanRenderer(
         return sb.toString()
     }
 
-    private fun buildFragmentShaderConfig(
+    private fun buildShaderProgramConfig(
         material: Material,
         descriptor: MaterialDescriptor,
         metadata: GeometryMetadata,
+        vertexLayouts: List<VertexBufferLayout>,
         hasEnvironmentBinding: Boolean
-    ): FragmentShaderConfig {
+    ): ShaderProgramConfig {
         val hasUv = metadata.bindingFor(GeometryAttribute.UV0) != null
         val hasTangent = metadata.bindingFor(GeometryAttribute.TANGENT) != null
 
@@ -1768,7 +1909,14 @@ class VulkanRenderer(
             usesRoughnessMap = usesRoughnessMap,
             usesMetalnessMap = usesMetalnessMap,
             usesAmbientOcclusionMap = usesAoMap,
-            usesEnvironmentMaps = usesEnvironment
+            usesEnvironmentMaps = usesEnvironment,
+            usesInstancing = metadata.isInstanced
+        )
+
+        val vertexSource = composeVertexShader(
+            metadata = metadata,
+            vertexLayouts = vertexLayouts,
+            features = features
         )
 
         val fragmentSource = composeFragmentShader(
@@ -1784,7 +1932,7 @@ class VulkanRenderer(
             brdfPair = brdfPair
         )
 
-        return FragmentShaderConfig(fragmentSource, features)
+        return ShaderProgramConfig(vertexSource, fragmentSource, features)
     }
 
     private fun updateStats(frameTimeMs: Long, drawCalls: Int, triangleCount: Int) {

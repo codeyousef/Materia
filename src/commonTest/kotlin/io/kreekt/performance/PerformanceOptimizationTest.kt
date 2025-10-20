@@ -9,11 +9,18 @@ import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.primitives.BoxGeometry
 import io.kreekt.material.MeshBasicMaterial
+import kotlin.math.roundToInt
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.time.measureTime
 import kotlin.time.Duration
+
+private fun formatDouble(value: Double): String {
+    if (!value.isFinite()) return value.toString()
+    val rounded = (value * 100).roundToInt() / 100.0
+    return rounded.toString()
+}
 
 /**
  * Performance optimization validation tests
@@ -122,17 +129,17 @@ class PerformanceOptimizationTest {
         if (baselineMs <= 5) {
             // If the baseline completes in under ~5ms the measurement is dominated by noise.
             // Ensure we at least avoid catastrophic regressions (>10x slower) while logging context.
-            println("Baseline under 5ms; treating pooling ratio as informational (ratio=${"%.2f".format(ratio)})")
+            println("Baseline under 5ms; treating pooling ratio as informational (ratio=${formatDouble(ratio)})")
             assertTrue(
                 ratio <= 10.0,
-                "Object pooling should not be an order of magnitude slower: ratio=${"%.2f".format(ratio)}, " +
+                "Object pooling should not be an order of magnitude slower: ratio=${formatDouble(ratio)}, " +
                     "pooling=${timeWithPooling.inWholeMicroseconds}µs, no-pooling=${timeWithoutPooling.inWholeMicroseconds}µs"
             )
         } else {
             val acceptableRatio = 4.0 // generous tolerance allowing for pool bookkeeping overhead
             assertTrue(
                 ratio <= acceptableRatio,
-                "Object pooling should not excessively degrade performance: ratio=${"%.2f".format(ratio)}, " +
+                "Object pooling should not excessively degrade performance: ratio=${formatDouble(ratio)}, " +
                     "pooling=${timeWithPooling.inWholeMicroseconds}µs, no-pooling=${timeWithoutPooling.inWholeMicroseconds}µs"
             )
         }
@@ -235,18 +242,18 @@ class PerformanceOptimizationTest {
         }
         if (timeRegular.inWholeMilliseconds <= 5) {
             println(
-                "Normalize baseline under 5ms; treating inline ratio as informational (ratio=${"%.2f".format(normalizeRatio)})"
+                "Normalize baseline under 5ms; treating inline ratio as informational (ratio=${formatDouble(normalizeRatio)})"
             )
             assertTrue(
                 normalizeRatio <= 3.0,
-                "Inline math should not be dramatically slower: ratio=${"%.2f".format(normalizeRatio)}, " +
+                "Inline math should not be dramatically slower: ratio=${formatDouble(normalizeRatio)}, " +
                     "inline=${timeInline.inWholeMicroseconds}µs, regular=${timeRegular.inWholeMicroseconds}µs"
             )
         } else {
             val acceptableRatio = 1.5
             assertTrue(
                 normalizeRatio <= acceptableRatio,
-                "Inline math should be competitive: ratio=${"%.2f".format(normalizeRatio)}, " +
+                "Inline math should be competitive: ratio=${formatDouble(normalizeRatio)}, " +
                     "inline=${timeInline.inWholeMicroseconds}µs, regular=${timeRegular.inWholeMicroseconds}µs"
             )
         }
