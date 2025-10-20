@@ -117,9 +117,11 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 6. ✅ Texture fidelity: Vulkan path now generates mip levels when supported and respects sampler filtering/wrap modes (no anisotropic filtering yet).
 7. ✅ Lighting parity: bind and sample environment cube textures (prefilter/BRDF) so PBR materials behave consistently across Vulkan/WebGPU.
 8. ✅ PBR material support: wire roughness/metalness/ambient occlusion maps and tangent-space lighting into Vulkan shaders with proper descriptor bindings.
-9. ⚙️ Validation: broaden coverage (integration smoke, docs) around the new BRDF/environment wiring and highlight remaining parity deltas (baseline doc + unit checks landed).
+9. ✅ Validation: broaden coverage (integration smoke, docs) around the new BRDF/environment wiring and highlight remaining parity deltas (baseline doc + unit checks landed).
 
 ### Upcoming Tasks
 - ✅ Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs (see `examples/common-backend/EnvironmentScene.kt`).
 - ✅ Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
 - ✅ Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends (see `src/jvmTest/kotlin/io/kreekt/lighting/HeadsetEnvironmentRegressionTest.kt`).
+- ✅ Ship showcase examples (`embedding-galaxy`, `force-graph-rerank`) with shared runner utilities, deterministic force-layout baking, and instanced geometry validation tests.
+- 🚧 Finalise JS fallback rendering: ensure the WebGL path draws instanced point clouds without relying on WebGPU and add automated coverage so regressions are caught.
