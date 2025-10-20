@@ -4,6 +4,8 @@ import io.kreekt.renderer.CubeTexture
 import io.kreekt.renderer.CubeTextureImpl
 import io.kreekt.renderer.CubeFace
 import io.kreekt.renderer.Texture2D
+import io.kreekt.renderer.TextureFilter
+import io.kreekt.renderer.TextureFormat
 import io.kreekt.renderer.gpu.GpuBindGroup
 import io.kreekt.renderer.gpu.GpuBindGroupDescriptor
 import io.kreekt.renderer.gpu.GpuBindGroupEntry
@@ -67,28 +69,71 @@ internal class WebGPUEnvironmentManager(
     private var lastBrdfId: Int = -1
     private var lastBrdfVersion: Int = -1
     private var trackedBrdfBytes: Long = 0
+    private var lastTextureVersion: Int = -1
+    private var lastUsingFallbackEnvironment: Boolean = false
+    private var lastUsingFallbackBrdf: Boolean = false
+    private var fallbackCubeTexture: CubeTextureImpl? = null
+    private var fallbackBrdfTexture: Texture2D? = null
 
     fun prepare(cube: CubeTexture?, brdf: Texture2D?): EnvironmentBinding? {
         val device = deviceProvider() ?: return null
-        cube ?: run {
-            dispose()
-            return null
+
+        val usingFallbackEnvironment = cube == null
+        val effectiveCube: CubeTexture = cube ?: ensureFallbackCube()
+        val sourceId = cube?.id ?: FALLBACK_ENVIRONMENT_ID
+        val currentVersion = when {
+            usingFallbackEnvironment -> FALLBACK_VERSION
+            cube is CubeTextureImpl -> cube.version
+            else -> if (cube?.needsUpdate == true) lastTextureVersion + 1 else lastTextureVersion
         }
 
-        val sourceId = cube.id
-        if (bindGroup != null && sourceId == lastTextureId) {
-            val layout = bindGroupLayout ?: return null
-            return EnvironmentBinding(bindGroup!!, layout, mipCount)
+        val environmentChanged = bindGroup == null ||
+            cubeTexture == null ||
+            sourceId != lastTextureId ||
+            currentVersion != lastTextureVersion ||
+            cube?.needsUpdate == true ||
+            usingFallbackEnvironment != lastUsingFallbackEnvironment
+
+        val usingFallbackBrdf = brdf == null
+        val brdfSourceId = brdf?.id ?: FALLBACK_BRDF_ID
+        val brdfSourceVersion = brdf?.version ?: FALLBACK_VERSION
+        var brdfChanged = brdfView == null ||
+            brdfSourceId != lastBrdfId ||
+            brdfSourceVersion != lastBrdfVersion ||
+            brdf?.needsUpdate == true ||
+            usingFallbackBrdf != lastUsingFallbackBrdf
+
+        if (environmentChanged) {
+            uploadEnvironment(device, effectiveCube)
+            createSampler(device)
+            brdfChanged = true
         }
 
-        uploadEnvironment(device, cube)
-        createSampler(device)
-        ensureBrdfResources(device, brdf)
-        createBindGroup(device)
+        if (brdfChanged) {
+            ensureBrdfResources(device, brdf)
+        }
+
+        if (environmentChanged || brdfChanged || bindGroup == null) {
+            createBindGroup(device)
+        }
 
         val layout = bindGroupLayout ?: return null
         val group = bindGroup ?: return null
-        return EnvironmentBinding(group, layout, mipCount)
+
+        cube?.needsUpdate = false
+
+        lastTextureId = sourceId
+        lastTextureVersion = currentVersion
+        lastUsingFallbackEnvironment = usingFallbackEnvironment
+        lastUsingFallbackBrdf = usingFallbackBrdf
+
+        return EnvironmentBinding(
+            bindGroup = group,
+            layout = layout,
+            mipCount = mipCount,
+            usingFallbackEnvironment = usingFallbackEnvironment,
+            usingFallbackBrdf = usingFallbackBrdf
+        )
     }
 
     fun dispose() {
@@ -111,8 +156,11 @@ internal class WebGPUEnvironmentManager(
         bindGroup = null
         bindGroupLayout = null
         lastTextureId = -1
+        lastTextureVersion = -1
         lastBrdfId = -1
         lastBrdfVersion = -1
+        lastUsingFallbackEnvironment = false
+        lastUsingFallbackBrdf = false
     }
 
     private fun uploadEnvironment(device: GpuDevice, cube: CubeTexture) {
@@ -208,10 +256,10 @@ internal class WebGPUEnvironmentManager(
                 rawDevice.queue.writeTexture(destination, uint8, dataLayout, sizeDesc)
             }
         }
-        lastTextureId = cube.id
     }
 
     private fun ensureBrdfResources(device: GpuDevice, brdf: Texture2D?) {
+        val textureSource = brdf ?: ensureFallbackBrdfTexture()
         val sourceId = brdf?.id ?: FALLBACK_BRDF_ID
         val sourceVersion = brdf?.version ?: FALLBACK_VERSION
 
@@ -224,9 +272,9 @@ internal class WebGPUEnvironmentManager(
         brdfView = null
         brdfSampler = null
 
-        val width = brdf?.width ?: FALLBACK_BRDF_SIZE
-        val height = brdf?.height ?: FALLBACK_BRDF_SIZE
-        val floatData = brdf?.getData() ?: fallbackBrdfData(width, height)
+        val width = textureSource.width
+        val height = textureSource.height
+        val floatData = textureSource.getData() ?: fallbackBrdfData(width, height)
 
         val descriptor = GpuTextureDescriptor(
             width = width,
@@ -354,6 +402,45 @@ internal class WebGPUEnvironmentManager(
         val layout = device.createBindGroupLayout(descriptor)
         bindGroupLayout = layout
         return layout
+    }
+
+    private fun ensureFallbackCube(): CubeTextureImpl {
+        fallbackCubeTexture?.let { return it }
+
+        val cube = CubeTextureImpl(
+            size = 1,
+            format = TextureFormat.RGBA8,
+            filter = TextureFilter.LINEAR,
+            generateMipmaps = false,
+            textureName = "FallbackEnvironment"
+        )
+        val faceData = FloatArray(4).apply { this[3] = 1f }
+        CubeFace.values().forEach { face ->
+            cube.setFaceData(face, faceData.copyOf())
+        }
+        cube.needsUpdate = false
+        cube.version = FALLBACK_VERSION
+        fallbackCubeTexture = cube
+        return cube
+    }
+
+    private fun ensureFallbackBrdfTexture(): Texture2D {
+        fallbackBrdfTexture?.let { return it }
+        val width = FALLBACK_BRDF_SIZE
+        val height = FALLBACK_BRDF_SIZE
+        val texture = Texture2D(
+            width = width,
+            height = height,
+            format = TextureFormat.RG32F,
+            filter = TextureFilter.LINEAR,
+            generateMipmaps = false,
+            textureName = "FallbackBrdfLut"
+        )
+        texture.setData(fallbackBrdfData(width, height))
+        texture.needsUpdate = false
+        texture.version = FALLBACK_VERSION
+        fallbackBrdfTexture = texture
+        return texture
     }
 
     private fun collectMipChain(cube: CubeTexture): Triple<Int, Map<Pair<Int, Int>, ByteArray>, Long> {

@@ -7,6 +7,7 @@
 
 package io.kreekt.renderer
 
+import kotlin.collections.buildList
 import kotlin.math.roundToInt
 
 /**
@@ -35,7 +36,9 @@ data class RenderStats(
     val timestamp: Long = 0L,
     val iblCpuMs: Double = 0.0,
     val iblPrefilterMipCount: Int = 0,
-    val iblLastRoughness: Float = 0f
+    val iblLastRoughness: Float = 0f,
+    val iblUsingFallbackEnvironment: Boolean = false,
+    val iblUsingFallbackBrdf: Boolean = false
 ) {
     init {
         require(fps >= 0) { "FPS must be non-negative, got: $fps" }
@@ -62,10 +65,19 @@ data class RenderStats(
     override fun toString(): String {
         val fpsStr = (fps * 10).toInt() / 10.0
         val frameTimeStr = (frameTime * 100).toInt() / 100.0
-        val iblSummary = if (iblPrefilterMipCount > 0) {
+        val fallbackTokens = buildList {
+            if (iblUsingFallbackEnvironment) add("env")
+            if (iblUsingFallbackBrdf) add("brdf")
+        }
+        val fallbackSummary = when (fallbackTokens.size) {
+            0 -> ""
+            1 -> " fallback=${fallbackTokens.first()}"
+            else -> " fallback=${fallbackTokens.joinToString("+")}"
+        }
+        val iblSummary = if (iblPrefilterMipCount > 0 || fallbackTokens.isNotEmpty()) {
             val iblMs = (iblCpuMs * 10).roundToInt() / 10.0
             val iblRough = (iblLastRoughness * 100).roundToInt() / 100.0
-            " | IBL ${iblMs}ms mips=$iblPrefilterMipCount rough=$iblRough"
+            " | IBL ${iblMs}ms mips=$iblPrefilterMipCount rough=$iblRough$fallbackSummary"
         } else {
             ""
         }
@@ -86,10 +98,15 @@ data class RenderStats(
             appendLine("  Draw Calls: $drawCalls")
             appendLine("  Texture Memory: ${textureMemory / 1024 / 1024}MB")
             appendLine("  Buffer Memory: ${bufferMemory / 1024 / 1024}MB")
-            if (iblPrefilterMipCount > 0) {
+            if (iblPrefilterMipCount > 0 || iblUsingFallbackEnvironment || iblUsingFallbackBrdf) {
                 val iblMs = (iblCpuMs * 100).roundToInt() / 100.0
                 val iblRough = (iblLastRoughness * 100).roundToInt() / 100.0
                 appendLine("  IBL CPU: ${iblMs}ms (mips=$iblPrefilterMipCount, rough=$iblRough)")
+                if (iblUsingFallbackEnvironment || iblUsingFallbackBrdf) {
+                    appendLine(
+                        "  IBL Fallback: env=${iblUsingFallbackEnvironment}, brdf=${iblUsingFallbackBrdf}"
+                    )
+                }
             }
             appendLine(
                 "  Status: ${
@@ -103,4 +120,3 @@ data class RenderStats(
         }
     }
 }
-

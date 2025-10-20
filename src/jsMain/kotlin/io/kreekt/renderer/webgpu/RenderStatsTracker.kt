@@ -36,6 +36,8 @@ class RenderStatsTracker {
     private var iblCpuMs = 0.0
     private var iblPrefilterMipCount = 0
     private var iblLastRoughness = 0f
+    private var iblFallbackEnvironment = false
+    private var iblFallbackBrdf = false
 
     // Frame timing
     private var frameStartTime = 0.0
@@ -56,6 +58,8 @@ class RenderStatsTracker {
         vertices = 0
         points = 0
         lines = 0
+        iblFallbackEnvironment = false
+        iblFallbackBrdf = false
     }
 
     /**
@@ -189,7 +193,9 @@ class RenderStatsTracker {
             bufferMemory = bufferMemory,
             iblCpuMs = iblCpuMs,
             iblPrefilterMipCount = iblPrefilterMipCount,
-            iblLastRoughness = iblLastRoughness
+            iblLastRoughness = iblLastRoughness,
+            iblUsingFallbackEnvironment = iblFallbackEnvironment,
+            iblUsingFallbackBrdf = iblFallbackBrdf
         )
     }
 
@@ -218,6 +224,8 @@ class RenderStatsTracker {
         iblCpuMs = 0.0
         iblPrefilterMipCount = 0
         iblLastRoughness = 0f
+        iblFallbackEnvironment = false
+        iblFallbackBrdf = false
     }
 
     fun recordIBLConvolution(metrics: IBLConvolutionMetrics) {
@@ -229,8 +237,24 @@ class RenderStatsTracker {
 
     fun recordIBLMaterial(roughness: Float, mipCount: Int) {
         iblLastRoughness = roughness
-        if (mipCount >= 0) {
+        if (!iblFallbackEnvironment && !iblFallbackBrdf && mipCount >= 0) {
             iblPrefilterMipCount = mipCount
+        }
+    }
+
+    fun recordEnvironmentBinding(
+        mipCount: Int,
+        usingFallbackEnvironment: Boolean,
+        usingFallbackBrdf: Boolean
+    ) {
+        iblFallbackEnvironment = usingFallbackEnvironment
+        iblFallbackBrdf = usingFallbackBrdf
+        iblPrefilterMipCount = if (iblFallbackEnvironment || iblFallbackBrdf) {
+            0
+        } else if (mipCount >= 0) {
+            mipCount
+        } else {
+            iblPrefilterMipCount
         }
     }
 

@@ -525,4 +525,4 @@ println("Prefilter: ${metrics.prefilterMs} ms, samples=${metrics.prefilterSample
 println("Irradiance: ${metrics.irradianceMs} ms")
 ```
 
-These values bubble up into `RenderStats` (`iblCpuMs`, `iblPrefilterMipCount`, `iblLastRoughness`) so the WebGPU renderer can surface lighting diagnostics without additional instrumentation.
+These values bubble up into `RenderStats` (`iblCpuMs`, `iblPrefilterMipCount`, `iblLastRoughness`, `iblUsingFallbackEnvironment`, `iblUsingFallbackBrdf`) so the WebGPU renderer can surface lighting diagnostics without additional instrumentation.
