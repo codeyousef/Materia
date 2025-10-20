@@ -41,7 +41,7 @@ kotlin {
     macosX64()
     macosArm64()
 
-    // Android Native targets (supported by kotlinx-datetime 0.7.1+)
+    // Android Native targets (supported by kotlinx-datetime 0.6.1+)
     androidNativeArm32()
     androidNativeArm64()
     androidNativeX86()
@@ -62,7 +62,7 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-                implementation(libs.kotlinx.datetime)
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
             }
         }
 
@@ -77,7 +77,6 @@ kotlin {
             dependencies {
                 implementation("org.slf4j:slf4j-api:2.0.9")
                 implementation("ch.qos.logback:logback-classic:1.4.14")
-                implementation(project(":"))
             }
         }
 
@@ -85,7 +84,6 @@ kotlin {
             dependencies {
                 implementation("org.junit.jupiter:junit-jupiter:5.10.1")
                 implementation("io.mockk:mockk:1.13.8")
-                implementation(libs.kotlinx.datetime)
             }
         }
 
@@ -194,9 +192,7 @@ tasks.register<JavaExec>("validateProductionReadiness") {
     description = "Validates that the KreeKt codebase is production ready"
 
     mainClass.set("io.kreekt.validation.cli.ValidationRunnerKt")
-    val runtimeClasspath = configurations.getByName("jvmRuntimeClasspath")
-    classpath = runtimeClasspath + files(tasks.named("jvmJar"))
-    dependsOn("jvmJar")
+    classpath = kotlin.targets["jvm"].compilations["main"].runtimeDependencyFiles
 
     // Pass project path as argument
     args = listOf(
@@ -227,32 +223,6 @@ tasks.register<JavaExec>("validateProductionReadiness") {
             println("   - HTML: file://${reportDir.absolutePath}/report.html")
             println("   - JSON: ${reportDir.absolutePath}/report.json")
         }
-    }
-}
-
-tasks.register<JavaExec>("captureGoldenImages") {
-    group = "validation"
-    description = "Generates deterministic HDR IBL golden images for regression comparison"
-
-    mainClass.set("io.kreekt.validation.cli.GoldenImageCaptureKt")
-    val runtimeClasspath = configurations.getByName("jvmRuntimeClasspath")
-    classpath = runtimeClasspath + files(tasks.named("jvmJar"))
-    dependsOn("jvmJar")
-
-    if (!project.hasProperty("skipDefaultGoldenOutput")) {
-        args = listOf(
-            "--output",
-            layout.buildDirectory.dir("golden-images").get().asFile.absolutePath
-        )
-    }
-
-    doFirst {
-        println("📸 Capturing HDR golden images...")
-    }
-
-    doLast {
-        val dir = layout.buildDirectory.dir("golden-images").get().asFile
-        println("✅ Golden images available at ${dir.absolutePath}")
     }
 }
 

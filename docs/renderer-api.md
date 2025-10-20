@@ -112,7 +112,7 @@ window.addEventListener("unload", {
 - `LightingSystem.applyEnvironmentToScene(scene, environmentCube)` remains available when you already have GPU cubemaps (no HDR input).
 - Roughness-driven LOD selection mirrors the CPU path via `PrefilterMipSelector`, ensuring consistent reflections.
 - When no prefiltered cube is available the renderer binds a neutral fallback so Vulkan stays stable (diffuse-only response, zero specular) while WebGPU continues sampling normally.
-- Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; telemetry surfaces fallback usage through `RenderStats.iblUsingFallbackEnvironment` / `iblUsingFallbackBrdf`, and `iblPrefilterMipCount` automatically drops to `0` whenever either fallback is bound.
+- Vulkan now consumes the same prefiltered cube + BRDF LUT pair as WebGPU; when the BRDF LUT fallback is active the renderer reports `iblPrefilterMipCount = 0` in `RenderStats` so parity gaps are visible in telemetry.
 - Specular highlights can appear subtly softer on Vulkan while the fallback BRDF is active; expect to revisit once the GPU LUT generator lands.
 - The new `IBLConvolutionProfiler` captures CPU time for irradiance/prefilter convolutions; the latest values surface through `RenderStats` (`iblCpuMs`).
 - Example entry points (`basic-scene`, `profiling-example`, `voxelcraft`) now invoke `processEnvironmentForScene` so both renderer backends share the same prefiltered cubes and BRDF LUTs by default.
@@ -139,13 +139,6 @@ if (hdrResult is IBLResult.Success) {
 val metrics = IBLConvolutionProfiler.snapshot()
 console.log("Prefilter took ${metrics.prefilterMs} ms across ${metrics.prefilterMipCount} mips")
 ```
-
-### Material Shader Compilation
-
-- Every material descriptor in `MaterialShaderLibrary` is shared across backends. Descriptors reference placeholder-driven chunks (`{{VERTEX_INPUT_EXTRA}}`, `{{FRAGMENT_BINDINGS}}`, etc.) registered in `ShaderChunkRegistry`.
-- `MaterialShaderGenerator.compile(descriptor, language)` expands the descriptor into full shader sources. WGSL is used by WebGPU, while Vulkan now requests GLSL via the same descriptor and reuse of overrides.
-- Platform-specific override builders inject attribute declarations, varyings, instancing matrices, morph target wiring, and texture bindings before the chunk registry resolves `#include` directives.
-- To customise shaders, copy an existing descriptor with `withOverrides(...)`, providing replacements for the relevant placeholders. The generator caches results per `(descriptor, language)` to avoid recomputing sources.
 
 ## API Reference
 
@@ -262,16 +255,12 @@ Read-only rendering statistics captured after the most recent frame.
 - `iblCpuMs: Double` - Last CPU time spent in IBL convolution
 - `iblPrefilterMipCount: Int` - Prefilter mip chain used by the renderer (0 when the neutral fallback is bound)
 - `iblLastRoughness: Float` - Roughness value from the most recent PBR draw sampled against a real prefilter
-- `iblUsingFallbackEnvironment: Boolean` - `true` when the neutral environment cube is bound
-- `iblUsingFallbackBrdf: Boolean` - `true` when the fallback BRDF LUT texture is bound
 
 **Example:**
 ```kotlin
 val stats = renderer.stats
 console.log("${stats.fps} FPS | ${stats.drawCalls} draw calls")
-if (stats.iblUsingFallbackEnvironment || stats.iblUsingFallbackBrdf) {
-    console.warn("IBL fallback active (env=${stats.iblUsingFallbackEnvironment}, brdf=${stats.iblUsingFallbackBrdf})")
-} else if (stats.iblPrefilterMipCount > 0) {
+if (stats.iblPrefilterMipCount > 0) {
     console.log("IBL CPU: ${stats.iblCpuMs} ms (mips=${stats.iblPrefilterMipCount})")
 }
 ```

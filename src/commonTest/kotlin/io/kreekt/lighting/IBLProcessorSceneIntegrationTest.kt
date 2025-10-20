@@ -2,7 +2,6 @@ package io.kreekt.lighting
 
 import io.kreekt.core.scene.Scene
 import io.kreekt.lighting.ibl.HDREnvironment
-import io.kreekt.lighting.ibl.IBLResult
 import io.kreekt.renderer.Texture
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -38,7 +37,7 @@ class IBLProcessorSceneIntegrationTest {
         val result = processor.processEnvironmentForScene(hdr, config, scene)
 
         assertTrue(result is IBLResult.Success, "Expected IBL processing to succeed, but was $result")
-        val maps = (result as IBLResult.Success).data
+        val maps = result.data
         val sceneEnvironment = scene.environment
         val brdfLut = scene.environmentBrdfLut
 

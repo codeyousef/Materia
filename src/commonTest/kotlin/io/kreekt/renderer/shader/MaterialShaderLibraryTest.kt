@@ -28,7 +28,7 @@ class MaterialShaderLibraryTest {
 
     @Test
     fun basicShaderCompilesViaChunkRegistry() {
-        val shader = MaterialShaderGenerator.compile(MaterialShaderLibrary.basic(), ShaderLanguage.WGSL)
+        val shader = MaterialShaderGenerator.compile(MaterialShaderLibrary.basic())
 
         assertTrue(shader.vertexSource.contains("@vertex"))
         assertFalse(shader.vertexSource.contains("#include"), "Includes should be resolved in vertex shader")
@@ -41,7 +41,7 @@ class MaterialShaderLibraryTest {
 
     @Test
     fun meshStandardShaderExposesEnvironmentBindings() {
-        val shader = MaterialShaderGenerator.compile(MaterialShaderLibrary.meshStandard(), ShaderLanguage.WGSL)
+        val shader = MaterialShaderGenerator.compile(MaterialShaderLibrary.meshStandard())
 
         assertTrue(shader.fragmentSource.contains("@group(2) @binding(0) var prefilterTexture"))
         assertTrue(shader.fragmentSource.contains("@group(2) @binding(2) var brdfLutTexture"))
@@ -51,8 +51,8 @@ class MaterialShaderLibraryTest {
     @Test
     fun generatorCachesCompiledDescriptors() {
         val descriptor = MaterialShaderLibrary.basic()
-        val first = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.WGSL)
-        val second = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.WGSL)
+        val first = MaterialShaderGenerator.compile(descriptor)
+        val second = MaterialShaderGenerator.compile(descriptor)
 
         assertSame(first, second, "Shader generator should return cached source for identical descriptors")
     }
@@ -83,7 +83,7 @@ class MaterialShaderLibraryTest {
         baseOverrides["FRAGMENT_EXTRA"] = fragmentExtra
 
         val descriptor = MaterialShaderLibrary.basic().withOverrides(baseOverrides)
-        val shader = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.WGSL)
+        val shader = MaterialShaderGenerator.compile(descriptor)
         val fragmentSource = shader.fragmentSource
 
         assertTrue(
@@ -106,43 +106,4 @@ class MaterialShaderLibraryTest {
             )
         }
     }
-
-    @Test
-    fun glslChunksResolveIncludesAndPlaceholders() {
-        val overrides = mapOf(
-            "VERTEX_INPUT_EXTRA" to "layout(location = 0) in vec3 inPosition;",
-            "VERTEX_OUTPUT_EXTRA" to "layout(location = 0) out vec3 vColor;",
-            "VERTEX_ASSIGN_EXTRA" to "    vColor = vec3(1.0)\n    gl_Position = vec4(inPosition, 1.0);",
-            "FRAGMENT_INPUT_EXTRA" to "layout(location = 0) in vec3 vColor;",
-            "FRAGMENT_BINDINGS" to "",
-            "FRAGMENT_INIT_EXTRA" to "    vec3 color = vColor;",
-            "FRAGMENT_EXTRA" to ""
-        )
-        val descriptor = MaterialShaderLibrary.basic().withOverrides(overrides)
-        val shader = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.GLSL)
-
-        assertTrue(shader.vertexSource.contains("gl_Position"), "GLSL vertex shader should write gl_Position")
-        assertFalse(shader.vertexSource.contains("#include"), "GLSL vertex shader should resolve includes")
-        assertTrue(shader.vertexSource.contains("layout(location = 0) in vec3 inPosition"))
-
-        assertTrue(shader.fragmentSource.contains("layout(location = 0) out vec4 outColor"))
-        assertFalse(shader.fragmentSource.contains("#include"), "GLSL fragment shader should resolve includes")
-        assertTrue(shader.fragmentSource.contains("outColor = vec4"), "GLSL fragment shader should assign to outColor")
-    }
-
-
-    @Test
-    fun cacheSeparatesLanguagesPerDescriptor() {
-        val descriptor = MaterialShaderLibrary.basic()
-        val wgsl = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.WGSL)
-        val glsl = MaterialShaderGenerator.compile(descriptor, ShaderLanguage.GLSL)
-
-        assertFalse(
-            wgsl === glsl,
-            "Cache should store separate shader sources for each language"
-        )
-        assertTrue(wgsl.vertexSource.contains("@vertex"))
-        assertTrue(glsl.vertexSource.contains("gl_Position"))
-    }
-
 }

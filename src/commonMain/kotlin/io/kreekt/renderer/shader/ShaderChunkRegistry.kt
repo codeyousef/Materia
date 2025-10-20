@@ -16,23 +16,13 @@ enum class ShaderStageType {
 }
 
 /**
- * Supported shading languages for reusable chunks.
- */
-enum class ShaderLanguage {
-    ANY,
-    WGSL,
-    GLSL
-}
-
-/**
  * Represents a reusable shader chunk. The chunk can optionally be scoped to a specific
  * [ShaderStageType]; when `stage` is `null` the chunk is treated as shared across all stages.
  */
 data class ShaderChunk(
     val name: String,
     val source: String,
-    val stage: ShaderStageType? = null,
-    val language: ShaderLanguage = ShaderLanguage.ANY
+    val stage: ShaderStageType? = null
 )
 
 /**
@@ -47,14 +37,11 @@ object ShaderChunkRegistry {
     private fun findChunk(
         registry: PersistentMap<String, PersistentList<ShaderChunk>>,
         name: String,
-        stage: ShaderStageType,
-        language: ShaderLanguage
+        stage: ShaderStageType
     ): ShaderChunk? {
         val candidates = registry[name] ?: return null
-        return candidates.firstOrNull { it.stage == stage && it.language == language }
-            ?: candidates.firstOrNull { it.stage == stage && it.language == ShaderLanguage.ANY }
-            ?: candidates.firstOrNull { it.stage == null && it.language == language }
-            ?: candidates.firstOrNull { it.stage == null && it.language == ShaderLanguage.ANY }
+        return candidates.firstOrNull { it.stage == stage }
+            ?: candidates.firstOrNull { it.stage == null }
     }
 
     /**
@@ -66,10 +53,10 @@ object ShaderChunkRegistry {
         while (true) {
             val current = chunkRegistry.value
             val existing = current[chunk.name] ?: persistentListOf()
-            val index = existing.indexOfFirst { it.stage == chunk.stage && it.language == chunk.language }
+            val index = existing.indexOfFirst { it.stage == chunk.stage }
             val updatedList = when {
                 index >= 0 && !replaceExisting ->
-                    error("Shader chunk '${chunk.name}' already registered for stage ${chunk.stage} and language ${chunk.language}")
+                    error("Shader chunk '${chunk.name}' already registered for stage ${chunk.stage}")
                 index >= 0 -> existing.set(index, chunk)
                 else -> existing.add(chunk)
             }
@@ -91,16 +78,12 @@ object ShaderChunkRegistry {
      * Returns true when a chunk with [name] is registered for [stage]. When [stage] is `null`
      * the method checks for any registration regardless of stage.
      */
-    fun contains(name: String, stage: ShaderStageType? = null, language: ShaderLanguage? = null): Boolean {
+    fun contains(name: String, stage: ShaderStageType? = null): Boolean {
         val candidates = chunkRegistry.value[name] ?: return false
         if (stage == null) {
-            if (language == null) return candidates.isNotEmpty()
-            return candidates.any { it.language == language || it.language == ShaderLanguage.ANY }
+            return candidates.isNotEmpty()
         }
-        return candidates.any {
-            (it.stage == stage || it.stage == null) &&
-                (language == null || it.language == language || it.language == ShaderLanguage.ANY)
-        }
+        return candidates.any { it.stage == stage || it.stage == null }
     }
 
     /**
@@ -119,16 +102,15 @@ object ShaderChunkRegistry {
     fun assemble(
         chunkNames: List<String>,
         stage: ShaderStageType,
-        language: ShaderLanguage = ShaderLanguage.ANY,
         replacements: Map<String, String> = emptyMap()
     ): String {
         require(chunkNames.isNotEmpty()) { "At least one shader chunk must be specified for stage $stage" }
         val snapshot = chunkRegistry.value
         val builder = StringBuilder()
         chunkNames.forEachIndexed { index, name ->
-            val chunk = findChunk(snapshot, name, stage, language)
-                ?: error("Shader chunk '$name' not registered for stage $stage (language=$language)")
-            val resolved = resolveChunk(snapshot, chunk, stage, language, mutableListOf())
+            val chunk = findChunk(snapshot, name, stage)
+                ?: error("Shader chunk '$name' not registered for stage $stage")
+            val resolved = resolveChunk(snapshot, chunk, stage, mutableListOf())
             builder.append(resolved.trim())
             if (index != chunkNames.lastIndex) {
                 builder.appendLine()
@@ -146,10 +128,9 @@ object ShaderChunkRegistry {
         registry: PersistentMap<String, PersistentList<ShaderChunk>>,
         chunk: ShaderChunk,
         stage: ShaderStageType,
-        language: ShaderLanguage,
         stack: MutableList<String>
     ): String {
-        val key = chunk.name + "::" + (chunk.stage ?: "ANY") + "::" + chunk.language
+        val key = chunk.name + "::" + (chunk.stage ?: "ANY")
         if (key in stack) {
             error("Circular shader chunk include detected: ${stack.joinToString(" -> ")} -> ${chunk.name}")
         }
@@ -159,9 +140,9 @@ object ShaderChunkRegistry {
 
         source = includeRegex.replace(source) { match ->
             val includeName = match.groupValues[1]
-            val includeChunk = findChunk(registry, includeName, stage, language)
-                ?: error("Shader chunk '$includeName' referenced from '${chunk.name}' is not registered for stage $stage (language=$language)")
-            resolveChunk(registry, includeChunk, stage, language, stack)
+            val includeChunk = findChunk(registry, includeName, stage)
+                ?: error("Shader chunk '$includeName' referenced from '${chunk.name}' is not registered for stage $stage")
+            resolveChunk(registry, includeChunk, stage, stack)
         }
 
         stack.removeAt(stack.size - 1)

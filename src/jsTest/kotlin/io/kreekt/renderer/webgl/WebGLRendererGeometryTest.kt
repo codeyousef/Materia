@@ -5,23 +5,14 @@ import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
 import io.kreekt.geometry.BufferAttribute
 import io.kreekt.geometry.BufferGeometry
-import io.kreekt.geometry.InstancedPointsGeometry
 import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.points.Points
-import io.kreekt.points.PointsMaterial
-import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.webgpu.WebGPURendererFactory
-import io.kreekt.renderer.webgl.WebGLRenderer
 import kotlinx.browser.document
 import kotlinx.coroutines.test.runTest
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.test.Test
 import kotlin.test.Ignore
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Contract Tests: WebGLRenderer Geometry Rendering (Contracts 2 & 3)
@@ -181,45 +172,5 @@ class WebGLRendererGeometryTest {
         assertTrue(stats.triangles == 0, "Expected 0 triangles from empty scene, got ${stats.triangles}")
 
         console.log("✅ Empty scene test passed: 0 triangles rendered")
-    }
-
-    @Test
-    fun testInstancedPointCloudFallbackRendering() = runTest {
-        val canvas = document.createElement("canvas") as HTMLCanvasElement
-        canvas.width = 640
-        canvas.height = 480
-
-        val renderer = WebGLRenderer(canvas)
-        val initResult = renderer.initialize(RendererConfig())
-        assertTrue(initResult is io.kreekt.core.Result.Success, "WebGL renderer should initialise successfully")
-
-        val scene = Scene()
-        val camera = PerspectiveCamera(60f, 640f / 480f, 0.1f, 1000f)
-        camera.position.set(0f, 0f, 10f)
-        camera.updateMatrixWorld(true)
-        camera.updateProjectionMatrix()
-
-        val instanceCount = 128
-        val geometry = InstancedPointsGeometry(instanceCount)
-        repeat(instanceCount) { index ->
-            val angle = (index / instanceCount.toFloat()) * (2 * PI.toFloat())
-            val radius = 5f
-            geometry.updatePosition(index, radius * cos(angle), radius * sin(angle), 0f)
-            val t = index / (instanceCount - 1f)
-            geometry.updateColor(index, t, 1f - t, 0.5f)
-            geometry.updateSize(index, 2f)
-        }
-
-        val material = PointsMaterial().apply {
-            size = 4f
-        }
-        val points = Points(geometry, material)
-        scene.add(points)
-
-        renderer.render(scene, camera)
-
-        val stats = renderer.stats
-        assertEquals(1, stats.drawCalls, "Instanced point cloud should render with a single draw call")
-        assertEquals(instanceCount, stats.triangles, "Point cloud should report vertices rendered as triangle count placeholder")
     }
 }
