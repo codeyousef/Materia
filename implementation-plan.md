@@ -52,6 +52,12 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - Introduce node-based material graph with code generation for both backends.
 - ✅ Wire WebGPU texture sampling (albedo, normal) through `FRAGMENT_BINDINGS`/`FRAGMENT_INIT_EXTRA` overrides and shared descriptor metadata.
 - ✅ Reflect texture bindings into Vulkan/SPIR-V material pipelines once layout negotiation is mirrored.
+- **Lambert lighting follow-ups**
+  - Plumb shared ambient/fog/light uniforms into chunk system so diffuse materials can reuse them across backends.
+  - Extend basic/Lambert WGSL + GLSL chunks with emissive and AO handling (maps + overrides).
+  - Emit Lambert-specific shader overrides during descriptor resolution, wiring emissive color/intensity and optional emissive/AO textures.
+  - Update WebGPU/Vulkan override builders + pipeline caches to honour Lambert variants.
+  - Add renderer tests covering Lambert lighting (diffuse, emissive, AO) on both backends.
 
 - ### M3. Geometry & Attribute Pipeline (In Progress)
 - Implement geometry builder that maps Three.js BufferGeometry semantics to GPU buffers.
@@ -124,6 +130,7 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - ✅ Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
 - ✅ Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends (see `src/jvmTest/kotlin/io/kreekt/lighting/HeadsetEnvironmentRegressionTest.kt`).
 - ✅ Ship showcase examples (`embedding-galaxy`, `force-graph-rerank`) with shared runner utilities, deterministic force-layout baking, and instanced geometry validation tests.
-- 🚧 Finalise JS fallback rendering: ensure the WebGL path draws instanced point clouds without relying on WebGPU and add automated coverage so regressions are caught.
-- 📌 Surface Vulkan/WebGPU IBL fallback stats in dashboard tooling (CLI + HUD) so QA can flag parity gaps automatically.
-- 📌 Automate golden-image capture for HDR environments to validate identical lighting across backends after texture updates.
+- ✅ Finalise JS fallback rendering: ensure the WebGL path draws instanced point clouds without relying on WebGPU and add automated coverage so regressions are caught.
+- ✅ Surface Vulkan/WebGPU IBL fallback stats in dashboard tooling (CLI + HUD) so QA can flag parity gaps automatically.
+- ✅ Automate golden-image capture for HDR environments to validate identical lighting across backends after texture updates.
+- **Lambert lighting integration**: implement the outstanding shader/API/doc work noted above.
