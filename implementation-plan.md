@@ -119,6 +119,6 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 9. ⚙️ Validation: broaden coverage (integration smoke, docs) around the new BRDF/environment wiring and highlight remaining parity deltas (baseline doc + unit checks landed).
 
 ### Upcoming Tasks
-- 📌 Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs.
+- ✅ Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs (see `examples/common-backend/EnvironmentScene.kt`).
 - ✅ Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
 - 📌 Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends.
