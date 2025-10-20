@@ -59,6 +59,10 @@ import kotlin.js.jsTypeOf
  */
 class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
+    private companion object {
+        private const val MAX_MORPH_TARGETS = 8
+    }
+
     private val statsTracker = RenderStatsTracker()
 
     // Core WebGPU objects
@@ -729,6 +733,49 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 fragmentExtra.appendLine("    let anisotropy = clamp(1.0 - abs(dot(normalize(in.viewDir), tangent)), 0.0, 1.0);")
                 fragmentExtra.appendLine("    color = color * (0.75 + 0.25 * anisotropy);")
             }
+        }
+
+        val morphPositionBindings = metadata.bindings
+            .filter { it.attribute == GeometryAttribute.MORPH_POSITION }
+            .sortedBy { it.location }
+        val morphNormalBindings = metadata.bindings
+            .filter { it.attribute == GeometryAttribute.MORPH_NORMAL }
+            .sortedBy { it.location }
+        val morphCount = morphPositionBindings.size.coerceAtMost(MAX_MORPH_TARGETS)
+
+        if (morphCount > 0) {
+            val positionNames = mutableListOf<String>()
+            val normalNames = mutableListOf<String>()
+            morphPositionBindings.take(morphCount).forEachIndexed { index, binding ->
+                val name = "morphPosition$index"
+                vertexInputExtra.appendLine("    @location(${binding.location}) $name: vec3<f32>,")
+                positionNames += name
+            }
+            morphNormalBindings.take(morphCount).forEachIndexed { index, binding ->
+                val name = "morphNormal$index"
+                vertexInputExtra.appendLine("    @location(${binding.location}) $name: vec3<f32>,")
+                normalNames += name
+            }
+
+            vertexAssignExtra.appendLine("    var blendedPosition = position;")
+            if (normalNames.isNotEmpty()) {
+                vertexAssignExtra.appendLine("    var blendedNormal = normal;")
+            } else {
+                vertexAssignExtra.appendLine("    var blendedNormal = normal;")
+            }
+            val components = arrayOf("x", "y", "z", "w")
+            repeat(morphCount) { index ->
+                val source = if (index < 4) "uniforms.morphInfluences0" else "uniforms.morphInfluences1"
+                val comp = components[index % 4]
+                val weightName = "morphWeight$index"
+                vertexAssignExtra.appendLine("    let $weightName = $source.$comp;")
+                vertexAssignExtra.appendLine("    blendedPosition = blendedPosition + ${positionNames[index]} * $weightName;")
+                normalNames.getOrNull(index)?.let { normalAttr ->
+                    vertexAssignExtra.appendLine("    blendedNormal = blendedNormal + $normalAttr * $weightName;")
+                }
+            }
+            vertexAssignExtra.appendLine("    position = blendedPosition;")
+            vertexAssignExtra.appendLine("    normal = normalize(blendedNormal);")
         }
 
         return mapOf(

@@ -65,7 +65,7 @@ internal class UniformBufferManager(
             logMatrices(frameInfo, camera, projMatrix, viewMatrix, modelMatrix)
         }
 
-        val uniformData = FloatArray(60)
+        val uniformData = FloatArray(68)
         for (i in 0 until 16) {
             uniformData[i] = projMatrix[i]
             uniformData[16 + i] = viewMatrix[i]
@@ -95,7 +95,14 @@ internal class UniformBufferManager(
         uniformData[56] = cameraPosition.getOrNull(0) ?: camera.position.x
         uniformData[57] = cameraPosition.getOrNull(1) ?: camera.position.y
         uniformData[58] = cameraPosition.getOrNull(2) ?: camera.position.z
-        uniformData[59] = 1f
+        uniformData[59] = cameraPosition.getOrNull(3) ?: 1f
+
+        val morphInfluenceSource = mesh.morphTargetInfluences
+            ?: (mesh.userData["morphTargetInfluences"] as? MutableList<Float>)
+            ?: emptyList<Float>()
+        for (i in 0 until MAX_MORPH_TARGETS) {
+            uniformData[60 + i] = morphInfluenceSource.getOrNull(i) ?: 0f
+        }
 
         val offset = dynamicOffset(drawIndex)
         if (offset + OBJECT_BYTES > UNIFORM_BUFFER_SIZE) {
@@ -258,6 +265,7 @@ internal class UniformBufferManager(
     companion object {
         const val MAX_MESHES_PER_FRAME = 200
         private const val UNIFORM_ALIGNMENT = 256
+        private const val MAX_MORPH_TARGETS = 8
         private val OBJECT_BYTES_INTERNAL = MaterialDescriptorRegistry.uniformBlockSizeBytes()
         val OBJECT_BYTES: Int = OBJECT_BYTES_INTERNAL
         val UNIFORM_SIZE_PER_MESH: Int =

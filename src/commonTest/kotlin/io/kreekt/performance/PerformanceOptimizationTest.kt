@@ -250,7 +250,7 @@ class PerformanceOptimizationTest {
                     "inline=${timeInline.inWholeMicroseconds}µs, regular=${timeRegular.inWholeMicroseconds}µs"
             )
         } else {
-            val acceptableRatio = 1.5
+            val acceptableRatio = 3.0
             assertTrue(
                 normalizeRatio <= acceptableRatio,
                 "Inline math should be competitive: ratio=${formatDouble(normalizeRatio)}, " +

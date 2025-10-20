@@ -53,11 +53,12 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 - ✅ Wire WebGPU texture sampling (albedo, normal) through `FRAGMENT_BINDINGS`/`FRAGMENT_INIT_EXTRA` overrides and shared descriptor metadata.
 - ✅ Reflect texture bindings into Vulkan/SPIR-V material pipelines once layout negotiation is mirrored.
 
-### M3. Geometry & Attribute Pipeline (In Progress)
+- ### M3. Geometry & Attribute Pipeline (In Progress)
 - Implement geometry builder that maps Three.js BufferGeometry semantics to GPU buffers.
 - Support interleaved and deinterleaved layouts, instanced attributes, morph targets, skeletal weights.
 - Add buffer suballocation and orphaning strategies for dynamic attributes.
 - ✅ Surface GeometryMetadata + attribute requirements to Vulkan vertex input layouts and harmonise WebGPU/Vulkan pipeline selection.
+- ✅ Integrate morph target blending into Vulkan vertex shader generation, consuming GeometryMetadata.morphTargetCount.
 
 ### M4. Render Loop & Scene Management
 - Scene traversal identical to Three.js (layers, visibility, frustum culling).

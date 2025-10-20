@@ -129,6 +129,8 @@ private object BuiltInMaterialChunks {
                     baseColor: vec4<f32>,
                     pbrParams: vec4<f32>,
                     cameraPosition: vec4<f32>,
+                    morphInfluences0: vec4<f32>,
+                    morphInfluences1: vec4<f32>,
                 };
 
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -162,13 +164,15 @@ private object BuiltInMaterialChunks {
                 @vertex
                 fn vs_main(in: VertexInput) -> BasicVertexOutput {
                     var out: BasicVertexOutput;
-                    let worldPosition = uniforms.modelMatrix * vec4<f32>(in.position, 1.0);
+                    var position = in.position;
+                    var normal = in.normal;
+                    var vertexColor = in.color;
+                    {{VERTEX_ASSIGN_EXTRA}}
+                    let worldPosition = uniforms.modelMatrix * vec4<f32>(position, 1.0);
                     let viewPosition = uniforms.viewMatrix * worldPosition;
                     out.position = uniforms.projectionMatrix * viewPosition;
-                    let vertexColor = in.color;
                     let materialColor = uniforms.baseColor.rgb;
                     out.color = materialColor * vertexColor;
-                    {{VERTEX_ASSIGN_EXTRA}}
                     return out;
                 }
             """.trimIndent()
@@ -230,7 +234,12 @@ private object BuiltInMaterialChunks {
                 @vertex
                 fn vs_main(in: PbrVertexInput) -> PbrVertexOutput {
                     var out: PbrVertexOutput;
-                    let worldPosition = uniforms.modelMatrix * vec4<f32>(in.position, 1.0);
+                    var position = in.position;
+                    var normal = in.normal;
+                    var vertexColor = max(in.color, vec3<f32>(1.0));
+                    {{VERTEX_ASSIGN_EXTRA}}
+
+                    let worldPosition = uniforms.modelMatrix * vec4<f32>(position, 1.0);
                     let viewPosition = uniforms.viewMatrix * worldPosition;
                     out.position = uniforms.projectionMatrix * viewPosition;
 
@@ -239,15 +248,13 @@ private object BuiltInMaterialChunks {
                         uniforms.modelMatrix[1].xyz,
                         uniforms.modelMatrix[2].xyz
                     );
-                    out.worldNormal = normalize(normalMatrix * in.normal);
+                    out.worldNormal = normalize(normalMatrix * normal);
 
                     let cameraPos = uniforms.cameraPosition.xyz;
                     out.viewDir = cameraPos - worldPosition.xyz;
 
                     let materialColor = uniforms.baseColor.rgb;
-                    let vertexColor = max(in.color, vec3<f32>(1.0));
                     out.albedo = materialColor * vertexColor;
-                    {{VERTEX_ASSIGN_EXTRA}}
                     return out;
                 }
             """.trimIndent()

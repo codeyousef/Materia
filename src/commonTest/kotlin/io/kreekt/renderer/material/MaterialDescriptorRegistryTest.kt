@@ -41,7 +41,7 @@ class MaterialDescriptorRegistryTest {
         val descriptor = MaterialDescriptorRegistry.descriptorFor(material)
         assertNotNull(descriptor)
         assertEquals("material.basic", descriptor.key)
-        assertEquals(240, MaterialDescriptorRegistry.uniformBlockSizeBytes())
+        assertEquals(272, MaterialDescriptorRegistry.uniformBlockSizeBytes())
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.POSITION))
         assertTrue(descriptor.requiredAttributes.contains(GeometryAttribute.NORMAL))
         assertEquals(setOf(1), descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP))

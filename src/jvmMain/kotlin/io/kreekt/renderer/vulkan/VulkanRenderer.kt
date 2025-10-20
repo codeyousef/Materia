@@ -60,8 +60,9 @@ import org.lwjgl.vulkan.*
 import org.lwjgl.vulkan.VK12.*
 import org.lwjgl.vulkan.KHRSwapchain.*
 import kotlin.system.measureTimeMillis
-import kotlin.math.roundToInt
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import java.util.Locale
 
 /**
@@ -539,13 +540,20 @@ class VulkanRenderer(
                         aoIntensity
                     )
 
+                    val morphInfluenceSource = drawInfo.mesh.morphTargetInfluences
+                        ?: (drawInfo.mesh.userData["morphTargetInfluences"] as? MutableList<Float>)
+                    val morphInfluences = FloatArray(MAX_MORPH_TARGETS) { index ->
+                        morphInfluenceSource?.getOrNull(index) ?: 0f
+                    }
+
                     updateUniformBuffer(
                         projectionMatrix,
                         viewMatrix,
                         modelMatrix,
                         baseColor,
                         pbrParams,
-                        cameraPositionVector
+                        cameraPositionVector,
+                        morphInfluences
                     )
 
                     val pipelineLayout = pipelineForDraw.getPipelineLayout()
@@ -788,7 +796,8 @@ class VulkanRenderer(
             model = identity,
             baseColor = floatArrayOf(1f, 1f, 1f, 1f),
             pbrParams = floatArrayOf(1f, 0f, 0f, 1f),
-            cameraPosition = floatArrayOf(0f, 0f, 0f, 1f)
+            cameraPosition = floatArrayOf(0f, 0f, 0f, 1f),
+            morphInfluences = FloatArray(MAX_MORPH_TARGETS)
         )
     }
 
@@ -974,7 +983,8 @@ class VulkanRenderer(
         model: Matrix4,
         baseColor: FloatArray,
         pbrParams: FloatArray,
-        cameraPosition: FloatArray
+        cameraPosition: FloatArray,
+        morphInfluences: FloatArray
     ) {
         val bufferMgr = bufferManager ?: return
         val buffer = uniformBuffer ?: return
@@ -1000,6 +1010,9 @@ class VulkanRenderer(
         putVec4(baseColor)
         putVec4(pbrParams)
         putVec4(cameraPosition)
+        for (i in 0 until MAX_MORPH_TARGETS) {
+            byteBuffer.putFloat(morphInfluences.getOrElse(i) { 0f })
+        }
 
         bufferMgr.updateUniformBuffer(buffer, bytes)
     }
@@ -1025,9 +1038,10 @@ class VulkanRenderer(
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
-        private const val UNIFORM_BUFFER_SIZE = 240
+        private const val UNIFORM_BUFFER_SIZE = 272
         private const val MAX_PIPELINE_CACHE_SIZE = 32
         private const val MAX_MATERIAL_TEXTURE_SETS = 256
+        private const val MAX_MORPH_TARGETS = 8
     }
 
     private fun determineClearColor(scene: Scene): Color {
@@ -1436,7 +1450,9 @@ class VulkanRenderer(
         val usesAmbientOcclusionMap: Boolean,
         val usesEnvironmentMaps: Boolean,
         val usesInstancing: Boolean,
-        val usesSecondaryUv: Boolean
+        val usesSecondaryUv: Boolean,
+        val morphTargetCount: Int,
+        val usesMorphNormals: Boolean
     )
 
     private data class ShaderProgramConfig(
@@ -1603,6 +1619,13 @@ class VulkanRenderer(
         val tangentBinding = metadata.bindingFor(GeometryAttribute.TANGENT)
         val uvBinding = metadata.bindingFor(GeometryAttribute.UV0)
         val uv2Binding = metadata.bindingFor(GeometryAttribute.UV1)
+        val morphPositionBindings = metadata.bindings
+            .filter { it.attribute == GeometryAttribute.MORPH_POSITION }
+            .sortedBy { it.location }
+        val morphNormalBindings = metadata.bindings
+            .filter { it.attribute == GeometryAttribute.MORPH_NORMAL }
+            .sortedBy { it.location }
+        val morphCount = min(features.morphTargetCount, morphPositionBindings.size)
 
         val hasNormalAttr = normalBinding != null
         val hasColorAttr = colorBinding != null
@@ -1612,6 +1635,8 @@ class VulkanRenderer(
 
         val declaredLocations = mutableSetOf(positionBinding.location)
         val instanceAttributeNames = mutableListOf<String>()
+        val morphPositionInputs = mutableListOf<String>()
+        val morphNormalInputs = mutableListOf<String>()
 
         fun declareInput(builder: StringBuilder, location: Int, glslType: String, name: String) {
             if (declaredLocations.add(location)) {
@@ -1638,6 +1663,17 @@ class VulkanRenderer(
                 declareInput(this, uv2Binding!!.location, "vec2", "inUV2")
             }
 
+            morphPositionBindings.take(morphCount).forEachIndexed { index, binding ->
+                val attrName = "inMorphPosition$index"
+                declareInput(this, binding.location, "vec3", attrName)
+                morphPositionInputs += attrName
+            }
+            morphNormalBindings.take(morphCount).forEachIndexed { index, binding ->
+                val attrName = "inMorphNormal$index"
+                declareInput(this, binding.location, "vec3", attrName)
+                morphNormalInputs += attrName
+            }
+
             if (features.usesInstancing) {
                 val instanceAttributes = vertexLayouts
                     .filter { it.stepMode == VertexStepMode.INSTANCE }
@@ -1661,8 +1697,10 @@ class VulkanRenderer(
             appendLine("layout(location = 2) out vec3 vNormal;")
             appendLine("layout(location = 3) out vec3 vTangent;")
             appendLine("layout(location = 4) out vec3 vBitangent;")
-            appendLine("layout(location = 5) out vec3 vWorldPos;")
+        appendLine("layout(location = 5) out vec3 vWorldPos;")
+        if (features.usesSecondaryUv) {
             appendLine("layout(location = 6) out vec2 vUV2;")
+        }
             appendLine()
             appendLine("layout(set = 0, binding = 0) uniform UniformBufferObject {")
             appendLine("    mat4 uProjection;")
@@ -1671,6 +1709,8 @@ class VulkanRenderer(
             appendLine("    vec4 uBaseColor;")
             appendLine("    vec4 uPbrParams;")
             appendLine("    vec4 uCameraPosition;")
+            appendLine("    vec4 uMorphInfluences0;")
+            appendLine("    vec4 uMorphInfluences1;")
             appendLine("} ubo;")
             appendLine()
             appendLine("void main() {")
@@ -1687,15 +1727,36 @@ class VulkanRenderer(
             } else {
                 appendLine("    mat4 modelMatrix = ubo.uModel;")
             }
-            appendLine("    vec4 worldPosition = modelMatrix * vec4(inPosition, 1.0);")
-            appendLine("    gl_Position = ubo.uProjection * ubo.uView * worldPosition;")
+            appendLine("    vec4 worldPosition;")
             appendLine("    mat3 normalMatrix = transpose(inverse(mat3(modelMatrix)));")
             appendLine(
-                "    vec3 normal = normalize(normalMatrix * ${
+                "    vec3 baseNormal = normalize(normalMatrix * ${
                     if (hasNormalAttr) "inNormal" else "vec3(0.0, 0.0, 1.0)"
                 });"
             )
-            appendLine("    if (length(normal) < 1e-5) normal = vec3(0.0, 0.0, 1.0);")
+            appendLine("    if (length(baseNormal) < 1e-5) baseNormal = vec3(0.0, 0.0, 1.0);")
+            appendLine("    vec3 blendedPosition = inPosition;")
+            appendLine("    vec3 blendedNormal = baseNormal;")
+            if (morphCount > 0) {
+                appendLine("    vec4 morphInfluences0 = ubo.uMorphInfluences0;")
+                appendLine("    vec4 morphInfluences1 = ubo.uMorphInfluences1;")
+                appendLine("    float morphInfluences[$MAX_MORPH_TARGETS];")
+                val component = arrayOf("x", "y", "z", "w")
+                for (i in 0 until MAX_MORPH_TARGETS) {
+                    val source = if (i < 4) "morphInfluences0" else "morphInfluences1"
+                    val comp = component[i % 4]
+                    appendLine("    morphInfluences[$i] = $source.$comp;")
+                }
+                for (index in 0 until morphCount) {
+                    val positionAttr = morphPositionInputs.getOrNull(index) ?: continue
+                    appendLine("    blendedPosition += $positionAttr * morphInfluences[$index];")
+                    val normalAttr = morphNormalInputs.getOrNull(index)
+                    if (normalAttr != null && features.usesMorphNormals) {
+                        appendLine("    blendedNormal += $normalAttr * morphInfluences[$index];")
+                    }
+                }
+            }
+            appendLine("    vec3 normal = normalize(blendedNormal);")
             if (hasTangentAttr) {
                 appendLine("    vec3 tangent = normalize(normalMatrix * inTangent.xyz);")
                 appendLine("    float handedness = inTangent.w == 0.0 ? 1.0 : inTangent.w;")
@@ -1714,10 +1775,15 @@ class VulkanRenderer(
             )
             appendLine("    vColor = vertexColor;")
             appendLine("    vUV = uv;")
-            appendLine("    vUV2 = ${if (hasUv2Attr) "inUV2" else "uv"};")
+            if (features.usesSecondaryUv) {
+                appendLine("    vUV2 = ${if (hasUv2Attr) "inUV2" else "uv"};")
+            }
             appendLine("    vNormal = normal;")
             appendLine("    vTangent = tangent;")
             appendLine("    vBitangent = bitangent;")
+            appendLine("    vec4 localPosition = vec4(blendedPosition, 1.0);")
+            appendLine("    worldPosition = modelMatrix * localPosition;")
+            appendLine("    gl_Position = ubo.uProjection * ubo.uView * worldPosition;")
             appendLine("    vWorldPos = worldPosition.xyz;")
             appendLine("}")
         }
@@ -1768,6 +1834,8 @@ class VulkanRenderer(
         sb.appendLine("    vec4 uBaseColor;")
         sb.appendLine("    vec4 uPbrParams;")
         sb.appendLine("    vec4 uCameraPosition;")
+        sb.appendLine("    vec4 uMorphInfluences0;")
+        sb.appendLine("    vec4 uMorphInfluences1;")
         sb.appendLine("} ubo;")
         sb.appendLine()
 
@@ -1916,6 +1984,10 @@ class VulkanRenderer(
         val brdfPair = bindingPair(environmentBindingLookup, MaterialBindingSource.ENVIRONMENT_BRDF)
         val usesEnvironment = hasEnvironmentBinding && prefilterPair != null && brdfPair != null
 
+        val morphTargetCount = min(metadata.morphTargetCount, MAX_MORPH_TARGETS)
+        val usesMorphNormals = metadata.bindings.any { it.attribute == GeometryAttribute.MORPH_NORMAL }
+        val usesSecondaryUv = hasUv2
+
         val features = MaterialPipelineFeatures(
             usesAlbedoMap = usesAlbedoMap,
             usesNormalMap = usesNormalMap,
@@ -1924,7 +1996,9 @@ class VulkanRenderer(
             usesAmbientOcclusionMap = usesAoMap,
             usesEnvironmentMaps = usesEnvironment,
             usesInstancing = metadata.isInstanced,
-            usesSecondaryUv = hasUv2
+            usesSecondaryUv = usesSecondaryUv,
+            morphTargetCount = morphTargetCount,
+            usesMorphNormals = usesMorphNormals
         )
 
         val vertexSource = composeVertexShader(
