@@ -1,10 +1,21 @@
 package io.kreekt.gpu
 
+import io.kreekt.renderer.gpu.GpuBuffer as RendererGpuBuffer
+import io.kreekt.renderer.gpu.GpuContext as RendererGpuContext
+import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
+import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
+import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
+import io.kreekt.renderer.gpu.unwrapHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private const val PLACEHOLDER_VENDOR = "KreeKt"
-private const val PLACEHOLDER_DRIVER = "mvp-placeholder"
+import org.lwjgl.system.MemoryStack
+import org.lwjgl.system.MemoryUtil
+import org.lwjgl.vulkan.VK10.VK_SUCCESS
+import org.lwjgl.vulkan.VK10.vkDestroyBuffer
+import org.lwjgl.vulkan.VK10.vkFreeMemory
+import org.lwjgl.vulkan.VK10.vkMapMemory
+import org.lwjgl.vulkan.VK10.vkUnmapMemory
+import org.lwjgl.vulkan.VkDevice
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
     withContext(Dispatchers.Default) {
@@ -18,14 +29,16 @@ actual class GpuInstance actual constructor(
 
     actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter =
         ensureActive {
-            val backend = descriptor.preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU
-            val info = GpuAdapterInfo(
-                name = "Placeholder $backend Adapter",
-                vendor = PLACEHOLDER_VENDOR,
-                architecture = "virtual",
-                driverVersion = PLACEHOLDER_DRIVER
+            val config = descriptor.toRendererConfig(options)
+            val rendererContext = RendererGpuDeviceFactory.requestContext(config)
+            val adapterInfo = rendererContext.device.info.toAdapterInfo()
+            val adapter = GpuAdapter(
+                backend = rendererContext.device.backend.toGpuBackend(),
+                options = options,
+                info = adapterInfo
             )
-            GpuAdapter(backend, options, info)
+            adapter.attachContext(rendererContext)
+            adapter
         }
 
     actual fun dispose() {
@@ -43,20 +56,41 @@ actual class GpuAdapter actual constructor(
     actual val options: GpuRequestAdapterOptions,
     actual val info: GpuAdapterInfo
 ) {
+    private lateinit var rendererContext: RendererGpuContext
+
+    internal fun attachContext(context: RendererGpuContext) {
+        rendererContext = context
+    }
+
+    internal fun context(): RendererGpuContext =
+        if (::rendererContext.isInitialized) rendererContext
+        else error("Renderer context not attached to adapter")
+
     actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice =
-        withContext(Dispatchers.Default) {
-            GpuDevice(this@GpuAdapter, descriptor)
-        }
+        GpuDevice(this, descriptor).also { it.attachContext(context()) }
 }
 
 actual class GpuDevice actual constructor(
     actual val adapter: GpuAdapter,
     actual val descriptor: GpuDeviceDescriptor
 ) {
-    actual val queue: GpuQueue = GpuQueue(label = descriptor.label)
+    private lateinit var rendererContext: RendererGpuContext
 
-    actual fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer =
-        GpuBuffer(this, descriptor)
+    private val rendererDevice: RendererGpuDevice
+        get() = rendererContext.device
+
+    internal fun attachContext(context: RendererGpuContext) {
+        rendererContext = context
+        queue.attachQueue(context.queue)
+    }
+
+    actual val queue: GpuQueue = GpuQueue(descriptor.label)
+
+    actual fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer {
+        val rendererDescriptor = descriptor.toRendererDescriptor()
+        val rendererBuffer = rendererDevice.createBuffer(rendererDescriptor, null)
+        return GpuBuffer(this, descriptor).apply { attach(rendererBuffer) }
+    }
 
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture =
         GpuTexture(this, descriptor)
@@ -77,16 +111,42 @@ actual class GpuDevice actual constructor(
         GpuComputePipeline(this, descriptor)
 
     actual fun destroy() {
-        // Nothing to release in the placeholder implementation.
+        // Renderer context lifecycle is managed externally (RendererFactory). No-op here.
+    }
+
+    internal fun mapAndCopy(buffer: RendererGpuBuffer, data: ByteArray, byteOffset: Long) {
+        val handle = rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for buffer writes")
+        MemoryStack.stackPush().use { stack ->
+            val pointerBuffer = stack.mallocPointer(1)
+            val result = vkMapMemory(handle, buffer.memory, byteOffset, data.size.toLong(), 0, pointerBuffer)
+            check(result == VK_SUCCESS) { "vkMapMemory failed with error code $result" }
+            val mappedPtr = pointerBuffer[0]
+            val target = MemoryUtil.memByteBuffer(mappedPtr, data.size)
+            target.put(data)
+            target.flip()
+            vkUnmapMemory(handle, buffer.memory)
+        }
+    }
+
+    internal fun destroyBuffer(buffer: RendererGpuBuffer) {
+        val handle = rendererDevice.unwrapHandle() as? VkDevice
+            ?: return
+        vkDestroyBuffer(handle, buffer.buffer, null)
+        vkFreeMemory(handle, buffer.memory, null)
     }
 }
 
 actual class GpuQueue actual constructor(
     actual val label: String?
 ) {
+    internal fun attachQueue(queue: RendererGpuQueue) {
+        // Queue linkage will be wired once renderer submissions are exposed through the abstraction.
+    }
+
     actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
-        // Placeholder no-op submission.
-        commandBuffers.forEach { _ -> }
+        // Submission path is not yet wired through the renderer abstractions for JVM.
+        // Intentionally no-op for the MVP scaffolding.
     }
 }
 
@@ -116,9 +176,6 @@ actual class GpuSurface actual constructor(
         val descriptor = GpuTextureDescriptor(
             label = "${label ?: "surface"}-frame-${frameCounter++}",
             size = Triple(config.width, config.height, 1),
-            mipLevelCount = 1,
-            sampleCount = 1,
-            dimension = GpuTextureDimension.D2,
             format = config.format,
             usage = config.usage
         )
@@ -140,35 +197,36 @@ actual class GpuBuffer actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuBufferDescriptor
 ) {
-    private val storage = ByteArray(descriptor.size.toInt())
+    private lateinit var rendererBuffer: RendererGpuBuffer
 
     actual fun write(data: ByteArray, offset: Int) {
+        check(::rendererBuffer.isInitialized) { "Renderer buffer not attached" }
         require(offset >= 0) { "Offset must be >= 0" }
-        require(offset + data.size <= storage.size) {
-            "Write range exceeds buffer size (offset=$offset, data=${data.size}, capacity=${storage.size})"
-        }
-        data.copyInto(storage, destinationOffset = offset, endIndex = data.size)
+        val byteOffset = offset.toLong()
+        device.mapAndCopy(rendererBuffer, data, byteOffset)
     }
 
     actual fun writeFloats(data: FloatArray, offset: Int) {
-        var byteOffset = offset * Float.SIZE_BYTES
-        val requiredBytes = data.size * Float.SIZE_BYTES
-        require(byteOffset >= 0) { "Offset must be >= 0" }
-        require(byteOffset + requiredBytes <= storage.size) {
-            "Write range exceeds buffer size (offset=$byteOffset, dataBytes=$requiredBytes, capacity=${storage.size})"
-        }
+        val byteArray = ByteArray(data.size * Float.SIZE_BYTES)
+        var position = 0
         data.forEach { value ->
             val bits = value.toRawBits()
-            storage[byteOffset++] = (bits and 0xFF).toByte()
-            storage[byteOffset++] = ((bits shr 8) and 0xFF).toByte()
-            storage[byteOffset++] = ((bits shr 16) and 0xFF).toByte()
-            storage[byteOffset++] = ((bits shr 24) and 0xFF).toByte()
+            byteArray[position++] = (bits and 0xFF).toByte()
+            byteArray[position++] = ((bits shr 8) and 0xFF).toByte()
+            byteArray[position++] = ((bits shr 16) and 0xFF).toByte()
+            byteArray[position++] = ((bits shr 24) and 0xFF).toByte()
         }
+        write(byteArray, offset * Float.SIZE_BYTES)
     }
 
     actual fun destroy() {
-        // Placeholder no-op
-        storage.fill(0)
+        if (::rendererBuffer.isInitialized) {
+            device.destroyBuffer(rendererBuffer)
+        }
+    }
+
+    internal fun attach(buffer: RendererGpuBuffer) {
+        rendererBuffer = buffer
     }
 }
 
@@ -180,7 +238,7 @@ actual class GpuTexture actual constructor(
         GpuTextureView(this, descriptor)
 
     actual fun destroy() {
-        // Placeholder no-op
+        // Textures not yet backed by renderer resources on JVM.
     }
 }
 
@@ -239,21 +297,11 @@ actual class GpuRenderPassEncoder actual constructor(
     actual val encoder: GpuCommandEncoder,
     actual val descriptor: GpuRenderPassDescriptor
 ) {
-    private val recordedCalls = mutableListOf<String>()
+    actual fun setPipeline(pipeline: GpuRenderPipeline) {}
 
-    actual fun setPipeline(pipeline: GpuRenderPipeline) {
-        recordedCalls += "setPipeline:${pipeline.descriptor.label ?: "pipeline"}"
-    }
+    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {}
 
-    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {
-        recordedCalls += "setVertexBuffer:$slot:${buffer.descriptor.label ?: "buffer"}"
-    }
+    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {}
 
-    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {
-        recordedCalls += "draw:$vertexCount:$instanceCount:$firstVertex:$firstInstance"
-    }
-
-    actual fun end() {
-        recordedCalls.clear()
-    }
+    actual fun end() {}
 }

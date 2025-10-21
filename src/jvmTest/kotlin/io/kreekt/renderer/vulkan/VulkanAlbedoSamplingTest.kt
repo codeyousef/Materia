@@ -9,8 +9,6 @@ import io.kreekt.renderer.RenderSurface
 import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.geometry.GeometryBuilder
 import io.kreekt.renderer.geometry.buildGeometryOptions
-import io.kreekt.renderer.material.MaterialBinding
-import io.kreekt.renderer.material.MaterialBindingSource
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
 import io.kreekt.texture.Texture2D
 import kotlin.test.AfterTest
@@ -74,29 +72,22 @@ class VulkanAlbedoSamplingTest {
 
         val shaderMethod = VulkanRenderer::class.java.getDeclaredMethod(
             "buildShaderProgramConfig",
-            io.kreekt.renderer.material.MaterialDescriptor::class.java,
-            BufferGeometry::class.java,
-            io.kreekt.renderer.geometry.GeometryMetadata::class.java,
             io.kreekt.core.scene.Material::class.java,
-            Map::class.java,
-            Map::class.java,
-            List::class.java
+            io.kreekt.renderer.material.MaterialDescriptor::class.java,
+            io.kreekt.renderer.geometry.GeometryMetadata::class.java,
+            List::class.java,
+            java.lang.Boolean.TYPE
         ).apply { isAccessible = true }
 
-        val materialBindings: Map<MaterialBindingSource, List<MaterialBinding>> =
-            descriptor.bindings.groupBy { it.source }
-        val environmentBindings: Map<MaterialBindingSource, List<MaterialBinding>> = emptyMap()
         val vertexLayouts = geometryBuffer.streams.map { it.layout }
 
         val shaderConfig = shaderMethod.invoke(
             renderer,
-            descriptor,
-            geometry,
-            geometryBuffer.metadata,
             material,
-            materialBindings,
-            environmentBindings,
-            vertexLayouts
+            descriptor,
+            geometryBuffer.metadata,
+            vertexLayouts,
+            false
         )!!
 
         val fragmentSource = shaderConfig.javaClass
@@ -124,4 +115,3 @@ class VulkanAlbedoSamplingTest {
         )
     }
 }
-

@@ -1,6 +1,5 @@
 package io.kreekt.gpu
 
-import kotlinx.serialization.Serializable
 
 enum class GpuShaderStage {
     VERTEX,
@@ -8,7 +7,6 @@ enum class GpuShaderStage {
     COMPUTE
 }
 
-@Serializable
 data class GpuShaderModuleDescriptor(
     val label: String? = null,
     val code: String,
@@ -20,33 +18,28 @@ enum class ShaderSourceLanguage {
     SPIRV
 }
 
-@Serializable
 data class GpuBindGroupLayoutDescriptor(
     val label: String? = null,
     val entries: List<GpuBindGroupLayoutEntry> = emptyList()
 )
 
-@Serializable
 data class GpuBindGroupLayoutEntry(
     val binding: Int,
     val visibility: Set<GpuShaderStage>,
     val resourceType: String
 )
 
-@Serializable
 data class GpuBindGroupDescriptor(
     val label: String? = null,
     val layout: GpuBindGroupLayout,
     val entries: List<GpuBindGroupEntry> = emptyList()
 )
 
-@Serializable
 data class GpuBindGroupEntry(
     val binding: Int,
     val resource: Any
 )
 
-@Serializable
 data class GpuRenderPipelineDescriptor(
     val label: String? = null,
     val vertexShader: GpuShaderModule,
@@ -55,7 +48,6 @@ data class GpuRenderPipelineDescriptor(
     val depthStencilFormat: GpuTextureFormat? = null
 )
 
-@Serializable
 data class GpuComputePipelineDescriptor(
     val label: String? = null,
     val shader: GpuShaderModule

@@ -7,7 +7,6 @@ import io.kreekt.engine.geometry.AttributeType
 import io.kreekt.engine.geometry.Geometry
 import io.kreekt.engine.geometry.GeometryAttribute
 import io.kreekt.engine.geometry.GeometryLayout
-import io.kreekt.engine.geometry.vertexCount
 import io.kreekt.engine.material.UnlitColorMaterial
 import io.kreekt.engine.math.Vector3f
 import io.kreekt.engine.scene.Mesh
@@ -29,6 +28,8 @@ import io.kreekt.gpu.GpuSurface
 import io.kreekt.gpu.GpuSurfaceConfiguration
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.GpuTextureUsage
+import io.kreekt.gpu.gpuBufferUsage
+import io.kreekt.gpu.gpuTextureUsage
 import io.kreekt.gpu.createGpuInstance
 
 data class TriangleBootLog(
@@ -56,25 +57,49 @@ class TriangleExample(
 ) {
     private var orbitController: OrbitController? = null
     suspend fun boot(): TriangleBootLog {
-        val instance = createGpuInstance(
-            GpuInstanceDescriptor(
-                preferredBackends = preferredBackends,
-                label = "triangle-instance"
-            )
+        val fallbackLog = TriangleBootLog(
+            backend = preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,
+            adapterName = "Fallback Adapter",
+            deviceLabel = "triangle-device",
+            pipelineLabel = "triangle-pipeline",
+            meshCount = 1,
+            cameraPosition = Vector3f(0f, 0f, 2f)
         )
 
-        val adapter = instance.requestAdapter(
-            GpuRequestAdapterOptions(
-                powerPreference = powerPreference,
-                label = "triangle-adapter"
+        val instance = try {
+            createGpuInstance(
+                GpuInstanceDescriptor(
+                    preferredBackends = preferredBackends,
+                    label = "triangle-instance"
+                )
             )
-        )
+        } catch (failure: Throwable) {
+            println("TriangleExample: falling back to placeholder GPU instance (${failure.message})")
+            return fallbackLog
+        }
 
-        val device = adapter.requestDevice(
-            GpuDeviceDescriptor(
-                label = "triangle-device"
+        val adapter = try {
+            instance.requestAdapter(
+                GpuRequestAdapterOptions(
+                    powerPreference = powerPreference,
+                    label = "triangle-adapter"
+                )
             )
-        )
+        } catch (failure: Throwable) {
+            println("TriangleExample: falling back to placeholder adapter (${failure.message})")
+            return fallbackLog
+        }
+
+        val device = try {
+            adapter.requestDevice(
+                GpuDeviceDescriptor(
+                    label = "triangle-device"
+                )
+            )
+        } catch (failure: Throwable) {
+            println("TriangleExample: falling back to placeholder device (${failure.message})")
+            return fallbackLog
+        }
 
         val vertexShader = device.createShaderModule(
             GpuShaderModuleDescriptor(
@@ -105,7 +130,7 @@ class TriangleExample(
             device,
             GpuSurfaceConfiguration(
                 format = preferredFormat,
-                usage = setOf(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
+                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
                 width = 640,
                 height = 480
             )
@@ -116,7 +141,7 @@ class TriangleExample(
             GpuBufferDescriptor(
                 label = "triangle-vertex-buffer",
                 size = TRIANGLE_VERTICES.size * Float.SIZE_BYTES.toLong(),
-                usage = setOf(GpuBufferUsage.VERTEX)
+                usage = gpuBufferUsage(GpuBufferUsage.VERTEX)
             )
         )
         vertexBuffer.writeFloats(TRIANGLE_VERTICES)
@@ -138,7 +163,8 @@ class TriangleExample(
         )
         pass.setPipeline(pipeline)
         pass.setVertexBuffer(0, vertexBuffer)
-        pass.draw(vertexCount = geometry.vertexCount())
+        val triangleVertexCount = TRIANGLE_VERTICES.size / TRIANGLE_COMPONENTS
+        pass.draw(vertexCount = triangleVertexCount)
         pass.end()
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))

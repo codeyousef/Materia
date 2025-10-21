@@ -12,7 +12,7 @@ fun main() {
         val log = example.boot()
         val message = log.pretty()
 
-        console.log(message)
+        println(message)
 
         val pre = (document.createElement("pre") as HTMLPreElement).apply {
             textContent = message

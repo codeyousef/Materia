@@ -43,6 +43,9 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.lwjgl.core)
+                implementation(libs.lwjgl.vulkan)
+                implementation(project(":"))
             }
         }
 

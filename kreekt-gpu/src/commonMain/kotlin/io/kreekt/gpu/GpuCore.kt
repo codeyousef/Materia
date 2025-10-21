@@ -1,6 +1,5 @@
 package io.kreekt.gpu
 
-import kotlinx.serialization.Serializable
 
 /**
  * Primary GPU backend selector. Mirrors WebGPU semantics while allowing Vulkan/MoltenVK adapters.
@@ -22,7 +21,6 @@ enum class GpuPowerPreference {
 /**
  * Descriptor used when instantiating a GPU instance.
  */
-@Serializable
 data class GpuInstanceDescriptor(
     val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
     val label: String? = null
@@ -31,7 +29,6 @@ data class GpuInstanceDescriptor(
 /**
  * Options supplied when requesting an adapter from an instance.
  */
-@Serializable
 data class GpuRequestAdapterOptions(
     val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
     val compatibleSurface: GpuSurface? = null,
@@ -42,7 +39,6 @@ data class GpuRequestAdapterOptions(
 /**
  * Hardware metadata surfaced by the adapter.
  */
-@Serializable
 data class GpuAdapterInfo(
     val name: String,
     val vendor: String? = null,
@@ -53,7 +49,6 @@ data class GpuAdapterInfo(
 /**
  * Descriptor used when creating a logical device.
  */
-@Serializable
 data class GpuDeviceDescriptor(
     val requiredFeatures: Set<String> = emptySet(),
     val requiredLimits: Map<String, Long> = emptyMap(),

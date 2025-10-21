@@ -44,6 +44,10 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 4. **Validation**
    - ✅ Compile-time checks on all targets after renderer refactor.
    - ✅ Diagnostic logging of backend/device capabilities surfaced via the abstraction.
+5. **Remaining work (MVP)**
+   - – Wire the WebGPU (`wasmJs`) actuals to the shared renderer layer once Kotlin/Wasm exposes the required JS interop hooks (current stub remains no-op).
+   - – Expose queue submission / command encoding from the renderer abstractions so the JVM actual can forward real command buffers instead of running in placeholder mode.
+   - – Add regression tests that cover the new converter layer (bitmask descriptors → renderer descriptors) to guard against drift while WebGPU integration is pending.
 
 ### M2. Material & Shader System Parity (In Progress)
 - Port Three.js shader chunks to WGSL and GLSL (SPIR-V) counterparts.

@@ -12,7 +12,7 @@ fun main() {
         ForceGraphApp.warmUp()
 
         val status = ForceGraphApp.statusMessage()
-        console.log(status)
+        println(status)
 
         val paragraph = document.createElement("p") as HTMLParagraphElement
         paragraph.textContent = status

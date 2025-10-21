@@ -1,27 +1,30 @@
 package io.kreekt.gpu
 
-import kotlinx.serialization.Serializable
 
 /**
  * Buffer usage flags mirror WebGPU semantics.
  */
-enum class GpuBufferUsage {
-    MAP_READ,
-    MAP_WRITE,
-    COPY_SRC,
-    COPY_DST,
-    INDEX,
-    VERTEX,
-    UNIFORM,
-    STORAGE,
-    INDIRECT
+enum class GpuBufferUsage(internal val mask: Int) {
+    MAP_READ(0x0001),
+    MAP_WRITE(0x0002),
+    COPY_SRC(0x0004),
+    COPY_DST(0x0008),
+    INDEX(0x0010),
+    VERTEX(0x0020),
+    UNIFORM(0x0040),
+    STORAGE(0x0080),
+    INDIRECT(0x0100)
 }
 
-@Serializable
+typealias GpuBufferUsageFlags = Int
+
+fun gpuBufferUsage(vararg usages: GpuBufferUsage): GpuBufferUsageFlags =
+    usages.fold(0) { acc, usage -> acc or usage.mask }
+
 data class GpuBufferDescriptor(
     val label: String? = null,
     val size: Long,
-    val usage: Set<GpuBufferUsage>,
+    val usage: GpuBufferUsageFlags,
     val mappedAtCreation: Boolean = false
 )
 
@@ -41,15 +44,19 @@ enum class GpuTextureDimension {
     D3
 }
 
-enum class GpuTextureUsage {
-    COPY_SRC,
-    COPY_DST,
-    TEXTURE_BINDING,
-    STORAGE_BINDING,
-    RENDER_ATTACHMENT
+enum class GpuTextureUsage(internal val mask: Int) {
+    COPY_SRC(0x01),
+    COPY_DST(0x02),
+    TEXTURE_BINDING(0x04),
+    STORAGE_BINDING(0x08),
+    RENDER_ATTACHMENT(0x10)
 }
 
-@Serializable
+typealias GpuTextureUsageFlags = Int
+
+fun gpuTextureUsage(vararg usages: GpuTextureUsage): GpuTextureUsageFlags =
+    usages.fold(0) { acc, usage -> acc or usage.mask }
+
 data class GpuTextureDescriptor(
     val label: String? = null,
     val size: Triple<Int, Int, Int>,
@@ -57,10 +64,9 @@ data class GpuTextureDescriptor(
     val sampleCount: Int = 1,
     val dimension: GpuTextureDimension = GpuTextureDimension.D2,
     val format: GpuTextureFormat,
-    val usage: Set<GpuTextureUsage>
+    val usage: GpuTextureUsageFlags
 )
 
-@Serializable
 data class GpuTextureViewDescriptor(
     val label: String? = null,
     val format: GpuTextureFormat? = null,
@@ -74,7 +80,6 @@ enum class GpuFilterMode { NEAREST, LINEAR }
 enum class GpuMipmapFilterMode { NEAREST, LINEAR }
 enum class GpuAddressMode { CLAMP_TO_EDGE, REPEAT, MIRROR_REPEAT }
 
-@Serializable
 data class GpuSamplerDescriptor(
     val label: String? = null,
     val addressModeU: GpuAddressMode = GpuAddressMode.CLAMP_TO_EDGE,
@@ -82,13 +87,14 @@ data class GpuSamplerDescriptor(
     val addressModeW: GpuAddressMode = GpuAddressMode.CLAMP_TO_EDGE,
     val magFilter: GpuFilterMode = GpuFilterMode.LINEAR,
     val minFilter: GpuFilterMode = GpuFilterMode.LINEAR,
-    val mipmapFilter: GpuMipmapFilterMode = GpuMipmapFilterMode.NEAREST
+    val mipmapFilter: GpuMipmapFilterMode = GpuMipmapFilterMode.NEAREST,
+    val lodMinClamp: Float = 0f,
+    val lodMaxClamp: Float = 32f
 )
 
-@Serializable
 data class GpuSurfaceConfiguration(
     val format: GpuTextureFormat,
-    val usage: Set<GpuTextureUsage>,
+    val usage: GpuTextureUsageFlags,
     val width: Int,
     val height: Int,
     val presentMode: String = "fifo"

@@ -212,6 +212,7 @@ class VulkanRenderer(
                         getPhysicalDeviceInfo(vkPhysicalDevice),
                         "Failed to create command pool"
                     )
+                )
             }
             println("T033: Command pool created successfully")
 
@@ -859,7 +860,6 @@ class VulkanRenderer(
             mainLightDirection = floatArrayOf(0f, -1f, 0f, 0f),
             mainLightColor = floatArrayOf(0f, 0f, 0f, 0f),
             morphInfluences = FloatArray(MAX_MORPH_TARGETS)
-        )
         )
     }
 
@@ -1825,6 +1825,7 @@ class VulkanRenderer(
                 blend = blendSignature,
                 writeMask = renderState.colorTarget.writeMask
             )
+        )
 
         return PipelineCacheKey(layoutSignature, renderSignature, features)
     }

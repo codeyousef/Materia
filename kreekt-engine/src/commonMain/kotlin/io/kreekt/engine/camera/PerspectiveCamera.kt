@@ -3,6 +3,7 @@ package io.kreekt.engine.camera
 import io.kreekt.engine.math.MatrixOps
 import io.kreekt.engine.math.Vector3f
 import io.kreekt.engine.scene.Node
+import kotlin.math.PI
 import kotlin.math.tan
 
 class PerspectiveCamera(
@@ -21,7 +22,8 @@ class PerspectiveCamera(
     }
 
     fun updateProjection() {
-        val f = 1f / tan(Math.toRadians((fovDegrees / 2f).toDouble())).toFloat()
+        val halfAngleRadians = (fovDegrees * PI / 180.0) / 2.0
+        val f = (1.0 / tan(halfAngleRadians)).toFloat()
         projectionMatrix[0] = f / aspect
         projectionMatrix[1] = 0f
         projectionMatrix[2] = 0f

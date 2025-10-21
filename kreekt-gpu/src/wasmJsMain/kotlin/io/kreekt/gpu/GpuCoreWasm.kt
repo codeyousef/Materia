@@ -62,7 +62,7 @@ actual class GpuDevice actual constructor(
         GpuComputePipeline(this, descriptor)
 
     actual fun destroy() {
-        // Placeholder
+        // Nothing to release in the placeholder implementation.
     }
 }
 
@@ -131,9 +131,7 @@ actual class GpuBuffer actual constructor(
         require(offset + data.size <= storage.size) {
             "Write range exceeds buffer size (offset=$offset, data=${data.size}, capacity=${storage.size})"
         }
-        for (i in data.indices) {
-            storage[offset + i] = data[i]
-        }
+        data.copyInto(storage, destinationOffset = offset, endIndex = data.size)
     }
 
     actual fun writeFloats(data: FloatArray, offset: Int) {
@@ -153,7 +151,6 @@ actual class GpuBuffer actual constructor(
     }
 
     actual fun destroy() {
-        // Placeholder
         storage.fill(0)
     }
 }
@@ -166,7 +163,7 @@ actual class GpuTexture actual constructor(
         GpuTextureView(this, descriptor)
 
     actual fun destroy() {
-        // Placeholder
+        // Placeholder no-op
     }
 }
 
@@ -225,11 +222,21 @@ actual class GpuRenderPassEncoder actual constructor(
     actual val encoder: GpuCommandEncoder,
     actual val descriptor: GpuRenderPassDescriptor
 ) {
-    actual fun setPipeline(pipeline: GpuRenderPipeline) {}
+    private val recordedCalls = mutableListOf<String>()
 
-    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {}
+    actual fun setPipeline(pipeline: GpuRenderPipeline) {
+        recordedCalls += "setPipeline:${pipeline.descriptor.label ?: "pipeline"}"
+    }
 
-    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {}
+    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {
+        recordedCalls += "setVertexBuffer:$slot:${buffer.descriptor.label ?: "buffer"}"
+    }
 
-    actual fun end() {}
+    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {
+        recordedCalls += "draw:$vertexCount:$instanceCount:$firstVertex:$firstInstance"
+    }
+
+    actual fun end() {
+        recordedCalls.clear()
+    }
 }

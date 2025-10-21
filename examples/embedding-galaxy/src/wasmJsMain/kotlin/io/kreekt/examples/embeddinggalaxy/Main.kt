@@ -12,7 +12,7 @@ fun main() {
         EmbeddingGalaxyApp.warmUp()
 
         val status = EmbeddingGalaxyApp.statusMessage()
-        console.log(status)
+        println(status)
 
         val paragraph = document.createElement("p") as HTMLParagraphElement
         paragraph.textContent = status
