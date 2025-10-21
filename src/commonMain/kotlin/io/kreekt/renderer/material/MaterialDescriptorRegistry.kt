@@ -147,7 +147,7 @@ object MaterialDescriptorRegistry {
         name = "Uniforms",
         group = 0,
         binding = 0,
-        sizeBytes = 272,
+        sizeBytes = 352,
         fields = listOf(
             MaterialUniformField("projectionMatrix", MaterialUniformType.MAT4, offset = 0),
             MaterialUniformField("viewMatrix", MaterialUniformType.MAT4, offset = 64),
@@ -155,8 +155,13 @@ object MaterialDescriptorRegistry {
             MaterialUniformField("baseColor", MaterialUniformType.VEC4, offset = 192),
             MaterialUniformField("pbrParams", MaterialUniformType.VEC4, offset = 208),
             MaterialUniformField("cameraPosition", MaterialUniformType.VEC4, offset = 224),
-            MaterialUniformField("morphInfluences0", MaterialUniformType.VEC4, offset = 240),
-            MaterialUniformField("morphInfluences1", MaterialUniformType.VEC4, offset = 256)
+            MaterialUniformField("ambientColor", MaterialUniformType.VEC4, offset = 240),
+            MaterialUniformField("fogColor", MaterialUniformType.VEC4, offset = 256),
+            MaterialUniformField("fogParams", MaterialUniformType.VEC4, offset = 272),
+            MaterialUniformField("mainLightDirection", MaterialUniformType.VEC4, offset = 288),
+            MaterialUniformField("mainLightColor", MaterialUniformType.VEC4, offset = 304),
+            MaterialUniformField("morphInfluences0", MaterialUniformType.VEC4, offset = 320),
+            MaterialUniformField("morphInfluences1", MaterialUniformType.VEC4, offset = 336)
         )
     )
 

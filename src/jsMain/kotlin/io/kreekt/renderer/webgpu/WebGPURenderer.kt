@@ -6,45 +6,24 @@ import io.kreekt.core.math.Color
 import io.kreekt.core.math.Matrix4
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BufferGeometry
+import io.kreekt.lighting.ibl.IBLConvolutionProfiler
+import io.kreekt.lighting.ibl.PrefilterMipSelector
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.MeshStandardMaterial
-import io.kreekt.material.Material as EngineMaterial
-import io.kreekt.lighting.ibl.PrefilterMipSelector
-import io.kreekt.lighting.ibl.IBLConvolutionProfiler
-import io.kreekt.optimization.BoundingBox
 import io.kreekt.optimization.Frustum
 import io.kreekt.renderer.*
-import io.kreekt.renderer.gpu.unwrapHandle
-import io.kreekt.renderer.gpu.GpuBindGroupLayout
-import io.kreekt.renderer.gpu.GpuBackend
-import io.kreekt.renderer.gpu.GpuDeviceFactory
-import io.kreekt.renderer.gpu.GpuDiagnostics
-import io.kreekt.renderer.gpu.GpuPowerPreference
-import io.kreekt.renderer.gpu.GpuRequestConfig
-import io.kreekt.renderer.gpu.unwrapHandleAdapter
 import io.kreekt.renderer.geometry.GeometryAttribute
-import io.kreekt.renderer.geometry.GeometryBuildOptions
 import io.kreekt.renderer.geometry.GeometryMetadata
 import io.kreekt.renderer.geometry.buildGeometryOptions
-import io.kreekt.renderer.material.MaterialBindingSource
-import io.kreekt.renderer.material.MaterialDescriptor
-import io.kreekt.renderer.material.MaterialDescriptorRegistry
-import io.kreekt.renderer.material.bindingGroups
-import io.kreekt.renderer.material.requiresBinding
-import io.kreekt.renderer.material.ResolvedMaterialDescriptor
-import io.kreekt.renderer.material.MaterialBindingType
+import io.kreekt.renderer.gpu.*
+import io.kreekt.renderer.lighting.SceneLightingUniforms
+import io.kreekt.renderer.lighting.collectSceneLightingUniforms
+import io.kreekt.renderer.material.*
 import io.kreekt.renderer.shader.MaterialShaderDescriptor
 import io.kreekt.renderer.shader.MaterialShaderGenerator
 import io.kreekt.renderer.shader.withOverrides
-import io.kreekt.renderer.webgpu.GPUCommandBuffer
-import io.kreekt.renderer.webgpu.GPUCommandEncoder
-import io.kreekt.renderer.webgpu.GPUBindGroup
-import io.kreekt.renderer.webgpu.GPUPipelineLayout
-import io.kreekt.renderer.webgpu.MaterialTextureBinding
-import io.kreekt.renderer.webgpu.WebGPUMaterialTextureManager
 import org.w3c.dom.HTMLCanvasElement
-import kotlin.js.jsTypeOf
+import io.kreekt.material.Material as EngineMaterial
 
 /**
  * Main WebGPU renderer class implementing the Renderer interface.
@@ -407,7 +386,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             ensureDepthTexture(canvas.width, canvas.height)
             val depthView = depthTextureView
             if (depthView == null) {
-                console.warn("⚠️ Depth texture unavailable; rendering without depth buffer")
+                console.warn("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Depth texture unavailable; rendering without depth buffer")
             }
 
             // Create command encoder
@@ -445,12 +424,13 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // T009: Render scene with frustum culling
             val sceneBrdf = scene.environmentBrdfLut as? Texture2D
+            val lightingUniforms = collectSceneLightingUniforms(scene)
             val environmentBinding = environmentManager.prepare(scene.environment, sceneBrdf)
 
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Traversing scene graph and rendering meshes...")
                     scene.traverse { obj ->
                         if (obj is Mesh) {
-                            renderMesh(obj, camera, renderPass, environmentBinding)
+                            renderMesh(obj, camera, renderPass, environmentBinding, lightingUniforms)
                         }
                     }
             // T020: End render pass using manager
@@ -478,7 +458,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // T021 FIX: Validate buffer capacity was not exceeded
             if (drawIndexInFrame > UniformBufferManager.MAX_MESHES_PER_FRAME) {
-                console.warn("⚠️ T021: Frame rendered $drawIndexInFrame meshes but buffer supports only ${UniformBufferManager.MAX_MESHES_PER_FRAME}")
+                console.warn("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â T021: Frame rendered $drawIndexInFrame meshes but buffer supports only ${UniformBufferManager.MAX_MESHES_PER_FRAME}")
             }
 
             // T010: Log performance metrics (reduced verbosity)
@@ -501,12 +481,13 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         mesh: Mesh,
         camera: Camera,
         renderPass: GPURenderPassEncoder,
-        environmentBinding: EnvironmentBinding?
+        environmentBinding: EnvironmentBinding?,
+        lightingUniforms: SceneLightingUniforms
     ) {
         val maxMeshesPerFrame = UniformBufferManager.MAX_MESHES_PER_FRAME
         if (drawIndexInFrame >= maxMeshesPerFrame) {
             if (drawIndexInFrame == maxMeshesPerFrame) {
-                console.warn("⚠️ T021: Mesh count (${drawIndexInFrame + 1}) exceeds buffer capacity ($maxMeshesPerFrame), skipping remaining meshes this frame")
+                console.warn("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â T021: Mesh count (${drawIndexInFrame + 1}) exceeds buffer capacity ($maxMeshesPerFrame), skipping remaining meshes this frame")
             }
             return
         }
@@ -545,7 +526,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     metalness = material.metalness,
                     envIntensity = material.envMapIntensity,
                     prefilterMipCount = environmentBinding?.mipCount ?: 1,
-                    cameraPosition = cameraPosition
+                    cameraPosition = cameraPosition,
+                    ambientColor = lightingUniforms.ambientColor,
+                    fogColor = lightingUniforms.fogColor,
+                    fogParams = lightingUniforms.fogParams,
+                    mainLightDirection = lightingUniforms.mainLightDirection,
+                    mainLightColor = lightingUniforms.mainLightColor
                 )
                 environmentBinding?.let { statsTracker.recordIBLMaterial(roughness, it.mipCount) }
                 uniforms
@@ -553,15 +539,19 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             is MeshBasicMaterial -> {
                 val baseColor = floatArrayOf(material.color.r, material.color.g, material.color.b, material.opacity)
-                val uniforms = MaterialUniformData(
+                MaterialUniformData(
                     baseColor = baseColor,
                     roughness = 1f,
                     metalness = 0f,
                     envIntensity = 0f,
                     prefilterMipCount = environmentBinding?.mipCount ?: 1,
-                    cameraPosition = cameraPosition
+                    cameraPosition = cameraPosition,
+                    ambientColor = lightingUniforms.ambientColor,
+                    fogColor = lightingUniforms.fogColor,
+                    fogParams = lightingUniforms.fogParams,
+                    mainLightDirection = lightingUniforms.mainLightDirection,
+                    mainLightColor = lightingUniforms.mainLightColor
                 )
-                uniforms
             }
 
             else -> return
@@ -1074,7 +1064,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val texture = WebGPUTexture(device!!, descriptor)
         when (texture.create()) {
             is io.kreekt.core.Result.Error -> {
-                console.error("❌ Failed to create depth texture")
+                console.error("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Failed to create depth texture")
                 depthTexture = null
                 depthTextureView = null
                 depthTextureWidth = 0

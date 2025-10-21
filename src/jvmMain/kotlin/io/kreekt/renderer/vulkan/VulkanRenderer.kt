@@ -9,67 +9,39 @@
 package io.kreekt.renderer.vulkan
 
 import io.kreekt.camera.Camera
+import io.kreekt.core.math.Matrix4
 import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Material
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
-import io.kreekt.core.math.Matrix4
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.renderer.geometry.GeometryAttribute
-import io.kreekt.renderer.geometry.GeometryBuilder
-import io.kreekt.renderer.geometry.GeometryBuildOptions
-import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.material.MeshStandardMaterial
-import io.kreekt.renderer.geometry.GeometryMetadata
-import io.kreekt.renderer.geometry.buildGeometryOptions
-import io.kreekt.renderer.webgpu.VertexAttribute
-import io.kreekt.renderer.webgpu.VertexBufferLayout
-import io.kreekt.renderer.webgpu.VertexFormat
-import io.kreekt.renderer.webgpu.VertexStepMode
-import io.kreekt.renderer.webgpu.PrimitiveTopology
-import io.kreekt.renderer.webgpu.CullMode
-import io.kreekt.renderer.webgpu.FrontFace
-import io.kreekt.renderer.webgpu.TextureFormat
-import io.kreekt.renderer.webgpu.ColorWriteMask
-import io.kreekt.renderer.webgpu.BlendFactor
-import io.kreekt.renderer.webgpu.BlendOperation
-import io.kreekt.renderer.*
-import io.kreekt.renderer.material.MaterialBinding
-import io.kreekt.renderer.material.MaterialBindingSource
-import io.kreekt.renderer.material.MaterialBindingType
-import io.kreekt.renderer.material.MaterialDescriptor
-import io.kreekt.renderer.material.MaterialDescriptorRegistry
-import io.kreekt.renderer.material.MaterialRenderState
-import io.kreekt.renderer.material.requiresBinding
-import io.kreekt.renderer.feature020.*
 import io.kreekt.lighting.ibl.IBLConvolutionProfiler
 import io.kreekt.lighting.ibl.PrefilterMipSelector
-import io.kreekt.renderer.gpu.GpuBackend
-import io.kreekt.renderer.gpu.GpuContext
-import io.kreekt.renderer.gpu.GpuDeviceFactory
-import io.kreekt.renderer.gpu.GpuDiagnostics
-import io.kreekt.renderer.gpu.GpuPowerPreference
-import io.kreekt.renderer.gpu.GpuRequestConfig
-import io.kreekt.renderer.gpu.queueFamilyIndex
-import io.kreekt.renderer.gpu.unwrapDescriptorPool
-import io.kreekt.renderer.gpu.unwrapHandle
-import io.kreekt.renderer.gpu.unwrapInstance
-import io.kreekt.renderer.gpu.unwrapPhysicalHandle
+import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.material.MeshStandardMaterial
+import io.kreekt.renderer.*
+import io.kreekt.renderer.feature020.*
+import io.kreekt.renderer.geometry.GeometryAttribute
+import io.kreekt.renderer.geometry.GeometryBuilder
+import io.kreekt.renderer.geometry.GeometryMetadata
+import io.kreekt.renderer.geometry.buildGeometryOptions
+import io.kreekt.renderer.gpu.*
+import io.kreekt.renderer.lighting.collectSceneLightingUniforms
+import io.kreekt.renderer.material.*
+import io.kreekt.renderer.webgpu.*
+import io.kreekt.renderer.webgpu.TextureFormat
+import org.lwjgl.system.MemoryStack
+import org.lwjgl.system.MemoryUtil
+import org.lwjgl.vulkan.*
+import org.lwjgl.vulkan.KHRSwapchain.*
+import org.lwjgl.vulkan.VK12.*
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.*
 import javax.imageio.ImageIO
-import org.lwjgl.system.MemoryUtil
-import org.lwjgl.system.MemoryStack
-import org.lwjgl.vulkan.*
-import org.lwjgl.vulkan.VK12.*
-import org.lwjgl.vulkan.KHRSwapchain.*
-import kotlin.system.measureTimeMillis
-import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
-import java.util.Locale
+import kotlin.system.measureTimeMillis
 
 /**
  * Vulkan renderer implementation for JVM platform.
@@ -160,6 +132,7 @@ class VulkanRenderer(
     private var lastIblHasRealEnvironment = false
 
     private data class CaptureRequest(val outputPath: String)
+
     private data class CaptureResources(
         val buffer: Long,
         val memory: Long,
@@ -239,7 +212,6 @@ class VulkanRenderer(
                         getPhysicalDeviceInfo(vkPhysicalDevice),
                         "Failed to create command pool"
                     )
-                )
             }
             println("T033: Command pool created successfully")
 
@@ -368,6 +340,7 @@ class VulkanRenderer(
         val environmentMgr = environmentManager
         val sceneEnvironmentBrdf = scene.environmentBrdfLut as? Texture2D
         val sceneEnvironmentBinding = environmentMgr?.prepare(scene.environment, sceneEnvironmentBrdf)
+        val lightingUniforms = collectSceneLightingUniforms(scene)
 
         val drawInfos = mutableListOf<MeshDrawInfo>()
         val retainedIds = mutableSetOf<Int>()
@@ -596,6 +569,11 @@ class VulkanRenderer(
                         baseColor,
                         pbrParams,
                         cameraPositionVector,
+                        lightingUniforms.ambientColor,
+                        lightingUniforms.fogColor,
+                        lightingUniforms.fogParams,
+                        lightingUniforms.mainLightDirection,
+                        lightingUniforms.mainLightColor,
                         morphInfluences
                     )
 
@@ -875,7 +853,13 @@ class VulkanRenderer(
             baseColor = floatArrayOf(1f, 1f, 1f, 1f),
             pbrParams = floatArrayOf(1f, 0f, 0f, 1f),
             cameraPosition = floatArrayOf(0f, 0f, 0f, 1f),
+            ambientColor = floatArrayOf(0f, 0f, 0f, 1f),
+            fogColor = floatArrayOf(0f, 0f, 0f, 0f),
+            fogParams = floatArrayOf(0f, 0f, 0f, 0f),
+            mainLightDirection = floatArrayOf(0f, -1f, 0f, 0f),
+            mainLightColor = floatArrayOf(0f, 0f, 0f, 0f),
             morphInfluences = FloatArray(MAX_MORPH_TARGETS)
+        )
         )
     }
 
@@ -1062,6 +1046,11 @@ class VulkanRenderer(
         baseColor: FloatArray,
         pbrParams: FloatArray,
         cameraPosition: FloatArray,
+        ambientColor: FloatArray,
+        fogColor: FloatArray,
+        fogParams: FloatArray,
+        mainLightDirection: FloatArray,
+        mainLightColor: FloatArray,
         morphInfluences: FloatArray
     ) {
         val bufferMgr = bufferManager ?: return
@@ -1088,6 +1077,11 @@ class VulkanRenderer(
         putVec4(baseColor)
         putVec4(pbrParams)
         putVec4(cameraPosition)
+        putVec4(ambientColor)
+        putVec4(fogColor)
+        putVec4(fogParams)
+        putVec4(mainLightDirection)
+        putVec4(mainLightColor)
         for (i in 0 until MAX_MORPH_TARGETS) {
             byteBuffer.putFloat(morphInfluences.getOrElse(i) { 0f })
         }
@@ -1116,7 +1110,7 @@ class VulkanRenderer(
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
-        private const val UNIFORM_BUFFER_SIZE = 272
+        private val UNIFORM_BUFFER_SIZE = MaterialDescriptorRegistry.uniformBlockSizeBytes()
         private const val MAX_PIPELINE_CACHE_SIZE = 32
         private const val MAX_MATERIAL_TEXTURE_SETS = 256
         private const val MAX_MORPH_TARGETS = 8
@@ -1831,7 +1825,6 @@ class VulkanRenderer(
                 blend = blendSignature,
                 writeMask = renderState.colorTarget.writeMask
             )
-        )
 
         return PipelineCacheKey(layoutSignature, renderSignature, features)
     }

@@ -132,6 +132,11 @@ private object BuiltInMaterialChunks {
                     baseColor: vec4<f32>,
                     pbrParams: vec4<f32>,
                     cameraPosition: vec4<f32>,
+                    ambientColor: vec4<f32>,
+                    fogColor: vec4<f32>,
+                    fogParams: vec4<f32>,
+                    mainLightDirection: vec4<f32>,
+                    mainLightColor: vec4<f32>,
                     morphInfluences0: vec4<f32>,
                     morphInfluences1: vec4<f32>,
                 };
