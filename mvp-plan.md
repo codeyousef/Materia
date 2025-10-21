@@ -6,6 +6,23 @@ targets.
 
 ---
 
+## 📋 Remaining Work Snapshot
+
+1. **GPU layer unification** – replace the placeholder `:kreekt-gpu` expect/actuals with delegates to the existing
+   Vulkan/WebGPU implementations (`io.kreekt.renderer.gpu.*`), including swapchain/surface handling.
+2. **Triangle smoke via real backend** – boot the example through `RendererFactory`/`RenderSurface` so the Vulkan/WebGPU
+   renderers drive the frame instead of the stub submission.
+3. **Materials & bindings** – hook `UnlitColorMaterial` / `UnlitPointsMaterial` into backend bind-group & pipeline
+   layouts; validate geometry stride/offset handling.
+4. **Instanced points + galaxy/force demos** – build the point-cloud pipeline, baked data loaders, and scene wiring for
+   Embedding Galaxy and Force Graph.
+5. **Target bootstraps & docs/tests** – flesh out per-platform launchers, math/scene tests, and MVP documentation once
+   the rendering path is stable.
+
+Keep this list in sync as tasks complete; the detailed checklist below mirrors these priorities.
+
+---
+
 ## 🚀 First 10 Minutes (Quickstart)
 
 > The commands below are the **intended** Gradle tasks Codex should generate.  
@@ -114,6 +131,9 @@ resources/shaders/*.wgsl
     * [ ] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
     * [ ] `GpuCommandBuffer`, `GpuQueue.submit()`
 * [ ] Minimal hidden sync (fences/events on Vulkan/MVK)
+* [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
+* [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
+* [ ] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
 
 ### 2) Rendering Engine (common)
 
@@ -130,6 +150,8 @@ resources/shaders/*.wgsl
     * [ ] `UnlitPointsMaterial` (VS quad expansion; distance attenuation)
 * [ ] Pipeline state helpers: depth test/write, culling, alpha/additive blending
 * [ ] Optional post: **FXAA** (toggle)
+* [ ] Material bindings → shader pipeline layout (bridging to backend descriptor sets)
+* [ ] Integrate engine drawables with real renderer submission (Geometry → vertex/index buffers)
 
 ### 3) Math & Utils
 
@@ -151,6 +173,8 @@ resources/shaders/*.wgsl
 ### 5) Examples (adoption funnel)
 
 * [ ] **Triangle** (smoke): clear + draw + resize on every target
+    * [ ] Boot via `RendererFactory` / `SurfaceFactory` (Vulkan/WebGPU actual implementations)
+    * [ ] Replace placeholder GPU submission with backend-rendered frame
 * [ ] **Embedding Galaxy** (wow)
 
     * [ ] 20k InstancedPoints; 5–6 clusters; camera spline
