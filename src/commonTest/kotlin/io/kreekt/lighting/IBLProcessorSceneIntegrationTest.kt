@@ -2,13 +2,10 @@ package io.kreekt.lighting
 
 import io.kreekt.core.scene.Scene
 import io.kreekt.lighting.ibl.HDREnvironment
+import io.kreekt.lighting.ibl.IBLResult
 import io.kreekt.renderer.Texture
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.test.assertNotNull
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
+import kotlin.test.*
 
 class IBLProcessorSceneIntegrationTest {
     private val processor = IBLProcessorImpl()
