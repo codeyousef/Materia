@@ -124,8 +124,37 @@ actual class GpuBuffer actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuBufferDescriptor
 ) {
+    private val storage = ByteArray(descriptor.size.toInt())
+
+    actual fun write(data: ByteArray, offset: Int) {
+        require(offset >= 0) { "Offset must be >= 0" }
+        require(offset + data.size <= storage.size) {
+            "Write range exceeds buffer size (offset=$offset, data=${data.size}, capacity=${storage.size})"
+        }
+        for (i in data.indices) {
+            storage[offset + i] = data[i]
+        }
+    }
+
+    actual fun writeFloats(data: FloatArray, offset: Int) {
+        var byteOffset = offset * Float.SIZE_BYTES
+        val requiredBytes = data.size * Float.SIZE_BYTES
+        require(byteOffset >= 0) { "Offset must be >= 0" }
+        require(byteOffset + requiredBytes <= storage.size) {
+            "Write range exceeds buffer size (offset=$byteOffset, dataBytes=$requiredBytes, capacity=${storage.size})"
+        }
+        data.forEach { value ->
+            val bits = value.toRawBits()
+            storage[byteOffset++] = (bits and 0xFF).toByte()
+            storage[byteOffset++] = ((bits shr 8) and 0xFF).toByte()
+            storage[byteOffset++] = ((bits shr 16) and 0xFF).toByte()
+            storage[byteOffset++] = ((bits shr 24) and 0xFF).toByte()
+        }
+    }
+
     actual fun destroy() {
         // Placeholder
+        storage.fill(0)
     }
 }
 

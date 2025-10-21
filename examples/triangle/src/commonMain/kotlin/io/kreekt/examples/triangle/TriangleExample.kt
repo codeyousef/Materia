@@ -1,5 +1,6 @@
 package io.kreekt.examples.triangle
 
+import io.kreekt.engine.camera.OrbitController
 import io.kreekt.engine.camera.PerspectiveCamera
 import io.kreekt.engine.math.Vector3f
 import io.kreekt.engine.scene.Mesh
@@ -47,6 +48,7 @@ class TriangleExample(
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
     private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
 ) {
+    private var orbitController: OrbitController? = null
     suspend fun boot(): TriangleBootLog {
         val instance = createGpuInstance(
             GpuInstanceDescriptor(
@@ -111,6 +113,7 @@ class TriangleExample(
                 usage = setOf(GpuBufferUsage.VERTEX)
             )
         )
+        vertexBuffer.writeFloats(TRIANGLE_VERTICES)
 
         val encoder = device.createCommandEncoder(
             GpuCommandEncoderDescriptor(label = "triangle-encoder")
@@ -136,7 +139,7 @@ class TriangleExample(
         surface.present(frame)
 
         val (scene, camera) = buildScene()
-        scene.updateWorldMatrix()
+        scene.update(0f)
 
         return TriangleBootLog(
             backend = adapter.backend,
@@ -164,6 +167,8 @@ class TriangleExample(
             lookAt(Vector3f(0f, 0f, 0f))
         }
         scene.add(camera)
+
+        orbitController = OrbitController(camera, target = Vector3f(0f, 0f, 0f), radius = 2f)
 
         return scene to camera
     }

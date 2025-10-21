@@ -49,4 +49,11 @@ open class Node(
         val m = worldMatrix
         return out.set(m[12], m[13], m[14])
     }
+
+    open fun onUpdate(deltaTime: Float) {}
+
+    fun traverse(action: (Node) -> Unit) {
+        action(this)
+        children.forEach { it.traverse(action) }
+    }
 }

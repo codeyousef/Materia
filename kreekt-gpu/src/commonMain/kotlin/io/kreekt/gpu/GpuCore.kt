@@ -109,7 +109,7 @@ expect class GpuQueue internal constructor(
     fun submit(commandBuffers: List<GpuCommandBuffer>)
 }
 
-expect class GpuSurface internal constructor(
+expect class GpuSurface constructor(
     label: String?
 ) {
     val label: String?

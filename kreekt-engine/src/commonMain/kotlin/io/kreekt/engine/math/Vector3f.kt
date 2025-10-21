@@ -42,4 +42,6 @@ data class Vector3f(
         val Up = Vector3f(0f, 1f, 0f)
         val Forward = Vector3f(0f, 0f, -1f)
     }
+
+    fun copy(): Vector3f = Vector3f(x, y, z)
 }

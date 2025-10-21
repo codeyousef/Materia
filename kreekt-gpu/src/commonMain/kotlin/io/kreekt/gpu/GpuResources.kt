@@ -101,6 +101,8 @@ expect class GpuBuffer internal constructor(
     val device: GpuDevice
     val descriptor: GpuBufferDescriptor
 
+    fun write(data: ByteArray, offset: Int = 0)
+    fun writeFloats(data: FloatArray, offset: Int = 0)
     fun destroy()
 }
 
