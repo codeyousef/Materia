@@ -7,6 +7,7 @@ import io.kreekt.engine.geometry.AttributeType
 import io.kreekt.engine.geometry.Geometry
 import io.kreekt.engine.geometry.GeometryAttribute
 import io.kreekt.engine.geometry.GeometryLayout
+import io.kreekt.engine.geometry.vertexCount
 import io.kreekt.engine.material.UnlitColorMaterial
 import io.kreekt.engine.math.Vector3f
 import io.kreekt.engine.scene.Mesh
@@ -137,7 +138,7 @@ class TriangleExample(
         )
         pass.setPipeline(pipeline)
         pass.setVertexBuffer(0, vertexBuffer)
-        pass.draw(vertexCount = 3)
+        pass.draw(vertexCount = geometry.vertexCount())
         pass.end()
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))
@@ -164,7 +165,7 @@ class TriangleExample(
         val geometry = Geometry(
             vertexBuffer = io.kreekt.engine.scene.VertexBuffer(
                 data = TRIANGLE_VERTICES,
-                stride = TRIANGLE_COMPONENTS * Float.SIZE_BYTES
+                strideBytes = TRIANGLE_COMPONENTS * Float.SIZE_BYTES
             ),
             layout = GeometryLayout(
                 stride = TRIANGLE_COMPONENTS * Float.SIZE_BYTES,

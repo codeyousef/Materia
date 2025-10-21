@@ -5,7 +5,7 @@ import io.kreekt.engine.material.Material
 
 data class VertexBuffer(
     val data: FloatArray,
-    val stride: Int
+    val strideBytes: Int
 )
 
 data class IndexBuffer(
