@@ -1,5 +1,8 @@
 package io.kreekt.engine.scene
 
+import io.kreekt.engine.geometry.Geometry
+import io.kreekt.engine.material.Material
+
 data class VertexBuffer(
     val data: FloatArray,
     val stride: Int
@@ -11,6 +14,6 @@ data class IndexBuffer(
 
 open class Mesh(
     name: String,
-    val vertices: VertexBuffer,
-    val indices: IndexBuffer? = null
+    val geometry: Geometry,
+    val material: Material
 ) : Node(name)

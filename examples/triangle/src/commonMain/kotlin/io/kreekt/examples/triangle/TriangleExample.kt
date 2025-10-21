@@ -2,10 +2,15 @@ package io.kreekt.examples.triangle
 
 import io.kreekt.engine.camera.OrbitController
 import io.kreekt.engine.camera.PerspectiveCamera
+import io.kreekt.engine.geometry.AttributeSemantic
+import io.kreekt.engine.geometry.AttributeType
+import io.kreekt.engine.geometry.Geometry
+import io.kreekt.engine.geometry.GeometryAttribute
+import io.kreekt.engine.geometry.GeometryLayout
+import io.kreekt.engine.material.UnlitColorMaterial
 import io.kreekt.engine.math.Vector3f
 import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.Scene
-import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBackend
 import io.kreekt.gpu.GpuBufferDescriptor
 import io.kreekt.gpu.GpuBufferUsage
@@ -156,9 +161,33 @@ class TriangleExample(
             backgroundColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
         }
 
+        val geometry = Geometry(
+            vertexBuffer = io.kreekt.engine.scene.VertexBuffer(
+                data = TRIANGLE_VERTICES,
+                stride = TRIANGLE_COMPONENTS * Float.SIZE_BYTES
+            ),
+            layout = GeometryLayout(
+                stride = TRIANGLE_COMPONENTS * Float.SIZE_BYTES,
+                attributes = mapOf(
+                    AttributeSemantic.POSITION to GeometryAttribute(
+                        offset = 0,
+                        components = 3,
+                        type = AttributeType.FLOAT32
+                    )
+                )
+            ),
+            indexBuffer = null
+        )
+
+        val material = UnlitColorMaterial(
+            label = "TriangleMaterial",
+            color = Vector3f(1f, 0.4f, 0.2f)
+        )
+
         val mesh = Mesh(
             name = "TriangleMesh",
-            vertices = VertexBuffer(data = TRIANGLE_VERTICES, stride = 3)
+            geometry = geometry,
+            material = material
         )
         scene.add(mesh)
 
@@ -199,5 +228,7 @@ class TriangleExample(
             -0.5f, -0.5f, 0f,
             0.5f, -0.5f, 0f
         )
+
+        private const val TRIANGLE_COMPONENTS = 3
     }
 }
