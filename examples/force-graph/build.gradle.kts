@@ -20,7 +20,7 @@ kotlin {
     wasmJs {
         browser {
             commonWebpackConfig {
-                outputFileName = "embedding-galaxy.js"
+                outputFileName = "force-graph.js"
             }
             testTask {
                 enabled = false
@@ -65,38 +65,38 @@ kotlin {
 
 tasks.register("run", JavaExec::class) {
     group = "examples"
-    description = "Run the JVM version of the Embedding Galaxy example (placeholder)"
+    description = "Run the JVM version of the Force Graph example (placeholder)"
 
     dependsOn("jvmMainClasses")
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
-    mainClass.set("io.kreekt.examples.embeddinggalaxy.MainKt")
+    mainClass.set("io.kreekt.examples.forcegraph.MainKt")
 
     doFirst {
-        println("🚀 Launching Embedding Galaxy placeholder on JVM")
-        println("This stub will be replaced with the full example during MVP execution.")
+        println("🚀 Launching Force Graph placeholder on JVM")
+        println("This stub will be replaced with the full demo during MVP development.")
     }
 }
 
 tasks.register("wasmJsBrowserRun") {
     group = "examples"
-    description = "Run the Embedding Galaxy WebAssembly placeholder in the browser"
+    description = "Run the Force Graph WebAssembly placeholder in the browser"
 
     dependsOn("wasmJsBrowserDevelopmentRun")
 
     doFirst {
-        println("🌐 Launching Embedding Galaxy placeholder (WebAssembly)")
-        println("Dev server opening — production rendering to follow during MVP build-out.")
+        println("🌐 Launching Force Graph placeholder (WebAssembly)")
+        println("Dev server opening — force-directed visualization lands later in the MVP timeline.")
     }
 }
 
 tasks.register("dev") {
     group = "examples"
-    description = "Development mode for Embedding Galaxy placeholder"
+    description = "Development mode for Force Graph placeholder"
 
     dependsOn("wasmJsBrowserDevelopmentRun")
 
     doFirst {
-        println("🔄 Starting Embedding Galaxy dev server (placeholder)")
+        println("🔄 Starting Force Graph dev server (placeholder)")
     }
 }

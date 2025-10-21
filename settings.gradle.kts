@@ -48,7 +48,7 @@ include(":kreekt-validation")
 include(":kreekt-examples-common")
 
 // Example projects
-include(":examples:basic-scene")
+include(":examples:triangle")
 include(":examples:voxelcraft")
 include(":examples:embedding-galaxy")
-include(":examples:force-graph-rerank")
+include(":examples:force-graph")
