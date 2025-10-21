@@ -1,0 +1,118 @@
+package io.kreekt.gpu
+
+import kotlinx.serialization.Serializable
+
+/**
+ * Primary GPU backend selector. Mirrors WebGPU semantics while allowing Vulkan/MoltenVK adapters.
+ */
+enum class GpuBackend {
+    WEBGPU,
+    VULKAN,
+    MOLTENVK
+}
+
+/**
+ * Preferred power profile when selecting adapters/devices.
+ */
+enum class GpuPowerPreference {
+    LOW_POWER,
+    HIGH_PERFORMANCE
+}
+
+/**
+ * Descriptor used when instantiating a GPU instance.
+ */
+@Serializable
+data class GpuInstanceDescriptor(
+    val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
+    val label: String? = null
+)
+
+/**
+ * Options supplied when requesting an adapter from an instance.
+ */
+@Serializable
+data class GpuRequestAdapterOptions(
+    val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
+    val compatibleSurface: GpuSurface? = null,
+    val forceFallbackAdapter: Boolean = false,
+    val label: String? = null
+)
+
+/**
+ * Hardware metadata surfaced by the adapter.
+ */
+@Serializable
+data class GpuAdapterInfo(
+    val name: String,
+    val vendor: String? = null,
+    val architecture: String? = null,
+    val driverVersion: String? = null
+)
+
+/**
+ * Descriptor used when creating a logical device.
+ */
+@Serializable
+data class GpuDeviceDescriptor(
+    val requiredFeatures: Set<String> = emptySet(),
+    val requiredLimits: Map<String, Long> = emptyMap(),
+    val label: String? = null
+)
+
+/**
+ * Factory for instantiating GPU instances across platforms.
+ */
+expect suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor = GpuInstanceDescriptor()): GpuInstance
+
+expect class GpuInstance internal constructor(
+    descriptor: GpuInstanceDescriptor
+) {
+    val descriptor: GpuInstanceDescriptor
+    suspend fun requestAdapter(options: GpuRequestAdapterOptions = GpuRequestAdapterOptions()): GpuAdapter
+    fun dispose()
+}
+
+expect class GpuAdapter internal constructor(
+    backend: GpuBackend,
+    options: GpuRequestAdapterOptions,
+    info: GpuAdapterInfo
+) {
+    val backend: GpuBackend
+    val options: GpuRequestAdapterOptions
+    val info: GpuAdapterInfo
+    suspend fun requestDevice(descriptor: GpuDeviceDescriptor = GpuDeviceDescriptor()): GpuDevice
+}
+
+expect class GpuDevice internal constructor(
+    adapter: GpuAdapter,
+    descriptor: GpuDeviceDescriptor
+) {
+    val adapter: GpuAdapter
+    val descriptor: GpuDeviceDescriptor
+    val queue: GpuQueue
+
+    fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer
+    fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture
+    fun createSampler(descriptor: GpuSamplerDescriptor = GpuSamplerDescriptor()): GpuSampler
+    fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor? = null): GpuCommandEncoder
+    fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule
+    fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline
+    fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline
+    fun destroy()
+}
+
+expect class GpuQueue internal constructor(
+    label: String?
+) {
+    val label: String?
+    fun submit(commandBuffers: List<GpuCommandBuffer>)
+}
+
+expect class GpuSurface internal constructor(
+    label: String?
+) {
+    val label: String?
+    fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration)
+    fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat
+}

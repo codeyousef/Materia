@@ -1,0 +1,162 @@
+package io.kreekt.gpu
+
+actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
+    GpuInstance(descriptor)
+
+actual class GpuInstance actual constructor(
+    actual val descriptor: GpuInstanceDescriptor
+) {
+    private var disposed = false
+
+    actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter {
+        check(!disposed) { "GpuInstance has been disposed." }
+        val backend = descriptor.preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU
+        val info = GpuAdapterInfo(
+            name = "Placeholder $backend Adapter",
+            vendor = "KreeKt",
+            architecture = "virtual",
+            driverVersion = "mvp-placeholder"
+        )
+        return GpuAdapter(backend, options, info)
+    }
+
+    actual fun dispose() {
+        disposed = true
+    }
+}
+
+actual class GpuAdapter actual constructor(
+    actual val backend: GpuBackend,
+    actual val options: GpuRequestAdapterOptions,
+    actual val info: GpuAdapterInfo
+) {
+    actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice =
+        GpuDevice(this, descriptor)
+}
+
+actual class GpuDevice actual constructor(
+    actual val adapter: GpuAdapter,
+    actual val descriptor: GpuDeviceDescriptor
+) {
+    actual val queue: GpuQueue = GpuQueue(descriptor.label)
+
+    actual fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer =
+        GpuBuffer(this, descriptor)
+
+    actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture =
+        GpuTexture(this, descriptor)
+
+    actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler =
+        GpuSampler(this, descriptor)
+
+    actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
+        GpuCommandEncoder(this, descriptor)
+
+    actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule =
+        GpuShaderModule(this, descriptor)
+
+    actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline =
+        GpuRenderPipeline(this, descriptor)
+
+    actual fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline =
+        GpuComputePipeline(this, descriptor)
+
+    actual fun destroy() {
+        // Placeholder
+    }
+}
+
+actual class GpuQueue actual constructor(
+    actual val label: String?
+) {
+    actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
+        commandBuffers.forEach { _ -> }
+    }
+}
+
+actual class GpuSurface actual constructor(
+    actual val label: String?
+) {
+    private var configuration: GpuSurfaceConfiguration? = null
+
+    actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
+        @Suppress("UNUSED_PARAMETER")
+        val unused = device
+        this.configuration = configuration
+    }
+
+    actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
+        @Suppress("UNUSED_PARAMETER")
+        val unused = adapter
+        return configuration?.format ?: GpuTextureFormat.RGBA8_UNORM
+    }
+}
+
+actual class GpuBuffer actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuBufferDescriptor
+) {
+    actual fun destroy() {
+        // Placeholder
+    }
+}
+
+actual class GpuTexture actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuTextureDescriptor
+) {
+    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView =
+        GpuTextureView(this, descriptor)
+
+    actual fun destroy() {
+        // Placeholder
+    }
+}
+
+actual class GpuTextureView actual constructor(
+    actual val texture: GpuTexture,
+    actual val descriptor: GpuTextureViewDescriptor
+)
+
+actual class GpuSampler actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuSamplerDescriptor
+)
+
+actual class GpuCommandEncoder actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuCommandEncoderDescriptor?
+) {
+    actual fun finish(label: String?): GpuCommandBuffer =
+        GpuCommandBuffer(device, label ?: descriptor?.label)
+}
+
+actual class GpuCommandBuffer actual constructor(
+    actual val device: GpuDevice,
+    actual val label: String?
+)
+
+actual class GpuShaderModule actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuShaderModuleDescriptor
+)
+
+actual class GpuBindGroupLayout actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuBindGroupLayoutDescriptor
+)
+
+actual class GpuBindGroup actual constructor(
+    actual val layout: GpuBindGroupLayout,
+    actual val descriptor: GpuBindGroupDescriptor
+)
+
+actual class GpuRenderPipeline actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuRenderPipelineDescriptor
+)
+
+actual class GpuComputePipeline actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuComputePipelineDescriptor
+)

@@ -47,6 +47,9 @@ include(":kreekt-validation")
 // Example utilities
 include(":kreekt-examples-common")
 
+// Core MVP modules
+include(":kreekt-gpu")
+
 // Example projects
 include(":examples:triangle")
 include(":examples:voxelcraft")

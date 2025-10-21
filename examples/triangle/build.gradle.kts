@@ -31,53 +31,34 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation(project(":"))
+                implementation(project(":kreekt-gpu"))
                 implementation(libs.kotlinx.coroutines.core)
-                implementation(libs.kotlinx.serialization.json)
             }
         }
 
         val commonTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
-                // Production readiness validation testing
-                implementation(project(":"))
             }
         }
 
         val jvmMain by getting {
             dependencies {
-                // LWJGL for OpenGL/Vulkan
-                implementation(libs.lwjgl.core)
-                implementation(libs.lwjgl.glfw)
-                implementation(libs.lwjgl.opengl)
-                implementation(libs.lwjgl.vulkan)
-
-                // Platform-specific natives
-                val lwjglVersion = libs.versions.lwjgl.get()
-                val osName = System.getProperty("os.name").lowercase()
-                val nativePlatform = when {
-                    osName.contains("windows") -> "natives-windows"
-                    osName.contains("linux") -> "natives-linux"
-                    osName.contains("mac") -> "natives-macos"
-                    else -> "natives-linux" // Default fallback
-                }
-
-                implementation("org.lwjgl:lwjgl:$lwjglVersion:$nativePlatform")
-                implementation("org.lwjgl:lwjgl-glfw:$lwjglVersion:$nativePlatform")
-                implementation("org.lwjgl:lwjgl-opengl:$lwjglVersion:$nativePlatform")
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
 
         val jvmTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
 
         val wasmJsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
 
@@ -100,11 +81,11 @@ tasks.register("run", JavaExec::class) {
     dependsOn("jvmMainClasses")
     val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (jvmCompilation.runtimeDependencyFiles ?: files()) + jvmCompilation.output.allOutputs
-    mainClass.set("MainKt")
+    mainClass.set("io.kreekt.examples.triangle.MainKt")
 
     doFirst {
         println("🎮 Starting KreeKt Triangle Example (JVM)")
-        println("Rendering first pixels via Vulkan backend")
+        println("Bootstrapping GPU abstraction for MVP triangle")
     }
 }
 
