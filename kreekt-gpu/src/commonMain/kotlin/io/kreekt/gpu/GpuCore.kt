@@ -115,4 +115,12 @@ expect class GpuSurface internal constructor(
     val label: String?
     fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration)
     fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat
+    fun acquireFrame(): GpuSurfaceFrame
+    fun present(frame: GpuSurfaceFrame)
+    fun resize(width: Int, height: Int)
 }
+
+data class GpuSurfaceFrame(
+    val texture: GpuTexture,
+    val view: GpuTextureView
+)

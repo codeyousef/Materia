@@ -6,14 +6,22 @@ import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.Scene
 import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBackend
+import io.kreekt.gpu.GpuBufferDescriptor
+import io.kreekt.gpu.GpuBufferUsage
 import io.kreekt.gpu.GpuCommandEncoderDescriptor
 import io.kreekt.gpu.GpuDeviceDescriptor
 import io.kreekt.gpu.GpuInstanceDescriptor
+import io.kreekt.gpu.GpuLoadOp
 import io.kreekt.gpu.GpuPowerPreference
+import io.kreekt.gpu.GpuRenderPassColorAttachment
+import io.kreekt.gpu.GpuRenderPassDescriptor
 import io.kreekt.gpu.GpuRenderPipelineDescriptor
 import io.kreekt.gpu.GpuRequestAdapterOptions
 import io.kreekt.gpu.GpuShaderModuleDescriptor
+import io.kreekt.gpu.GpuSurface
+import io.kreekt.gpu.GpuSurfaceConfiguration
 import io.kreekt.gpu.GpuTextureFormat
+import io.kreekt.gpu.GpuTextureUsage
 import io.kreekt.gpu.createGpuInstance
 
 data class TriangleBootLog(
@@ -83,11 +91,49 @@ class TriangleExample(
             )
         )
 
+        val surface = GpuSurface(label = "triangle-surface")
+        val preferredFormat = surface.getPreferredFormat(adapter)
+        surface.configure(
+            device,
+            GpuSurfaceConfiguration(
+                format = preferredFormat,
+                usage = setOf(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
+                width = 640,
+                height = 480
+            )
+        )
+        val frame = surface.acquireFrame()
+
+        val vertexBuffer = device.createBuffer(
+            GpuBufferDescriptor(
+                label = "triangle-vertex-buffer",
+                size = TRIANGLE_VERTICES.size * Float.SIZE_BYTES.toLong(),
+                usage = setOf(GpuBufferUsage.VERTEX)
+            )
+        )
+
         val encoder = device.createCommandEncoder(
             GpuCommandEncoderDescriptor(label = "triangle-encoder")
         )
+        val pass = encoder.beginRenderPass(
+            GpuRenderPassDescriptor(
+                colorAttachments = listOf(
+                    GpuRenderPassColorAttachment(
+                        view = frame.view,
+                        loadOp = GpuLoadOp.CLEAR,
+                        clearColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
+                    )
+                ),
+                label = "triangle-pass"
+            )
+        )
+        pass.setPipeline(pipeline)
+        pass.setVertexBuffer(0, vertexBuffer)
+        pass.draw(vertexCount = 3)
+        pass.end()
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))
+        surface.present(frame)
 
         val (scene, camera) = buildScene()
         scene.updateWorldMatrix()
@@ -107,15 +153,9 @@ class TriangleExample(
             backgroundColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
         }
 
-        val vertices = floatArrayOf(
-            0f, 0.5f, 0f,
-            -0.5f, -0.5f, 0f,
-            0.5f, -0.5f, 0f
-        )
-
         val mesh = Mesh(
             name = "TriangleMesh",
-            vertices = VertexBuffer(data = vertices, stride = 3)
+            vertices = VertexBuffer(data = TRIANGLE_VERTICES, stride = 3)
         )
         scene.add(mesh)
 
@@ -148,5 +188,11 @@ class TriangleExample(
                 return vec4<f32>(1.0, 0.4, 0.2, 1.0);
             }
         """
+
+        private val TRIANGLE_VERTICES = floatArrayOf(
+            0f, 0.5f, 0f,
+            -0.5f, -0.5f, 0f,
+            0.5f, -0.5f, 0f
+        )
     }
 }

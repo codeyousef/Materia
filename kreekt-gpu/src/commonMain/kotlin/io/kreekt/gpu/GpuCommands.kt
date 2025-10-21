@@ -15,6 +15,7 @@ expect class GpuCommandEncoder internal constructor(
     val descriptor: GpuCommandEncoderDescriptor?
 
     fun finish(label: String? = descriptor?.label): GpuCommandBuffer
+    fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder
 }
 
 expect class GpuCommandBuffer internal constructor(
@@ -23,4 +24,34 @@ expect class GpuCommandBuffer internal constructor(
 ) {
     val device: GpuDevice
     val label: String?
+}
+
+enum class GpuLoadOp { LOAD, CLEAR }
+enum class GpuStoreOp { STORE, DISCARD }
+
+data class GpuRenderPassColorAttachment(
+    val view: GpuTextureView,
+    val resolveTarget: GpuTextureView? = null,
+    val loadOp: GpuLoadOp = GpuLoadOp.CLEAR,
+    val storeOp: GpuStoreOp = GpuStoreOp.STORE,
+    val clearColor: FloatArray = floatArrayOf(0f, 0f, 0f, 1f)
+)
+
+data class GpuRenderPassDescriptor(
+    val colorAttachments: List<GpuRenderPassColorAttachment>,
+    val depthStencilAttachment: Any? = null,
+    val label: String? = null
+)
+
+expect class GpuRenderPassEncoder internal constructor(
+    encoder: GpuCommandEncoder,
+    descriptor: GpuRenderPassDescriptor
+) {
+    val encoder: GpuCommandEncoder
+    val descriptor: GpuRenderPassDescriptor
+
+    fun setPipeline(pipeline: GpuRenderPipeline)
+    fun setVertexBuffer(slot: Int, buffer: GpuBuffer)
+    fun draw(vertexCount: Int, instanceCount: Int = 1, firstVertex: Int = 0, firstInstance: Int = 0)
+    fun end()
 }

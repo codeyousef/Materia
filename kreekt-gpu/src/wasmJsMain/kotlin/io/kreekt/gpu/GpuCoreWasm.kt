@@ -78,10 +78,11 @@ actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
     private var configuration: GpuSurfaceConfiguration? = null
+    private var configuredDevice: GpuDevice? = null
+    private var frameCounter = 0
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
-        @Suppress("UNUSED_PARAMETER")
-        val unused = device
+        configuredDevice = device
         this.configuration = configuration
     }
 
@@ -89,6 +90,33 @@ actual class GpuSurface actual constructor(
         @Suppress("UNUSED_PARAMETER")
         val unused = adapter
         return configuration?.format ?: GpuTextureFormat.RGBA8_UNORM
+    }
+
+    actual fun acquireFrame(): GpuSurfaceFrame {
+        val config = configuration
+            ?: error("GpuSurface not configured before acquiring frame")
+        val device = configuredDevice
+            ?: error("GpuSurface missing device reference")
+        val descriptor = GpuTextureDescriptor(
+            label = "${label ?: "surface"}-frame-${frameCounter++}",
+            size = Triple(config.width, config.height, 1),
+            mipLevelCount = 1,
+            sampleCount = 1,
+            dimension = GpuTextureDimension.D2,
+            format = config.format,
+            usage = config.usage
+        )
+        val texture = device.createTexture(descriptor)
+        val view = texture.createView()
+        return GpuSurfaceFrame(texture, view)
+    }
+
+    actual fun present(frame: GpuSurfaceFrame) {
+        frame.texture.destroy()
+    }
+
+    actual fun resize(width: Int, height: Int) {
+        configuration = configuration?.copy(width = width, height = height)
     }
 }
 
@@ -129,6 +157,9 @@ actual class GpuCommandEncoder actual constructor(
 ) {
     actual fun finish(label: String?): GpuCommandBuffer =
         GpuCommandBuffer(device, label ?: descriptor?.label)
+
+    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder =
+        GpuRenderPassEncoder(this, descriptor)
 }
 
 actual class GpuCommandBuffer actual constructor(
@@ -160,3 +191,16 @@ actual class GpuComputePipeline actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuComputePipelineDescriptor
 )
+
+actual class GpuRenderPassEncoder actual constructor(
+    actual val encoder: GpuCommandEncoder,
+    actual val descriptor: GpuRenderPassDescriptor
+) {
+    actual fun setPipeline(pipeline: GpuRenderPipeline) {}
+
+    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {}
+
+    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {}
+
+    actual fun end() {}
+}
