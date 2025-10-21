@@ -49,6 +49,7 @@ include(":kreekt-examples-common")
 
 // Core MVP modules
 include(":kreekt-gpu")
+include(":kreekt-engine")
 
 // Example projects
 include(":examples:triangle")

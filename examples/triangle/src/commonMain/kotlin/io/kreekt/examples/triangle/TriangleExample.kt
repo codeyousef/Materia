@@ -1,5 +1,10 @@
 package io.kreekt.examples.triangle
 
+import io.kreekt.engine.camera.PerspectiveCamera
+import io.kreekt.engine.math.Vector3f
+import io.kreekt.engine.scene.Mesh
+import io.kreekt.engine.scene.Scene
+import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBackend
 import io.kreekt.gpu.GpuCommandEncoderDescriptor
 import io.kreekt.gpu.GpuDeviceDescriptor
@@ -15,7 +20,9 @@ data class TriangleBootLog(
     val backend: GpuBackend,
     val adapterName: String,
     val deviceLabel: String?,
-    val pipelineLabel: String?
+    val pipelineLabel: String?,
+    val meshCount: Int,
+    val cameraPosition: Vector3f
 ) {
     fun pretty(): String = buildString {
         appendLine("🎯 Triangle MVP bootstrap complete")
@@ -23,6 +30,8 @@ data class TriangleBootLog(
         appendLine("  Adapter : $adapterName")
         appendLine("  Device  : ${deviceLabel ?: "n/a"}")
         appendLine("  Pipeline: ${pipelineLabel ?: "n/a"}")
+        appendLine("  Meshes  : $meshCount")
+        appendLine("  Camera  : (${cameraPosition.x}, ${cameraPosition.y}, ${cameraPosition.z})")
     }
 }
 
@@ -80,12 +89,43 @@ class TriangleExample(
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))
 
+        val (scene, camera) = buildScene()
+        scene.updateWorldMatrix()
+
         return TriangleBootLog(
             backend = adapter.backend,
             adapterName = adapter.info.name,
             deviceLabel = device.descriptor.label,
-            pipelineLabel = pipeline.descriptor.label
+            pipelineLabel = pipeline.descriptor.label,
+            meshCount = scene.children.count { it is Mesh },
+            cameraPosition = camera.transform.position.copy()
         )
+    }
+
+    private fun buildScene(): Pair<Scene, PerspectiveCamera> {
+        val scene = Scene(name = "TriangleScene").apply {
+            backgroundColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
+        }
+
+        val vertices = floatArrayOf(
+            0f, 0.5f, 0f,
+            -0.5f, -0.5f, 0f,
+            0.5f, -0.5f, 0f
+        )
+
+        val mesh = Mesh(
+            name = "TriangleMesh",
+            vertices = VertexBuffer(data = vertices, stride = 3)
+        )
+        scene.add(mesh)
+
+        val camera = PerspectiveCamera(fovDegrees = 60f, aspect = 16f / 9f).apply {
+            transform.setPosition(0f, 0f, 2f)
+            lookAt(Vector3f(0f, 0f, 0f))
+        }
+        scene.add(camera)
+
+        return scene to camera
     }
 
     companion object {

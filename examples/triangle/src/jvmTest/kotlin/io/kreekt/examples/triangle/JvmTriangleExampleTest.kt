@@ -12,5 +12,6 @@ class JvmTriangleExampleTest {
         val log = TriangleExample().boot()
         assertEquals("triangle-pipeline", log.pipelineLabel)
         assertNotNull(log.adapterName)
+        assertEquals(1, log.meshCount)
     }
 }
