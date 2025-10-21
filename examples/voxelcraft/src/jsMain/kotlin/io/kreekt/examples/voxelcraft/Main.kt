@@ -1,16 +1,16 @@
-﻿package io.kreekt.examples.voxelcraft
+package io.kreekt.examples.voxelcraft
 
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.controls.PointerLock
 import io.kreekt.core.scene.Scene
+import io.kreekt.lighting.IBLConfig
+import io.kreekt.lighting.IBLProcessorImpl
+import io.kreekt.lighting.ibl.IBLResult
+import io.kreekt.lighting.processEnvironmentForScene
 import io.kreekt.renderer.FPSCounter
 import io.kreekt.renderer.RendererFactory
 import io.kreekt.renderer.RendererInitializationException
 import io.kreekt.renderer.SurfaceFactory
-import io.kreekt.lighting.IBLConfig
-import io.kreekt.lighting.IBLProcessorImpl
-import io.kreekt.lighting.IBLResult
-import io.kreekt.lighting.processEnvironmentForScene
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.*
@@ -55,11 +55,11 @@ fun startGameFromButton() {
 }
 
 suspend fun initGame() = coroutineScope {
-    logInfo("ðŸŒ Initializing VoxelCraft...")
+    logInfo("Initializing VoxelCraft...")
 
     val canvas = document.getElementById("kreekt-canvas") as? HTMLCanvasElement
     if (canvas == null) {
-        logError("âŒ Canvas element not found!")
+        logError("Canvas element not found!")
         return@coroutineScope
     }
 
@@ -81,9 +81,9 @@ suspend fun initGame() = coroutineScope {
     world.player.position.set(spawnX.toFloat(), tempSpawnY.toFloat(), spawnZ.toFloat())
     world.player.rotation.set(-0.3f, 0.0f, 0.0f)
     world.player.isFlying = true // Temporary, will disable after finding ground
-    
-    logInfo("ðŸ“ Temporary spawn: ($spawnX, $tempSpawnY, $spawnZ) - flight ON")
-    logInfo("â³ Will find ground after terrain generation...")
+
+    logInfo("Temporary spawn: ($spawnX, $tempSpawnY, $spawnZ) - flight ON")
+    logInfo("Will find ground after terrain generation completes...")
 
     generateTerrainAsync(
         scope = this,
@@ -114,18 +114,18 @@ fun generateTerrainAsync(
             world.generateTerrain { current, total ->
                 val percent = (current * 100) / total
                 if (percent % 10 == 0) {
-                    logInfo("? Generating terrain... $percent% ($current/$total chunks)")
+                    logInfo("Generating terrain... $percent% ($current/$total chunks)")
                     updateLoadingProgress("Generating terrain: $percent% ($current/$total chunks)")
                 }
             }
 
             if (savedState != null) {
                 savedState.applyModifications(world)
-                logInfo("? Applied ${savedState.chunks.size} saved chunk modifications")
+                logInfo("Applied ${savedState.chunks.size} saved chunk modifications")
             }
 
             val generationTime = js("Date.now()") as Double - startTime
-            logInfo("? Terrain generation complete in ${generationTime.toInt()}ms")
+            logInfo("Terrain generation complete in ${generationTime.toInt()}ms")
             
             // NOW find actual ground level (terrain exists!)
             // Use user-specified spawn position
@@ -147,15 +147,15 @@ fun generateTerrainAsync(
             world.player.position.set(spawnX.toFloat(), finalSpawnY.toFloat(), spawnZ.toFloat())
             world.player.isFlying = false // Disable flight
             world.player.velocity.set(0f, 0f, 0f) // Reset velocity
-            
-            logInfo("ðŸ“ Found ground at Y=$groundY, spawning player at Y=$finalSpawnY")
-            logInfo("ðŸŽ® Flight mode: OFF, Gravity: ON, Jump: Space")
-            logInfo("ðŸ’¡ Press F to toggle flight mode")
+
+            logInfo("Found ground at Y=$groundY, spawning player at Y=$finalSpawnY")
+            logInfo("Flight mode: OFF, Gravity: ON, Jump: Space")
+            logInfo("Press F to toggle flight mode")
             
             updateLoadingProgress("Terrain ready, generating meshes...")
             
             // T021: Phase 2 - Wait for initial mesh generation to complete
-            val initialChunkCount = 81  // 9Ã—9 grid (INITIAL_GENERATION_RADIUS=4)
+            val initialChunkCount = 81  // 9x9 grid (INITIAL_GENERATION_RADIUS=4)
             world.setInitialMeshTarget(initialChunkCount)
             
             // Poll mesh generation progress
@@ -195,7 +195,7 @@ fun generateTerrainAsync(
             updateLoadingProgress("World ready!")  // Shows "Click on canvas to start"
             setupStartOnClick(world)  // Wait for click, then hide loading screen
         } catch (e: Throwable) {
-            logError("? Generation failed: ${e.message}", e)
+            logError("Generation failed: ${e.message}", e)
             console.error(e)
         }
     }
@@ -215,14 +215,14 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
     // Check if WebGPU is available
     if (!availableBackends.contains(io.kreekt.renderer.BackendType.WEBGPU)) {
         val errorMsg = """
-            âŒ WebGPU Not Available
+            WebGPU not available
 
             VoxelCraft requires WebGPU support.
 
             WebGPU is available in:
-            â€¢ Chrome/Edge 113+ (enabled by default)
-            â€¢ Firefox Nightly (enable dom.webgpu.enabled in about:config)
-            â€¢ Safari Technology Preview
+            - Chrome/Edge 113+ (enabled by default)
+            - Firefox Nightly (enable dom.webgpu.enabled in about:config)
+            - Safari Technology Preview
 
             Your browser detected: ${availableBackends.joinToString(", ")}
 
@@ -234,7 +234,7 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
         throw RuntimeException("WebGPU not available. Please use a WebGPU-enabled browser.")
     }
 
-    // Create renderer with automatic backend selection (WebGPU â†’ WebGL fallback)
+    // Create renderer with automatic backend selection (WebGPU + WebGL fallback)
     val renderer = try {
         when (val result = RendererFactory.create(surface)) {
             is io.kreekt.core.Result.Success -> result.value
@@ -242,7 +242,7 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
                 val exception = result.exception as? RendererInitializationException
                 when (exception) {
                     is RendererInitializationException.NoGraphicsSupportException -> {
-                        logError("âŒ Graphics not supported: ${result.message}")
+                        logError("Graphics not supported: ${result.message}")
                         logError("   Platform: ${exception.platform}")
                         logError("   Available: ${exception.availableBackends}")
                         logError("   Required: ${exception.requiredFeatures}")
@@ -250,20 +250,20 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
                     }
 
                     else -> {
-                        logError("âŒ Renderer initialization failed: ${result.message}")
+                        logError("Renderer initialization failed: ${result.message}")
                         throw exception ?: RuntimeException(result.message)
                     }
                 }
             }
         }
     } catch (e: Throwable) {
-        logError("âŒ Failed to create renderer: ${e.message}")
+        logError("Failed to create renderer: ${e.message}")
         updateLoadingProgress("Error: ${e.message}")
         throw e
     }
 
     // Log selected backend
-    logInfo("âœ… Renderer initialized!")
+    logInfo("Renderer initialized!")
     logInfo("  Backend: ${renderer.backend}")
     logInfo("  Device: ${renderer.capabilities.deviceName}")
 
@@ -292,7 +292,7 @@ suspend fun continueInitialization(world: VoxelWorld, canvas: HTMLCanvasElement)
     window.setInterval({
         val result = storage.save(world)
         if (!result.success) {
-            logWarn("âš ï¸ Auto-save failed: ${result.error}")
+            logWarn("Auto-save failed: ${result.error}")
         }
     }, 30000)
 
@@ -438,7 +438,7 @@ fun updateLoadingProgress(message: String) {
     val progressElement = document.getElementById("loading-progress")
     if (message == "World ready!") {
         // T021: Show click instruction after loading completes
-        progressElement?.innerHTML = "$message<br><br>ðŸ–±ï¸ <strong>Click on the canvas to start playing!</strong>"
+        progressElement?.innerHTML = "$message<br><br><strong>Click on the canvas to start playing!</strong>"
     } else {
         progressElement?.textContent = message
     }
@@ -494,7 +494,7 @@ fun updateHUD(world: VoxelWorld) {
 
 fun updateFPS(fps: Int, triangles: Int = 0, drawCalls: Int = 0) {
     val fpsElement = document.getElementById("fps")
-    fpsElement?.textContent = "$fps FPS | ${triangles}â–² | ${drawCalls}DC"
+    fpsElement?.textContent = "$fps FPS | ${triangles} tris | ${drawCalls} DC"
 }
 
 /**

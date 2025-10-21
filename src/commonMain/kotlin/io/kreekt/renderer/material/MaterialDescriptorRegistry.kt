@@ -4,26 +4,18 @@ import io.kreekt.core.scene.Material
 import io.kreekt.material.Blending
 import io.kreekt.material.MeshBasicMaterial
 import io.kreekt.material.MeshStandardMaterial
-import io.kreekt.material.BlendMode as StandardBlendMode
-import io.kreekt.material.MaterialSide as StandardMaterialSide
 import io.kreekt.material.Side
 import io.kreekt.renderer.geometry.GeometryAttribute
 import io.kreekt.renderer.shader.MaterialShaderDescriptor
 import io.kreekt.renderer.shader.MaterialShaderLibrary
-import io.kreekt.renderer.webgpu.BlendComponent
-import io.kreekt.renderer.webgpu.BlendFactor
-import io.kreekt.renderer.webgpu.BlendOperation
-import io.kreekt.renderer.webgpu.BlendState
-import io.kreekt.renderer.webgpu.ColorTargetDescriptor
-import io.kreekt.renderer.webgpu.ColorWriteMask
-import io.kreekt.renderer.webgpu.CompareFunction
-import io.kreekt.renderer.webgpu.CullMode
-import io.kreekt.renderer.webgpu.FrontFace
-import io.kreekt.renderer.webgpu.PrimitiveTopology
-import io.kreekt.renderer.webgpu.TextureFormat
-import kotlin.reflect.KClass
+import io.kreekt.renderer.webgpu.*
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.persistentMapOf
+import kotlin.reflect.KClass
+import io.kreekt.material.BlendMode as StandardBlendMode
+import io.kreekt.material.MaterialSide as StandardMaterialSide
 import kotlinx.atomicfu.locks.synchronized as atomicSynchronized
 
 data class ResolvedMaterialDescriptor(
@@ -117,10 +109,20 @@ data class MaterialDescriptor(
 )
 
 object MaterialDescriptorRegistry {
-    private val lock = SynchronizedObject()
+    private val initLock = SynchronizedObject()
     private val defaultsRegistered = atomic(false)
-    private val descriptorsByKey = mutableMapOf<String, MaterialDescriptor>()
-    private val descriptorsByMaterial = mutableMapOf<KClass<out Material>, MaterialDescriptor>()
+
+    private data class DescriptorState(
+        val byKey: PersistentMap<String, MaterialDescriptor>,
+        val byMaterial: PersistentMap<KClass<out Material>, MaterialDescriptor>
+    )
+
+    private val state = atomic(
+        DescriptorState(
+            byKey = persistentMapOf(),
+            byMaterial = persistentMapOf()
+        )
+    )
 
     private val BASIC_REQUIRED_ATTRIBUTES = setOf(
         GeometryAttribute.POSITION,
@@ -166,9 +168,8 @@ object MaterialDescriptorRegistry {
         materials: List<KClass<out Material>>,
         replaceExisting: Boolean = false
     ) {
-        withLock {
-            registerUnsafe(descriptor, materials, replaceExisting)
-        }
+        ensureDefaultsRegistered()
+        registerInternal(descriptor, materials, replaceExisting)
     }
 
     /**
@@ -176,9 +177,7 @@ object MaterialDescriptorRegistry {
      */
     fun descriptorFor(material: Material): MaterialDescriptor? {
         ensureDefaultsRegistered()
-        return withLock {
-            descriptorsByMaterial[material::class]
-        }
+        return state.value.byMaterial[material::class]
     }
 
     /**
@@ -186,9 +185,7 @@ object MaterialDescriptorRegistry {
      */
     fun descriptorForKey(key: String): MaterialDescriptor? {
         ensureDefaultsRegistered()
-        return withLock {
-            descriptorsByKey[key]
-        }
+        return state.value.byKey[key]
     }
 
     /**
@@ -217,18 +214,32 @@ object MaterialDescriptorRegistry {
         }
     }
 
-    private fun registerDescriptor(descriptor: MaterialDescriptor, replaceExisting: Boolean) {
-        val existing = descriptorsByKey[descriptor.key]
-        if (existing != null && !replaceExisting) {
-            error("Material descriptor with key '${descriptor.key}' already registered")
+    private fun registerInternal(
+        descriptor: MaterialDescriptor,
+        materials: List<KClass<out Material>>,
+        replaceExisting: Boolean
+    ) {
+        mutateState { current ->
+            if (!replaceExisting) {
+                current.byKey[descriptor.key]?.let {
+                    error("Material descriptor with key '${descriptor.key}' already registered")
+                }
+                materials.firstOrNull { it in current.byMaterial }?.let { conflicting ->
+                    error("Descriptor already registered for ${conflicting.simpleName}")
+                }
+            }
+            val updatedByKey = current.byKey.put(descriptor.key, descriptor)
+            val updatedByMaterial = materials.fold(current.byMaterial) { acc, materialClass ->
+                acc.put(materialClass, descriptor)
+            }
+            current.copy(byKey = updatedByKey, byMaterial = updatedByMaterial)
         }
-        descriptorsByKey[descriptor.key] = descriptor
     }
 
     private fun ensureDefaultsRegistered() {
         if (defaultsRegistered.value) return
         MaterialShaderLibrary.ensureBuiltInsRegistered()
-        withLock {
+        atomicSynchronized(initLock) {
             if (defaultsRegistered.value) return
             registerDefaultsLocked()
             defaultsRegistered.value = true
@@ -245,7 +256,7 @@ object MaterialDescriptorRegistry {
             requiredAttributes = BASIC_REQUIRED_ATTRIBUTES,
             optionalAttributes = BASIC_OPTIONAL_ATTRIBUTES
         )
-        registerUnsafe(
+        registerInternal(
             descriptor = basicDescriptor,
             materials = listOf(MeshBasicMaterial::class),
             replaceExisting = true
@@ -265,48 +276,38 @@ object MaterialDescriptorRegistry {
             requiredAttributes = STANDARD_REQUIRED_ATTRIBUTES,
             optionalAttributes = STANDARD_OPTIONAL_ATTRIBUTES
         )
-        registerUnsafe(
+        registerInternal(
             descriptor = standardDescriptor,
             materials = listOf(MeshStandardMaterial::class),
             replaceExisting = true
         )
     }
 
-    internal fun resetForTests() {
-        withLock {
-            descriptorsByKey.clear()
-            descriptorsByMaterial.clear()
-            defaultsRegistered.value = false
-        }
-    }
-
-    private fun registerUnsafe(
-        descriptor: MaterialDescriptor,
-        materials: List<KClass<out Material>>,
-        replaceExisting: Boolean
-    ) {
-        if (!replaceExisting) {
-            val conflictingMaterial = materials.firstOrNull { descriptorsByMaterial.containsKey(it) }
-            if (conflictingMaterial != null) {
-                error("Descriptor already registered for ${conflictingMaterial.simpleName}")
+    private inline fun mutateState(update: (DescriptorState) -> DescriptorState) {
+        while (true) {
+            val current = state.value
+            val updated = update(current)
+            if (state.compareAndSet(current, updated)) {
+                return
             }
         }
-        registerDescriptor(descriptor, replaceExisting)
-        materials.forEach { materialClass ->
-            descriptorsByMaterial[materialClass] = descriptor
-        }
     }
 
-    private inline fun <T> withLock(block: () -> T): T = atomicSynchronized(lock, block)
+    internal fun resetForTests() {
+        state.value = DescriptorState(
+            byKey = persistentMapOf(),
+            byMaterial = persistentMapOf()
+        )
+        defaultsRegistered.value = false
+    }
 
     private fun bindingsForGroup(group: Int): List<MaterialBinding> {
         ensureDefaultsRegistered()
-        return withLock {
-            descriptorsByKey.values
-                .flatMap { descriptor -> descriptor.bindings.filter { it.group == group } }
-                .distinctBy { it.binding to it.type }
-                .sortedBy { it.binding }
-        }
+        val descriptors = state.value.byKey.values
+        return descriptors
+            .flatMap { descriptor -> descriptor.bindings.filter { it.group == group } }
+            .distinctBy { it.binding to it.type }
+            .sortedBy { it.binding }
     }
 
     fun materialTextureBindingLayout(): List<MaterialBinding> = bindingsForGroup(MATERIAL_TEXTURE_GROUP)

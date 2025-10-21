@@ -2,6 +2,7 @@ package io.kreekt.renderer.shader
 
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.atomicfu.locks.synchronized as atomicSynchronized
 
 /**
@@ -38,12 +39,11 @@ data class MaterialShaderSource(
  * cached by descriptor to avoid redundant string assembly.
  */
 object MaterialShaderGenerator {
-    private val cacheLock = SynchronizedObject()
-    private val cache = mutableMapOf<MaterialShaderDescriptor, MaterialShaderSource>()
+    private val cache = atomic(persistentMapOf<MaterialShaderDescriptor, MaterialShaderSource>())
 
     fun compile(descriptor: MaterialShaderDescriptor): MaterialShaderSource {
         MaterialShaderLibrary.ensureBuiltInsRegistered()
-        atomicSynchronized(cacheLock) { cache[descriptor] }?.let { return it }
+        cache.value[descriptor]?.let { return it }
 
         val vertex = ShaderChunkRegistry.assemble(
             chunkNames = descriptor.vertexChunks,
@@ -57,15 +57,18 @@ object MaterialShaderGenerator {
         )
         val compiled = MaterialShaderSource(vertex, fragment)
 
-        return atomicSynchronized(cacheLock) {
-            cache.getOrPut(descriptor) { compiled }
+        while (true) {
+            val current = cache.value
+            current[descriptor]?.let { return it }
+            val updated = current.put(descriptor, compiled)
+            if (cache.compareAndSet(current, updated)) {
+                return compiled
+            }
         }
     }
 
     internal fun clearCacheForTests() {
-        atomicSynchronized(cacheLock) {
-            cache.clear()
-        }
+        cache.value = persistentMapOf()
     }
 }
 
