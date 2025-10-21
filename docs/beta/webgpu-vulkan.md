@@ -232,7 +232,9 @@ val config = RendererConfig(debug = true)
 
 1. **WebGPU Ray Tracing**: Limited browser support (experimental in Chrome/Safari)
 2. **Mobile Ray Tracing**: Only available on high-end devices (Adreno 7xx, Mali G710+)
-3. **Legacy GPU Support**: No fallback to reduced-fidelity modes (fail-fast by design)
+3. **Vulkan Environment Maps/Mipmaps**: Albedo textures sample correctly, but environment reflection maps still fall
+   back to neutral probes and GPU-side mipmap generation is pending.
+4. **Legacy GPU Support**: No fallback to reduced-fidelity modes (fail-fast by design)
 
 ## Roadmap
 

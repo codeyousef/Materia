@@ -1,12 +1,7 @@
 package io.kreekt.renderer.shader
 
 import io.kreekt.renderer.material.MaterialDescriptorRegistry
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertFalse
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class MaterialShaderLibraryTest {
 
@@ -59,15 +54,7 @@ class MaterialShaderLibraryTest {
 
     @Test
     fun fragmentOverridesRemovePlaceholdersAndPreserveFormatting() {
-        val baseOverrides = buildMap {
-            put("VERTEX_INPUT_EXTRA", "")
-            put("VERTEX_OUTPUT_EXTRA", "")
-            put("VERTEX_ASSIGN_EXTRA", "")
-            put("FRAGMENT_INPUT_EXTRA", "")
-            put("FRAGMENT_INIT_EXTRA", "")
-            put("FRAGMENT_EXTRA", "")
-            put("FRAGMENT_BINDINGS", "")
-        }.toMutableMap()
+        val baseOverrides = emptyOverrideMap()
 
         val fragmentBindings = listOf(
             "    @group(1) @binding(0) var materialAlbedo: texture_2d<f32>;",
@@ -106,4 +93,35 @@ class MaterialShaderLibraryTest {
             )
         }
     }
+
+    @Test
+    fun fragmentOverridesPreserveLiteralBraces() {
+        val overrides = emptyOverrideMap()
+        overrides["FRAGMENT_INIT_EXTRA"] = """
+            var emissive = in.albedo;
+            emissive = emissive * {{EMISSIVE_SCALE}};
+        """.trimIndent().prependIndent("    ")
+
+        val descriptor = MaterialShaderLibrary.meshStandard().withOverrides(overrides)
+        val fragment = MaterialShaderGenerator.compile(descriptor).fragmentSource
+
+        assertTrue(
+            fragment.contains("emissive = emissive * {{EMISSIVE_SCALE}};"),
+            "Literal double braces inside overrides should be preserved"
+        )
+        assertFalse(
+            fragment.contains("{{FRAGMENT_INIT_EXTRA}}"),
+            "Original placeholder must be removed after replacement"
+        )
+    }
+
+    private fun emptyOverrideMap(): MutableMap<String, String> = mutableMapOf(
+        "VERTEX_INPUT_EXTRA" to "",
+        "VERTEX_OUTPUT_EXTRA" to "",
+        "VERTEX_ASSIGN_EXTRA" to "",
+        "FRAGMENT_INPUT_EXTRA" to "",
+        "FRAGMENT_INIT_EXTRA" to "",
+        "FRAGMENT_EXTRA" to "",
+        "FRAGMENT_BINDINGS" to ""
+    )
 }
