@@ -221,10 +221,13 @@ resources/shaders/*.wgsl
 
 ### 9) Tests (minimum)
 
-* [ ] Math: matrix×vector, quat→matrix, `lookAt` correctness
-* [ ] Scene: world‑transform propagation & dirty‑flag invalidation
+* [x] Math: matrix×vector, quat→matrix, `lookAt` correctness
+* [x] Scene: world-transform propagation & dirty-flag invalidation
 * [ ] GPU: attribute stride/offset validation for **InstancedPoints** (WebGPU & Vulkan)
 * [ ] Layout: force layout determinism on tiny graph (seeded)
+
+> Pending follow-up: rerun `./gradlew :kreekt-engine:jvmTest` once the SSL trust store issue is resolved so the new
+> math/scene tests can execute on CI.
 
 ### 10) Docs (minimum)
 
