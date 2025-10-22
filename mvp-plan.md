@@ -121,17 +121,17 @@ resources/shaders/*.wgsl
 ### 1) GPU/Core Abstractions (commonMain)
 
 * [ ] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
-* [ ] `GpuSurface` (configure, present, resize)
+* [x] `GpuSurface` (configure, present, resize)
 * [ ] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
 * [ ] Shaders & pipelines
 
     * [ ] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
     * [ ] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
-    * [ ] `GpuRenderPipeline`, `GpuComputePipeline`
+* [x] `GpuRenderPipeline`, `GpuComputePipeline`
 * [ ] Command encoding & submit
 
-    * [ ] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
-    * [ ] `GpuCommandBuffer`, `GpuQueue.submit()`
+* [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
+* [x] `GpuCommandBuffer`, `GpuQueue.submit()`
 * [ ] Minimal hidden sync (fences/events on Vulkan/MVK)
 * [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
 * [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
