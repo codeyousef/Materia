@@ -1,12 +1,9 @@
 import org.gradle.api.tasks.JavaExec
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
 }
 
-@OptIn(ExperimentalWasmDsl::class)
 kotlin {
     jvm {
         compilerOptions {
@@ -17,7 +14,7 @@ kotlin {
         }
     }
 
-    wasmJs {
+    js(IR) {
         browser {
             commonWebpackConfig {
                 outputFileName = "triangle.js"
@@ -56,14 +53,14 @@ kotlin {
             }
         }
 
-        val wasmJsMain by getting {
+        val jsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
 
-        val wasmJsTest by getting {
+        val jsTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
             }
@@ -94,21 +91,21 @@ tasks.register("dev") {
     group = "examples"
     description = "Development mode - continuous build and run"
 
-    dependsOn("wasmJsBrowserDevelopmentRun")
+    dependsOn("jsBrowserDevelopmentRun")
 
     doFirst {
         println("🔄 Starting development mode with hot reload")
     }
 }
 
-tasks.register("wasmJsBrowserRun") {
+tasks.register("jsBrowserRun") {
     group = "examples"
-    description = "Run the WebAssembly triangle example in the browser"
+    description = "Run the browser triangle example"
 
-    dependsOn("wasmJsBrowserDevelopmentRun")
+    dependsOn("jsBrowserDevelopmentRun")
 
     doFirst {
-        println("🌐 Launching KreeKt Triangle Example (WebAssembly)")
+        println("🌐 Launching KreeKt Triangle Example (Browser)")
         println("Opening dev server - ensure a WebGPU capable browser is available")
     }
 }

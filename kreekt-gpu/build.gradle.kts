@@ -6,7 +6,7 @@ plugins {
     kotlin("plugin.serialization")
 }
 
-@OptIn(ExperimentalWasmDsl::class, ExperimentalKotlinGradlePluginApi::class)
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     jvm {
         compilerOptions {
@@ -17,7 +17,7 @@ kotlin {
         }
     }
 
-    wasmJs {
+    js(IR) {
         browser {
             testTask {
                 enabled = false
@@ -49,9 +49,10 @@ kotlin {
             }
         }
 
-        val wasmJsMain by getting {
+        val jsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(project(":"))
             }
         }
     }

@@ -1,3 +1,5 @@
+import org.gradle.api.GradleException
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
@@ -248,6 +250,69 @@ kotlin {
 //         targetCompatibility = JavaVersion.VERSION_11
 //     }
 // }
+
+// -----------------------------------------------------------------------------
+// WGSL → SPIR-V compilation (Tint CLI)
+// -----------------------------------------------------------------------------
+
+val tintExecutableProvider = providers.gradleProperty("tintExecutable").orElse("tint")
+
+val compileShaders = tasks.register("compileShaders") {
+    group = "build"
+    description = "Compile WGSL shaders to SPIR-V using the Tint CLI"
+
+    notCompatibleWithConfigurationCache("Invokes external compiler via Exec")
+
+    val wgslDir = layout.projectDirectory.dir("src/commonMain/resources/shaders")
+    val spvDir = layout.projectDirectory.dir("src/jvmMain/resources/shaders")
+
+    inputs.files(
+        fileTree(wgslDir) {
+            include("**/*.wgsl")
+        }
+    )
+    outputs.dir(spvDir)
+
+    doLast {
+        val tintExecutable = tintExecutableProvider.get()
+        val wgslFiles = wgslDir.asFile
+            .walkTopDown()
+            .filter { it.isFile && it.extension.equals("wgsl", ignoreCase = true) }
+            .toList()
+
+        if (wgslFiles.isEmpty()) {
+            logger.lifecycle("No WGSL shaders found under ${wgslDir.asFile}. Skipping Tint compilation.")
+            return@doLast
+        }
+
+        spvDir.asFile.mkdirs()
+
+        wgslFiles.forEach { wgslFile ->
+            val outputFile = spvDir.file("${wgslFile.nameWithoutExtension}.spv").asFile
+            logger.lifecycle("Compiling ${wgslFile.name} → ${outputFile.name}")
+
+            val execResult = runCatching {
+                project.exec {
+                    commandLine(tintExecutable, "--format", "spirv", wgslFile.absolutePath, "-o", outputFile.absolutePath)
+                }
+            }
+
+            if (execResult.isFailure) {
+                logger.error(
+                    """
+                        Failed to run Tint compiler.
+                        Ensure '$tintExecutable' is installed and available on PATH (override via -PtintExecutable=/path/to/tint).
+                    """.trimIndent()
+                )
+                throw execResult.exceptionOrNull() ?: GradleException("Tint execution failed for ${wgslFile.name}.")
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "jvmProcessResources" }.configureEach {
+    dependsOn(compileShaders)
+}
 
 // ============================================================================
 // Custom Tasks for Running Examples

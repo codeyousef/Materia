@@ -57,49 +57,25 @@ class TriangleExample(
 ) {
     private var orbitController: OrbitController? = null
     suspend fun boot(): TriangleBootLog {
-        val fallbackLog = TriangleBootLog(
-            backend = preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,
-            adapterName = "Fallback Adapter",
-            deviceLabel = "triangle-device",
-            pipelineLabel = "triangle-pipeline",
-            meshCount = 1,
-            cameraPosition = Vector3f(0f, 0f, 2f)
+        val instance = createGpuInstance(
+            GpuInstanceDescriptor(
+                preferredBackends = preferredBackends,
+                label = "triangle-instance"
+            )
         )
 
-        val instance = try {
-            createGpuInstance(
-                GpuInstanceDescriptor(
-                    preferredBackends = preferredBackends,
-                    label = "triangle-instance"
-                )
+        val adapter = instance.requestAdapter(
+            GpuRequestAdapterOptions(
+                powerPreference = powerPreference,
+                label = "triangle-adapter"
             )
-        } catch (failure: Throwable) {
-            println("TriangleExample: falling back to placeholder GPU instance (${failure.message})")
-            return fallbackLog
-        }
+        )
 
-        val adapter = try {
-            instance.requestAdapter(
-                GpuRequestAdapterOptions(
-                    powerPreference = powerPreference,
-                    label = "triangle-adapter"
-                )
+        val device = adapter.requestDevice(
+            GpuDeviceDescriptor(
+                label = "triangle-device"
             )
-        } catch (failure: Throwable) {
-            println("TriangleExample: falling back to placeholder adapter (${failure.message})")
-            return fallbackLog
-        }
-
-        val device = try {
-            adapter.requestDevice(
-                GpuDeviceDescriptor(
-                    label = "triangle-device"
-                )
-            )
-        } catch (failure: Throwable) {
-            println("TriangleExample: falling back to placeholder device (${failure.message})")
-            return fallbackLog
-        }
+        )
 
         val vertexShader = device.createShaderModule(
             GpuShaderModuleDescriptor(

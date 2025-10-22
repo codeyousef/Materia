@@ -58,3 +58,4 @@ Thumbs.db
 *.pid
 /docs/private/
 .aider*
+/dawn/

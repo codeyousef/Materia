@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KreeKt Triangle Example</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #kreekt-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .info-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 250px;
+        }
+
+        .info-overlay h3 {
+            margin: 0 0 10px 0;
+            color: #4fc3f7;
+            font-size: 16px;
+        }
+
+        .controls {
+            margin: 10px 0;
+        }
+
+        .controls div {
+            margin: 2px 0;
+            font-size: 12px;
+        }
+
+        .stats {
+            margin-top: 10px;
+            font-size: 11px;
+            opacity: 0.8;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            padding-top: 8px;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading h2 {
+            margin: 0 0 10px 0;
+            color: #4fc3f7;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .warning {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255, 152, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<canvas id="kreekt-canvas"></canvas>
+
+<div class="info-overlay">
+    <h3>🚀 KreeKt 3D Engine</h3>
+    <div><strong>Controls:</strong></div>
+    <div class="controls">
+        <div>WASD - Move camera</div>
+        <div>Q/E - Move up/down</div>
+        <div>Mouse - Look around (drag)</div>
+    </div>
+    <div class="stats">
+        <div>FPS: <span id="fps">--</span></div>
+        <div>Objects: <span id="objects">--</span></div>
+        <div>Renderer: <span id="renderer">WebGPU</span></div>
+    </div>
+</div>
+
+<div class="loading" id="loading-overlay">
+    <h2>Initializing WebGPU...</h2>
+    <div class="spinner"></div>
+    <p>Please ensure your browser supports WebGPU.</p>
+</div>
+
+<div class="warning" id="warning-banner">
+    ⚠️ WebGPU not available. Falling back to WebGL.
+</div>
+
+<script>
+    async function checkWebGPU() {
+        if (!navigator.gpu) {
+            console.warn('WebGPU not supported - falling back to WebGL');
+            document.getElementById('warning-banner').style.display = 'block';
+            document.getElementById('renderer').textContent = 'WebGL (Fallback)';
+            return false;
+        }
+        return true;
+    }
+
+    async function init() {
+        const hasWebGPU = await checkWebGPU();
+
+        if (!hasWebGPU) {
+            console.warn('Running with WebGL fallback - some features may be limited.');
+        }
+
+        const module = await import('./triangle.js');
+        if (module && module.default) {
+            await module.default();
+        }
+
+        document.getElementById('loading-overlay').style.display = 'none';
+        requestAnimationFrame(updateStats);
+    }
+
+    let lastFrameTime = performance.now();
+    let frameCount = 0;
+    let fps = 0;
+
+    function updateStats(time) {
+        frameCount++;
+        const delta = time - lastFrameTime;
+        if (delta >= 1000) {
+            fps = Math.round((frameCount * 1000) / delta);
+            document.getElementById('fps').textContent = fps;
+            frameCount = 0;
+            lastFrameTime = time;
+        }
+        requestAnimationFrame(updateStats);
+    }
+
+    init();
+</script>
+
+<script>
+    const canvas = document.getElementById('kreekt-canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+    if (gl) {
+        document.getElementById('renderer').textContent = 'WebGL (Fallback)';
+        document.getElementById('warning-banner').style.display = 'block';
+
+        const vertexShaderSource = `
+            attribute vec3 position;
+            attribute vec3 color;
+            varying vec3 vColor;
+            uniform mat4 projection;
+            uniform mat4 modelView;
+
+            void main() {
+                vColor = color;
+                gl_Position = projection * modelView * vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShaderSource = `
+            precision mediump float;
+            varying vec3 vColor;
+            void main() {
+                gl_FragColor = vec4(vColor, 1.0);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Error compiling shader:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vertexSource, fragmentSource) {
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+            if (!vertexShader || !fragmentShader) return null;
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Error linking program:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+
+            return program;
+        }
+
+        const shaderProgram = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+        gl.useProgram(shaderProgram);
+
+        const vertices = [
+            -1.0, -1.0,  1.0,
+             1.0, -1.0,  1.0,
+             1.0,  1.0,  1.0,
+            -1.0,  1.0,  1.0,
+            -1.0, -1.0, -1.0,
+             1.0, -1.0, -1.0,
+             1.0,  1.0, -1.0,
+            -1.0,  1.0, -1.0
+        ];
+
+        const colors = [
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+            1.0, 1.0, 0.0,
+            1.0, 0.0, 1.0,
+            0.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+            0.0, 0.0, 0.0
+        ];
+
+        const indices = [
+            0, 1, 2, 0, 2, 3,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            2, 3, 7, 2, 7, 6,
+            0, 3, 7, 0, 7, 4,
+            1, 2, 6, 1, 6, 5
+        ];
+
+        const projectionMatrix = (function () {
+            const fieldOfView = (45 * Math.PI) / 180;
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            const zNear = 0.1;
+            const zFar = 100.0;
+            const f = 1.0 / Math.tan(fieldOfView / 2);
+            const rangeInv = 1.0 / (zNear - zFar);
+
+            return [
+                f / aspect, 0, 0, 0,
+                0, f, 0, 0,
+                0, 0, (zNear + zFar) * rangeInv, -1,
+                0, 0, zNear * zFar * rangeInv * 2, 0
+            ];
+        })();
+
+        function makeIdentityMatrix() {
+            return [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function multiplyMatrices(a, b) {
+            const result = new Array(16).fill(0);
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    for (let k = 0; k < 4; k++) {
+                        result[row * 4 + col] += a[row * 4 + k] * b[k * 4 + col];
+                    }
+                }
+            }
+            return result;
+        }
+
+        function translate(matrix, x, y, z) {
+            const translation = makeIdentityMatrix();
+            translation[12] = x;
+            translation[13] = y;
+            translation[14] = z;
+            return multiplyMatrices(matrix, translation);
+        }
+
+        function rotateY(matrix, angle) {
+            const rotation = [
+                Math.cos(angle), 0, Math.sin(angle), 0,
+                0, 1, 0, 0,
+                -Math.sin(angle), 0, Math.cos(angle), 0,
+                0, 0, 0, 1
+            ];
+            return multiplyMatrices(matrix, rotation);
+        }
+
+        function rotateX(matrix, angle) {
+            const rotation = [
+                1, 0, 0, 0,
+                0, Math.cos(angle), -Math.sin(angle), 0,
+                0, Math.sin(angle), Math.cos(angle), 0,
+                0, 0, 0, 1
+            ];
+            return multiplyMatrices(matrix, rotation);
+        }
+
+        function identity() {
+            return makeIdentityMatrix();
+        }
+
+        let positionLoc = gl.getAttribLocation(shaderProgram, 'position');
+        let colorLoc = gl.getAttribLocation(shaderProgram, 'color');
+        let projectionLoc = gl.getUniformLocation(shaderProgram, 'projection');
+        let mvMatrixLoc = gl.getUniformLocation(shaderProgram, 'modelView');
+
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+        const colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+        gl.uniformMatrix4fv(projectionLoc, false, new Float32Array(projectionMatrix));
+
+        let cameraPos = {x: 0, y: 0, z: 0};
+        let cameraRot = {x: 0, y: 0};
+        let keys = {};
+        let mouseDown = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toUpperCase()] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toUpperCase()] = false;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            mouseDown = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        document.addEventListener('mouseup', () => {
+            mouseDown = false;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!mouseDown) return;
+
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+
+            cameraRot.y += deltaX * 0.005;
+            cameraRot.x += deltaY * 0.005;
+
+            cameraRot.x = Math.max(-1.5, Math.min(1.5, cameraRot.x));
+
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        function updateCamera() {
+            const speed = 0.1;
+
+            if (keys['W']) {
+                cameraPos.z += speed * Math.cos(cameraRot.y);
+                cameraPos.x -= speed * Math.sin(cameraRot.y);
+            }
+            if (keys['S']) {
+                cameraPos.z -= speed * Math.cos(cameraRot.y);
+                cameraPos.x += speed * Math.sin(cameraRot.y);
+            }
+
+            if (keys['A']) {
+                cameraPos.x += speed * Math.cos(cameraRot.y);
+                cameraPos.z += speed * Math.sin(cameraRot.y);
+            }
+            if (keys['D']) {
+                cameraPos.x -= speed * Math.cos(cameraRot.y);
+                cameraPos.z -= speed * Math.sin(cameraRot.y);
+            }
+
+            if (keys['Q']) cameraPos.y += speed;
+            if (keys['E']) cameraPos.y -= speed;
+        }
+
+        let objectCount = 3;
+
+        function render(time) {
+            updateCamera();
+
+            gl.clearColor(0.05, 0.05, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.enable(gl.DEPTH_TEST);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < objectCount; i++) {
+                const mvMatrix = identity();
+
+                rotateX(mvMatrix, -cameraRot.x);
+                rotateY(mvMatrix, -cameraRot.y);
+                translate(mvMatrix, -cameraPos.x, -cameraPos.y, -cameraPos.z);
+
+                translate(mvMatrix, (i - 1) * 3, 0, -8);
+                rotateY(mvMatrix, time * 0.001 + i);
+                rotateX(mvMatrix, time * 0.0007);
+
+                gl.uniformMatrix4fv(mvMatrixLoc, false, mvMatrix);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(positionLoc);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+                gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(colorLoc);
+
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+            }
+
+            document.getElementById('objects').textContent = objectCount;
+
+            requestAnimationFrame(render);
+        }
+
+        render(0);
+    } else {
+        console.error('WebGL not supported!');
+        document.getElementById('renderer').textContent = 'Not Available';
+    }
+</script>
+</body>
+</html>

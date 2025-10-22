@@ -1,10 +1,7 @@
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-
 plugins {
     kotlin("multiplatform")
 }
 
-@OptIn(ExperimentalWasmDsl::class)
 kotlin {
     jvm {
         compilerOptions {
@@ -15,7 +12,7 @@ kotlin {
         }
     }
 
-    wasmJs {
+    js(IR) {
         browser {
             testTask {
                 enabled = false
@@ -43,7 +40,7 @@ kotlin {
             }
         }
 
-        val wasmJsMain by getting {
+        val jsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
             }
