@@ -356,10 +356,21 @@ actual class GpuSurface actual constructor(
     private var lastImage: SwapchainImage? = null
     private var preferredFormat: GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
     private var extent: Pair<Int, Int> = 640 to 480
+    private var frameCounter: Long = 0L
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
-        val surface = renderSurface ?: error("RenderSurface not attached. Call attachRenderSurface(surface) before configure().")
+        val surface = renderSurface
+        if (surface == null) {
+            swapchain?.dispose()
+            swapchain = null
+            extent = configuration.width to configuration.height
+            preferredFormat = configuration.format
+            frameCounter = 0L
+            this.configuration = configuration
+            return
+        }
+
         val vulkanSurface = surface as? VulkanSurface
             ?: error("RenderSurface must be VulkanSurface on JVM targets")
 
@@ -383,6 +394,7 @@ actual class GpuSurface actual constructor(
         extent = swapchainManager.getExtent()
         val actualFormat = swapchainManager.getImageFormat().toGpuTextureFormat()
         preferredFormat = actualFormat
+        frameCounter = 0L
         this.configuration = configuration.copy(
             width = resolvedWidth,
             height = resolvedHeight,
@@ -398,8 +410,23 @@ actual class GpuSurface actual constructor(
 
     actual fun acquireFrame(): GpuSurfaceFrame {
         val device = configuredDevice ?: error("GpuSurface not configured with a device")
-        val swapchainManager = swapchain ?: error("Swapchain not initialised. Call configure() first.")
         val config = configuration ?: error("Surface configuration missing.")
+        val swapchainManager = swapchain
+
+        if (swapchainManager == null) {
+            val descriptor = GpuTextureDescriptor(
+                label = "${label ?: "surface"}-frame-${frameCounter++}",
+                size = Triple(extent.first, extent.second, 1),
+                mipLevelCount = 1,
+                sampleCount = 1,
+                dimension = GpuTextureDimension.D2,
+                format = preferredFormat,
+                usage = config.usage
+            )
+            val texture = device.createTexture(descriptor)
+            val view = texture.createView()
+            return GpuSurfaceFrame(texture, view)
+        }
 
         val image = try {
             swapchainManager.acquireNextImage()
@@ -436,8 +463,13 @@ actual class GpuSurface actual constructor(
     }
 
     actual fun present(frame: GpuSurfaceFrame) {
+        val swapchainManager = swapchain
+        if (swapchainManager == null) {
+            frame.texture.destroy()
+            return
+        }
+
         val device = configuredDevice ?: error("GpuSurface not configured with a device")
-        val swapchainManager = swapchain ?: error("Swapchain not initialised. Call configure() first.")
         val image = lastImage ?: error("No swapchain image acquired before present()")
         val queueHandle = device.queue.vkQueueHandle
             ?: error("Vulkan queue handle unavailable for presentation")

@@ -1,15 +1,31 @@
 package io.kreekt.examples.triangle
 
+import io.kreekt.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLPreElement
 
 fun main() {
     val scope = MainScope()
     scope.launch {
+        val canvas = (document.createElement("canvas") as HTMLCanvasElement).apply {
+            width = 640
+            height = 480
+            style.width = "640px"
+            style.height = "480px"
+            style.display = "block"
+            style.margin = "24px auto"
+            style.backgroundColor = "#000"
+        }
+
+        document.body?.appendChild(canvas)
+
+        val surface = WebGPUSurface(canvas)
+
         val example = TriangleExample()
-        val log = example.boot()
+        val log = example.boot(renderSurface = surface, widthOverride = canvas.width, heightOverride = canvas.height)
         val message = log.pretty()
 
         println(message)

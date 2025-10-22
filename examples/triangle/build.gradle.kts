@@ -31,6 +31,7 @@ kotlin {
                 implementation(project(":kreekt-gpu"))
                 implementation(project(":kreekt-engine"))
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(project(":"))
             }
         }
 
@@ -43,6 +44,20 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.lwjgl.core)
+                implementation(libs.lwjgl.glfw)
+                implementation(libs.lwjgl.vulkan)
+
+                val osName = System.getProperty("os.name").lowercase()
+                val lwjglNatives = when {
+                    osName.contains("win") -> "natives-windows"
+                    osName.contains("linux") -> "natives-linux"
+                    osName.contains("mac") || osName.contains("darwin") -> "natives-macos"
+                    else -> "natives-linux"
+                }
+
+                runtimeOnly("org.lwjgl:lwjgl::$lwjglNatives")
+                runtimeOnly("org.lwjgl:lwjgl-glfw::$lwjglNatives")
             }
         }
 
