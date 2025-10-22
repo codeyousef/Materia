@@ -120,13 +120,13 @@ resources/shaders/*.wgsl
 
 ### 1) GPU/Core Abstractions (commonMain)
 
-* [ ] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
+* [x] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
 * [x] `GpuSurface` (configure, present, resize)
-* [ ] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
-* [ ] Shaders & pipelines
+* [x] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
+* [x] Shaders & pipelines
 
-    * [ ] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
-    * [ ] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
+    * [x] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
+    * [x] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
 * [x] `GpuRenderPipeline`, `GpuComputePipeline`
 * [ ] Command encoding & submit
 

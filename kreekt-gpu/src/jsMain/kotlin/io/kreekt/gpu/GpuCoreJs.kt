@@ -221,6 +221,74 @@ actual class GpuDevice actual constructor(
         return GpuSampler(this, descriptor).apply { attach(sampler) }
     }
 
+    actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout {
+        val jsDescriptor = emptyObject()
+        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
+        val entries = JsArray()
+        descriptor.entries.forEach { entry ->
+            val jsEntry = emptyObject()
+            jsEntry.asDynamic().binding = entry.binding
+            jsEntry.asDynamic().visibility = entry.visibility.toWebGpuVisibilityMask()
+            when (entry.resourceType) {
+                GpuBindingResourceType.UNIFORM_BUFFER -> {
+                    val buffer = emptyObject()
+                    buffer.asDynamic().type = "uniform"
+                    jsEntry.asDynamic().buffer = buffer
+                }
+                GpuBindingResourceType.STORAGE_BUFFER -> {
+                    val buffer = emptyObject()
+                    buffer.asDynamic().type = "storage"
+                    jsEntry.asDynamic().buffer = buffer
+                }
+                GpuBindingResourceType.SAMPLER -> {
+                    val sampler = emptyObject()
+                    sampler.asDynamic().type = "filtering"
+                    jsEntry.asDynamic().sampler = sampler
+                }
+                GpuBindingResourceType.TEXTURE -> {
+                    val texture = emptyObject()
+                    texture.asDynamic().sampleType = "float"
+                    texture.asDynamic().viewDimension = "2d"
+                    texture.asDynamic().multisampled = false
+                    jsEntry.asDynamic().texture = texture
+                }
+            }
+            entries.asDynamic().push(jsEntry)
+        }
+        jsDescriptor.asDynamic().entries = entries
+        val layout = handle().createBindGroupLayout(jsDescriptor)
+        return GpuBindGroupLayout(this, descriptor).apply { attach(layout) }
+    }
+
+    actual fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup {
+        val jsDescriptor = emptyObject()
+        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
+        jsDescriptor.asDynamic().layout = descriptor.layout.handle()
+        val entries = JsArray()
+        descriptor.entries.forEach { entry ->
+            val jsEntry = emptyObject()
+            jsEntry.asDynamic().binding = entry.binding
+            val resource = when (val binding = entry.resource) {
+                is GpuBindingResource.Buffer -> {
+                    val bufferBinding = emptyObject()
+                    bufferBinding.asDynamic().buffer = binding.buffer.handle()
+                    if (binding.offset != 0L) {
+                        bufferBinding.asDynamic().offset = binding.offset
+                    }
+                    binding.size?.let { bufferBinding.asDynamic().size = it }
+                    bufferBinding
+                }
+                is GpuBindingResource.Sampler -> binding.sampler.handle()
+                is GpuBindingResource.Texture -> binding.textureView.handle()
+            }
+            jsEntry.asDynamic().resource = resource
+            entries.asDynamic().push(jsEntry)
+        }
+        jsDescriptor.asDynamic().entries = entries
+        val bindGroup = handle().createBindGroup(jsDescriptor)
+        return GpuBindGroup(descriptor.layout, descriptor).apply { attach(bindGroup) }
+    }
+
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder {
         val encoder = descriptor?.label?.let {
             val encDesc = emptyObject()
@@ -323,7 +391,7 @@ actual class GpuQueue actual constructor(
 actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
-    private var configuration: GpuSurfaceConfiguration? = null
+    internal var configuration: GpuSurfaceConfiguration? = null
     private var configuredDevice: GpuDevice? = null
     internal var canvas: dynamic = null
     private var context: dynamic = null
@@ -654,6 +722,18 @@ actual class GpuBindGroup actual constructor(
         return handle
     }
 }
+
+private fun Set<GpuShaderStage>.toWebGpuVisibilityMask(): Int {
+    var mask = 0
+    if (contains(GpuShaderStage.VERTEX)) mask = mask or 0x1
+    if (contains(GpuShaderStage.FRAGMENT)) mask = mask or 0x2
+    if (contains(GpuShaderStage.COMPUTE)) mask = mask or 0x4
+    return mask
+}
+
+actual fun GpuBindGroupLayout.unwrapHandle(): Any? = handle()
+
+actual fun GpuBindGroup.unwrapHandle(): Any? = handle()
 
 actual class GpuRenderPipeline actual constructor(
     actual val device: GpuDevice,

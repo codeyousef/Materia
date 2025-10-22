@@ -26,7 +26,7 @@ data class GpuBindGroupLayoutDescriptor(
 data class GpuBindGroupLayoutEntry(
     val binding: Int,
     val visibility: Set<GpuShaderStage>,
-    val resourceType: String
+    val resourceType: GpuBindingResourceType
 )
 
 data class GpuBindGroupDescriptor(
@@ -37,8 +37,31 @@ data class GpuBindGroupDescriptor(
 
 data class GpuBindGroupEntry(
     val binding: Int,
-    val resource: Any
+    val resource: GpuBindingResource
 )
+
+enum class GpuBindingResourceType {
+    UNIFORM_BUFFER,
+    STORAGE_BUFFER,
+    SAMPLER,
+    TEXTURE
+}
+
+sealed class GpuBindingResource {
+    data class Buffer(
+        val buffer: GpuBuffer,
+        val offset: Long = 0L,
+        val size: Long? = null
+    ) : GpuBindingResource()
+
+    data class Sampler(
+        val sampler: GpuSampler
+    ) : GpuBindingResource()
+
+    data class Texture(
+        val textureView: GpuTextureView
+    ) : GpuBindingResource()
+}
 
 data class GpuRenderPipelineDescriptor(
     val label: String? = null,

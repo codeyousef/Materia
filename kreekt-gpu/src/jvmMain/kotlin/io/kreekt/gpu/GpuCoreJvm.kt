@@ -8,6 +8,7 @@ import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
 import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
 import io.kreekt.renderer.gpu.commandPoolHandle
+import io.kreekt.renderer.gpu.unwrapDescriptorPool
 import io.kreekt.renderer.gpu.unwrapHandle
 import io.kreekt.renderer.gpu.unwrapInstance
 import io.kreekt.renderer.gpu.unwrapPhysicalHandle
@@ -71,6 +72,12 @@ import org.lwjgl.vulkan.VkSubpassDescription
 import org.lwjgl.vulkan.VkViewport
 import org.lwjgl.vulkan.VkVertexInputAttributeDescription
 import org.lwjgl.vulkan.VkVertexInputBindingDescription
+import org.lwjgl.vulkan.VkDescriptorBufferInfo
+import org.lwjgl.vulkan.VkDescriptorImageInfo
+import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo
+import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding
+import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo
+import org.lwjgl.vulkan.VkWriteDescriptorSet
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
     withContext(Dispatchers.Default) {
@@ -132,15 +139,19 @@ actual class GpuDevice actual constructor(
     private lateinit var rendererContext: RendererGpuContext
     private val renderPassCache = mutableMapOf<RenderPassKey, Long>()
     private val trackedPipelines = mutableSetOf<GpuRenderPipeline>()
+    private val trackedBindGroupLayouts = mutableSetOf<GpuBindGroupLayout>()
+    private val trackedBindGroups = mutableSetOf<GpuBindGroup>()
 
     internal val rendererDevice: RendererGpuDevice
         get() = rendererContext.device
 
     internal var commandPool: Long = VK_NULL_HANDLE
+    internal var descriptorPoolHandle: Long = VK_NULL_HANDLE
 
     internal fun attachContext(context: RendererGpuContext) {
         rendererContext = context
         commandPool = context.device.commandPoolHandle()
+        descriptorPoolHandle = context.device.unwrapDescriptorPool() as? Long ?: VK_NULL_HANDLE
         queue.attachQueue(context.queue, this)
     }
 
@@ -158,6 +169,12 @@ actual class GpuDevice actual constructor(
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler =
         GpuSampler(this, descriptor).apply { initialise() }
 
+    actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout =
+        GpuBindGroupLayout(this, descriptor)
+
+    actual fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup =
+        GpuBindGroup(descriptor.layout, descriptor)
+
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
         GpuCommandEncoder(this, descriptor)
 
@@ -172,6 +189,16 @@ actual class GpuDevice actual constructor(
 
     actual fun destroy() {
         val deviceHandle = rendererDevice.unwrapHandle() as? VkDevice
+        val groupsSnapshot = trackedBindGroups.toList()
+        groupsSnapshot.forEach { group ->
+            group.destroy()
+        }
+        trackedBindGroups.clear()
+        val layoutsSnapshot = trackedBindGroupLayouts.toList()
+        layoutsSnapshot.forEach { layout ->
+            layout.destroy()
+        }
+        trackedBindGroupLayouts.clear()
         val pipelinesSnapshot = trackedPipelines.toList()
         pipelinesSnapshot.forEach { pipeline ->
             pipeline.destroyInternal()
@@ -302,6 +329,22 @@ actual class GpuDevice actual constructor(
 
     internal fun unregisterPipeline(pipeline: GpuRenderPipeline) {
         trackedPipelines -= pipeline
+    }
+
+    internal fun unregisterBindGroupLayout(layout: GpuBindGroupLayout) {
+        trackedBindGroupLayouts -= layout
+    }
+
+    internal fun unregisterBindGroup(bindGroup: GpuBindGroup) {
+        trackedBindGroups -= bindGroup
+    }
+
+    internal fun registerBindGroupLayout(layout: GpuBindGroupLayout) {
+        trackedBindGroupLayouts += layout
+    }
+
+    internal fun registerBindGroup(bindGroup: GpuBindGroup) {
+        trackedBindGroups += bindGroup
     }
 }
 
@@ -859,12 +902,136 @@ actual class GpuShaderModule actual constructor(
 actual class GpuBindGroupLayout actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuBindGroupLayoutDescriptor
-)
+) {
+    internal val handle: Long
+
+    init {
+        val vkDevice = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for bind group layout creation")
+        MemoryStack.stackPush().use { stack ->
+            val bindings = VkDescriptorSetLayoutBinding.calloc(descriptor.entries.size, stack)
+            descriptor.entries.forEachIndexed { index, entry ->
+                bindings[index]
+                    .binding(entry.binding)
+                    .descriptorType(entry.resourceType.toVulkanDescriptorType())
+                    .descriptorCount(1)
+                    .stageFlags(entry.visibility.toVulkanStageFlags())
+                    .pImmutableSamplers(null)
+            }
+
+            val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO)
+                .pBindings(bindings)
+
+            val pLayout = stack.mallocLong(1)
+            val result = vkCreateDescriptorSetLayout(vkDevice, layoutInfo, null, pLayout)
+            check(result == VK_SUCCESS) { "vkCreateDescriptorSetLayout failed with error code $result" }
+            handle = pLayout[0]
+        }
+        device.registerBindGroupLayout(this)
+    }
+
+    internal fun destroy() {
+        val vkDevice = device.rendererDevice.unwrapHandle() as? VkDevice ?: return
+        if (handle != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(vkDevice, handle, null)
+        }
+        device.unregisterBindGroupLayout(this)
+    }
+}
 
 actual class GpuBindGroup actual constructor(
     actual val layout: GpuBindGroupLayout,
     actual val descriptor: GpuBindGroupDescriptor
-)
+) {
+    internal var descriptorSet: Long = VK_NULL_HANDLE
+
+    init {
+        allocateDescriptorSet()
+        layout.device.registerBindGroup(this)
+    }
+
+    private fun allocateDescriptorSet() {
+        val vkDevice = layout.device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for bind group allocation")
+        val descriptorPool = layout.device.descriptorPoolHandle
+        check(descriptorPool != VK_NULL_HANDLE) { "Descriptor pool not available for bind group allocation" }
+
+        MemoryStack.stackPush().use { stack ->
+            val allocInfo = VkDescriptorSetAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO)
+                .descriptorPool(descriptorPool)
+                .pSetLayouts(stack.longs(layout.handle))
+
+            val pSet = stack.mallocLong(1)
+            val allocResult = vkAllocateDescriptorSets(vkDevice, allocInfo, pSet)
+            check(allocResult == VK_SUCCESS) { "vkAllocateDescriptorSets failed with error code $allocResult" }
+            descriptorSet = pSet[0]
+
+            val writes = VkWriteDescriptorSet.calloc(descriptor.entries.size, stack)
+            descriptor.entries.forEachIndexed { index, entry ->
+                val layoutEntry = layout.descriptor.entries.firstOrNull { it.binding == entry.binding }
+                    ?: error("No bind group layout entry for binding ${entry.binding}")
+                val write = writes[index]
+                    .sType(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET)
+                    .dstSet(descriptorSet)
+                    .dstBinding(entry.binding)
+                    .descriptorCount(1)
+                    .descriptorType(layoutEntry.resourceType.toVulkanDescriptorType())
+
+                when (layoutEntry.resourceType) {
+                    GpuBindingResourceType.UNIFORM_BUFFER,
+                    GpuBindingResourceType.STORAGE_BUFFER -> {
+                        val resource = entry.resource as? GpuBindingResource.Buffer
+                            ?: error("Bind group entry ${entry.binding} expected buffer resource")
+                        val rendererBuffer = resource.buffer.nativeBuffer()
+                        val bufferInfos = VkDescriptorBufferInfo.calloc(1, stack)
+                        bufferInfos[0]
+                            .buffer(rendererBuffer.buffer)
+                            .offset(resource.offset)
+                            .range(resource.size ?: rendererBuffer.size)
+                        write.pBufferInfo(bufferInfos)
+                    }
+                    GpuBindingResourceType.TEXTURE -> {
+                        val resource = entry.resource as? GpuBindingResource.Texture
+                            ?: error("Bind group entry ${entry.binding} expected texture resource")
+                        val imageInfos = VkDescriptorImageInfo.calloc(1, stack)
+                        imageInfos[0]
+                            .sampler(VK_NULL_HANDLE)
+                            .imageView(resource.textureView.handle)
+                            .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                        write.pImageInfo(imageInfos)
+                    }
+                    GpuBindingResourceType.SAMPLER -> {
+                        val resource = entry.resource as? GpuBindingResource.Sampler
+                            ?: error("Bind group entry ${entry.binding} expected sampler resource")
+                        val imageInfos = VkDescriptorImageInfo.calloc(1, stack)
+                        imageInfos[0]
+                            .sampler(resource.sampler.samplerHandle)
+                            .imageView(VK_NULL_HANDLE)
+                            .imageLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                        write.pImageInfo(imageInfos)
+                    }
+                }
+            }
+
+            vkUpdateDescriptorSets(vkDevice, writes, null)
+        }
+    }
+
+    internal fun destroy() {
+        val vkDevice = layout.device.rendererDevice.unwrapHandle() as? VkDevice ?: return
+        val descriptorPool = layout.device.descriptorPoolHandle
+        if (descriptorSet != VK_NULL_HANDLE && descriptorPool != VK_NULL_HANDLE) {
+            MemoryStack.stackPush().use { stack ->
+                val pSets = stack.longs(descriptorSet)
+                vkFreeDescriptorSets(vkDevice, descriptorPool, pSets)
+            }
+            descriptorSet = VK_NULL_HANDLE
+        }
+        layout.device.unregisterBindGroup(this)
+    }
+}
 
 actual class GpuRenderPipeline actual constructor(
     actual val device: GpuDevice,
@@ -1212,6 +1379,25 @@ private fun findMemoryType(
     }
     throw IllegalStateException("Failed to find suitable Vulkan memory type")
 }
+
+private fun Set<GpuShaderStage>.toVulkanStageFlags(): Int {
+    var flags = 0
+    if (contains(GpuShaderStage.VERTEX)) flags = flags or VK_SHADER_STAGE_VERTEX_BIT
+    if (contains(GpuShaderStage.FRAGMENT)) flags = flags or VK_SHADER_STAGE_FRAGMENT_BIT
+    if (contains(GpuShaderStage.COMPUTE)) flags = flags or VK_SHADER_STAGE_COMPUTE_BIT
+    return flags
+}
+
+private fun GpuBindingResourceType.toVulkanDescriptorType(): Int = when (this) {
+    GpuBindingResourceType.UNIFORM_BUFFER -> VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+    GpuBindingResourceType.STORAGE_BUFFER -> VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+    GpuBindingResourceType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
+    GpuBindingResourceType.TEXTURE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+}
+
+actual fun GpuBindGroupLayout.unwrapHandle(): Any? = handle
+
+actual fun GpuBindGroup.unwrapHandle(): Any? = descriptorSet
 
 actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
     renderSurface = surface

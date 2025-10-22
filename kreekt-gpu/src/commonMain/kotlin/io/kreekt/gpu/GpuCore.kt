@@ -91,6 +91,8 @@ expect class GpuDevice internal constructor(
     fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer
     fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture
     fun createSampler(descriptor: GpuSamplerDescriptor = GpuSamplerDescriptor()): GpuSampler
+    fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout
+    fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup
     fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor? = null): GpuCommandEncoder
     fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule
     fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline
@@ -122,3 +124,7 @@ data class GpuSurfaceFrame(
 )
 
 expect fun GpuSurface.attachRenderSurface(surface: RenderSurface)
+
+expect fun GpuBindGroupLayout.unwrapHandle(): Any?
+
+expect fun GpuBindGroup.unwrapHandle(): Any?
