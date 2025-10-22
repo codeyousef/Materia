@@ -26,6 +26,7 @@ import io.kreekt.gpu.GpuRequestAdapterOptions
 import io.kreekt.gpu.GpuShaderModuleDescriptor
 import io.kreekt.gpu.GpuSurface
 import io.kreekt.gpu.GpuSurfaceConfiguration
+import io.kreekt.gpu.GpuSurfaceFactory
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.GpuTextureUsage
 import io.kreekt.gpu.gpuBufferUsage
@@ -110,13 +111,13 @@ class TriangleExample(
             )
         )
 
-        val surface = GpuSurface(label = "triangle-surface")
-        surface.attachRenderSurface(renderSurface)
         val targetWidth = widthOverride ?: renderSurface.width.takeIf { it > 0 } ?: 640
         val targetHeight = heightOverride ?: renderSurface.height.takeIf { it > 0 } ?: 480
-        surface.configure(
-            device,
-            GpuSurfaceConfiguration(
+        val surface = GpuSurfaceFactory.create(
+            device = device,
+            renderSurface = renderSurface,
+            label = "triangle-surface",
+            configuration = GpuSurfaceConfiguration(
                 format = GpuTextureFormat.BGRA8_UNORM,
                 usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
                 width = targetWidth,

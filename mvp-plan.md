@@ -135,7 +135,7 @@ resources/shaders/*.wgsl
 * [ ] Minimal hidden sync (fences/events on Vulkan/MVK)
 * [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
 * [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
-* [ ] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
+* [x] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
 
 ### 2) Rendering Engine (common)
 
