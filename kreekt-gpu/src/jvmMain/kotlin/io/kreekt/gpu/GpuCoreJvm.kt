@@ -1,5 +1,7 @@
 package io.kreekt.gpu
 
+import io.kreekt.renderer.RenderSurface
+import io.kreekt.renderer.feature020.SwapchainImage
 import io.kreekt.renderer.gpu.GpuBuffer as RendererGpuBuffer
 import io.kreekt.renderer.gpu.GpuContext as RendererGpuContext
 import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
@@ -7,19 +9,67 @@ import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
 import io.kreekt.renderer.gpu.commandPoolHandle
 import io.kreekt.renderer.gpu.unwrapHandle
+import io.kreekt.renderer.gpu.unwrapInstance
+import io.kreekt.renderer.gpu.unwrapPhysicalHandle
+import io.kreekt.renderer.vulkan.VulkanSurface
+import io.kreekt.renderer.vulkan.VulkanSwapchain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import org.lwjgl.vulkan.VK10.*
+import org.lwjgl.vulkan.VK12.VK_FORMAT_D24_UNORM_S8_UINT
+import org.lwjgl.vulkan.KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR
+import org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+import org.lwjgl.vulkan.KHRSwapchain.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
+import org.lwjgl.vulkan.KHRSwapchain.VK_SUBOPTIMAL_KHR
+import org.lwjgl.vulkan.KHRSwapchain.vkQueuePresentKHR
+import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_TILING_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_SAMPLED_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_STORAGE_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_TRANSFER_DST_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+import org.lwjgl.vulkan.VkAttachmentDescription
+import org.lwjgl.vulkan.VkAttachmentReference
+import org.lwjgl.vulkan.VkClearValue
 import org.lwjgl.vulkan.VkCommandBuffer
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo
 import org.lwjgl.vulkan.VkDevice
+import org.lwjgl.vulkan.VkFramebufferCreateInfo
+import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo
+import org.lwjgl.vulkan.VkImageCreateInfo
+import org.lwjgl.vulkan.VkImageViewCreateInfo
+import org.lwjgl.vulkan.VkMemoryAllocateInfo
+import org.lwjgl.vulkan.VkMemoryRequirements
+import org.lwjgl.vulkan.VkInstance
+import org.lwjgl.vulkan.VkPipelineColorBlendAttachmentState
+import org.lwjgl.vulkan.VkPipelineColorBlendStateCreateInfo
+import org.lwjgl.vulkan.VkPipelineDynamicStateCreateInfo
+import org.lwjgl.vulkan.VkPipelineInputAssemblyStateCreateInfo
+import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo
+import org.lwjgl.vulkan.VkPipelineMultisampleStateCreateInfo
+import org.lwjgl.vulkan.VkPipelineRasterizationStateCreateInfo
+import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo
+import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo
+import org.lwjgl.vulkan.VkPhysicalDevice
+import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties
+import org.lwjgl.vulkan.VkPresentInfoKHR
 import org.lwjgl.vulkan.VkQueue
+import org.lwjgl.vulkan.VkRect2D
+import org.lwjgl.vulkan.VkRenderPassBeginInfo
+import org.lwjgl.vulkan.VkRenderPassCreateInfo
+import org.lwjgl.vulkan.VkSamplerCreateInfo
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo
 import org.lwjgl.vulkan.VkSubmitInfo
+import org.lwjgl.vulkan.VkSubpassDependency
+import org.lwjgl.vulkan.VkSubpassDescription
+import org.lwjgl.vulkan.VkViewport
+import org.lwjgl.vulkan.VkVertexInputAttributeDescription
+import org.lwjgl.vulkan.VkVertexInputBindingDescription
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
     withContext(Dispatchers.Default) {
@@ -79,6 +129,8 @@ actual class GpuDevice actual constructor(
     actual val descriptor: GpuDeviceDescriptor
 ) {
     private lateinit var rendererContext: RendererGpuContext
+    private val renderPassCache = mutableMapOf<RenderPassKey, Long>()
+    private val trackedPipelines = mutableSetOf<GpuRenderPipeline>()
 
     internal val rendererDevice: RendererGpuDevice
         get() = rendererContext.device
@@ -100,10 +152,10 @@ actual class GpuDevice actual constructor(
     }
 
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture =
-        GpuTexture(this, descriptor)
+        GpuTexture(this, descriptor).apply { initialise() }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler =
-        GpuSampler(this, descriptor)
+        GpuSampler(this, descriptor).apply { initialise() }
 
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
         GpuCommandEncoder(this, descriptor)
@@ -112,13 +164,25 @@ actual class GpuDevice actual constructor(
         GpuShaderModule(this, descriptor)
 
     actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline =
-        GpuRenderPipeline(this, descriptor)
+        GpuRenderPipeline(this, descriptor).also { registerPipeline(it) }
 
     actual fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline =
         GpuComputePipeline(this, descriptor)
 
     actual fun destroy() {
-        // Renderer context lifecycle is managed externally (RendererFactory). No-op here.
+        val deviceHandle = rendererDevice.unwrapHandle() as? VkDevice
+        val pipelinesSnapshot = trackedPipelines.toList()
+        pipelinesSnapshot.forEach { pipeline ->
+            pipeline.destroyInternal()
+        }
+        trackedPipelines.clear()
+        if (deviceHandle != null) {
+            renderPassCache.values.forEach { handle ->
+                vkDestroyRenderPass(deviceHandle, handle, null)
+            }
+        }
+        renderPassCache.clear()
+        // Renderer context lifecycle is managed externally (RendererFactory) for device/queue.
     }
 
     internal fun mapAndCopy(buffer: RendererGpuBuffer, data: ByteArray, byteOffset: Long) {
@@ -175,6 +239,69 @@ actual class GpuDevice actual constructor(
             vkFreeCommandBuffers(deviceHandle, commandPool, pointerBuffer)
         }
     }
+
+    internal fun obtainRenderPass(key: RenderPassKey): Long {
+        renderPassCache[key]?.let { return it }
+        val deviceHandle = rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for render pass creation")
+        MemoryStack.stackPush().use { stack ->
+            val attachmentDescriptions = VkAttachmentDescription.calloc(key.colorAttachments.size, stack)
+            key.colorAttachments.forEachIndexed { index, attachment ->
+                attachmentDescriptions[index]
+                    .format(attachment.format.toVulkan())
+                    .samples(VK_SAMPLE_COUNT_1_BIT)
+                    .loadOp(attachment.loadOp.toVulkan())
+                    .storeOp(attachment.storeOp.toVulkan())
+                    .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                    .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                    .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                    .finalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            }
+
+            val colorReferences = VkAttachmentReference.calloc(key.colorAttachments.size, stack)
+            key.colorAttachments.forEachIndexed { index, _ ->
+                colorReferences[index]
+                    .attachment(index)
+                    .layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            }
+
+            val subpasses = VkSubpassDescription.calloc(1, stack)
+            subpasses[0]
+                .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
+                .colorAttachmentCount(colorReferences.capacity())
+                .pColorAttachments(colorReferences)
+
+            val dependencies = VkSubpassDependency.calloc(1, stack)
+            dependencies[0]
+                .srcSubpass(VK_SUBPASS_EXTERNAL)
+                .dstSubpass(0)
+                .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                .srcAccessMask(0)
+                .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+
+            val renderPassInfo = VkRenderPassCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO)
+                .pAttachments(attachmentDescriptions)
+                .pSubpasses(subpasses)
+                .pDependencies(dependencies)
+
+            val pRenderPass = stack.mallocLong(1)
+            val result = vkCreateRenderPass(deviceHandle, renderPassInfo, null, pRenderPass)
+            check(result == VK_SUCCESS) { "vkCreateRenderPass failed with error code $result" }
+            val handle = pRenderPass[0]
+            renderPassCache[key] = handle
+            return handle
+        }
+    }
+
+    internal fun registerPipeline(pipeline: GpuRenderPipeline) {
+        trackedPipelines += pipeline
+    }
+
+    internal fun unregisterPipeline(pipeline: GpuRenderPipeline) {
+        trackedPipelines -= pipeline
+    }
 }
 
 actual class GpuQueue actual constructor(
@@ -189,6 +316,9 @@ actual class GpuQueue actual constructor(
         vkQueue = queue.unwrapHandle() as? VkQueue
         this.device = device
     }
+
+    internal val vkQueueHandle: VkQueue?
+        get() = vkQueue
 
     actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
         if (commandBuffers.isEmpty()) return
@@ -220,42 +350,140 @@ actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
     private var configuration: GpuSurfaceConfiguration? = null
-    private var configuredDevice: GpuDevice? = null
-    private var frameCounter: Long = 0L
+    internal var configuredDevice: GpuDevice? = null
+    internal var renderSurface: RenderSurface? = null
+    private var swapchain: VulkanSwapchain? = null
+    private var lastImage: SwapchainImage? = null
+    private var preferredFormat: GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
+    private var extent: Pair<Int, Int> = 640 to 480
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
-        this.configuration = configuration
+        val surface = renderSurface ?: error("RenderSurface not attached. Call attachRenderSurface(surface) before configure().")
+        val vulkanSurface = surface as? VulkanSurface
+            ?: error("RenderSurface must be VulkanSurface on JVM targets")
+
+        val vkInstance = device.rendererDevice.unwrapInstance() as? VkInstance
+            ?: error("Vulkan instance handle unavailable for surface configuration")
+        val vkDevice = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for surface configuration")
+        val vkPhysicalDevice = device.rendererDevice.unwrapPhysicalHandle() as? VkPhysicalDevice
+            ?: error("Vulkan physical device handle unavailable for surface configuration")
+
+        val surfaceHandle = vulkanSurface.createSurface(vkInstance)
+        swapchain?.dispose()
+
+        val swapchainManager = VulkanSwapchain(vkDevice, vkPhysicalDevice, surfaceHandle)
+        val (frameWidth, frameHeight) = vulkanSurface.getFramebufferSize()
+        val resolvedWidth = if (configuration.width > 0) configuration.width else frameWidth
+        val resolvedHeight = if (configuration.height > 0) configuration.height else frameHeight
+        swapchainManager.recreateSwapchain(resolvedWidth, resolvedHeight)
+        swapchain = swapchainManager
+
+        extent = swapchainManager.getExtent()
+        val actualFormat = swapchainManager.getImageFormat().toGpuTextureFormat()
+        preferredFormat = actualFormat
+        this.configuration = configuration.copy(
+            width = resolvedWidth,
+            height = resolvedHeight,
+            format = actualFormat
+        )
     }
 
     actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
         @Suppress("UNUSED_PARAMETER")
         val unused = adapter
-        return configuration?.format ?: GpuTextureFormat.BGRA8_UNORM
+        return preferredFormat
     }
 
     actual fun acquireFrame(): GpuSurfaceFrame {
-        val config = configuration
-            ?: error("GpuSurface not configured before acquiring frame")
-        val device = configuredDevice
-            ?: error("GpuSurface missing device reference")
-        val descriptor = GpuTextureDescriptor(
-            label = "${label ?: "surface"}-frame-${frameCounter++}",
-            size = Triple(config.width, config.height, 1),
-            format = config.format,
+        val device = configuredDevice ?: error("GpuSurface not configured with a device")
+        val swapchainManager = swapchain ?: error("Swapchain not initialised. Call configure() first.")
+        val config = configuration ?: error("Surface configuration missing.")
+
+        val image = try {
+            swapchainManager.acquireNextImage()
+        } catch (error: Exception) {
+            throw IllegalStateException("Failed to acquire swapchain image", error)
+        }
+
+        lastImage = image
+        extent = swapchainManager.getExtent()
+
+        val textureDescriptor = GpuTextureDescriptor(
+            label = "${label ?: "surface"}-frame-${image.index}",
+            size = Triple(extent.first, extent.second, 1),
+            mipLevelCount = 1,
+            sampleCount = 1,
+            dimension = GpuTextureDimension.D2,
+            format = preferredFormat,
             usage = config.usage
         )
-        val texture = device.createTexture(descriptor)
-        val view = texture.createView()
+
+        val swapchainImageHandle = (image.handle as? Long)
+            ?: error("Swapchain image handle is not a Long (actual=${image.handle})")
+        val texture = GpuTexture(device, textureDescriptor).apply {
+            wrapExternalImage(swapchainImageHandle)
+        }
+
+        val imageViewHandle = swapchainManager.getImageView(image.index)
+        val view = texture.attachExternalView(
+            imageViewHandle,
+            GpuTextureViewDescriptor(label = "${textureDescriptor.label}-view")
+        )
+
         return GpuSurfaceFrame(texture, view)
     }
 
     actual fun present(frame: GpuSurfaceFrame) {
+        val device = configuredDevice ?: error("GpuSurface not configured with a device")
+        val swapchainManager = swapchain ?: error("Swapchain not initialised. Call configure() first.")
+        val image = lastImage ?: error("No swapchain image acquired before present()")
+        val queueHandle = device.queue.vkQueueHandle
+            ?: error("Vulkan queue handle unavailable for presentation")
+
+        MemoryStack.stackPush().use { stack ->
+            val presentInfo = VkPresentInfoKHR.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
+                .swapchainCount(1)
+                .pSwapchains(stack.longs(swapchainManager.getSwapchainHandle()))
+                .pImageIndices(stack.ints(image.index))
+
+            when (val result = vkQueuePresentKHR(queueHandle, presentInfo)) {
+                VK_SUCCESS -> Unit
+                VK_SUBOPTIMAL_KHR, VK_ERROR_OUT_OF_DATE_KHR -> {
+                    val (width, height) = extent
+                    swapchainManager.recreateSwapchain(width, height)
+                    extent = swapchainManager.getExtent()
+                    val actualFormat = swapchainManager.getImageFormat().toGpuTextureFormat()
+                    preferredFormat = actualFormat
+                    configuration = configuration?.copy(
+                        width = extent.first,
+                        height = extent.second,
+                        format = actualFormat
+                    )
+                }
+                else -> error("vkQueuePresentKHR failed with error code $result")
+            }
+        }
+
+        vkQueueWaitIdle(queueHandle)
+        lastImage = null
         frame.texture.destroy()
     }
 
     actual fun resize(width: Int, height: Int) {
-        configuration = configuration?.copy(width = width, height = height)
+        val swapchainManager = swapchain
+        if (swapchainManager != null) {
+            swapchainManager.recreateSwapchain(width, height)
+            extent = swapchainManager.getExtent()
+            val actualFormat = swapchainManager.getImageFormat().toGpuTextureFormat()
+            preferredFormat = actualFormat
+            configuration = configuration?.copy(width = width, height = height, format = actualFormat)
+        } else {
+            configuration = configuration?.copy(width = width, height = height)
+            extent = width to height
+        }
     }
 }
 
@@ -294,29 +522,198 @@ actual class GpuBuffer actual constructor(
     internal fun attach(buffer: RendererGpuBuffer) {
         rendererBuffer = buffer
     }
+
+    internal fun nativeBuffer(): RendererGpuBuffer {
+        check(::rendererBuffer.isInitialized) { "Renderer buffer not attached" }
+        return rendererBuffer
+    }
 }
+
+private data class ImageViewRecord(
+    val handle: Long,
+    val owned: Boolean
+)
 
 actual class GpuTexture actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuTextureDescriptor
 ) {
-    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView =
-        GpuTextureView(this, descriptor)
+    internal var imageHandle: Long = VK_NULL_HANDLE
+    internal var memoryHandle: Long = VK_NULL_HANDLE
+    private val imageViewRecords = mutableListOf<ImageViewRecord>()
+    private var ownsImage = false
+
+    internal fun initialise() {
+        if (imageHandle != VK_NULL_HANDLE) return
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for texture allocation")
+        val physicalDevice = device.rendererDevice.unwrapPhysicalHandle() as? VkPhysicalDevice
+            ?: error("Vulkan physical device unavailable for texture allocation")
+
+        MemoryStack.stackPush().use { stack ->
+            ownsImage = true
+            val createInfo = VkImageCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
+                .imageType(VK_IMAGE_TYPE_2D)
+                .format(descriptor.format.toVulkan())
+                .mipLevels(descriptor.mipLevelCount)
+                .arrayLayers(1)
+                .samples(VK_SAMPLE_COUNT_1_BIT)
+                .tiling(VK_IMAGE_TILING_OPTIMAL)
+                .usage(descriptor.usage.toVulkanImageUsage())
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+
+            createInfo.extent()
+                .width(descriptor.size.first)
+                .height(descriptor.size.second)
+                .depth(descriptor.size.third)
+
+            val pImage = stack.mallocLong(1)
+            val result = vkCreateImage(deviceHandle, createInfo, null, pImage)
+            check(result == VK_SUCCESS) { "vkCreateImage failed with error code $result" }
+            imageHandle = pImage[0]
+
+            val memoryRequirements = VkMemoryRequirements.calloc(stack)
+            vkGetImageMemoryRequirements(deviceHandle, imageHandle, memoryRequirements)
+
+            val allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                .allocationSize(memoryRequirements.size())
+                .memoryTypeIndex(
+                    findMemoryType(
+                        physicalDevice,
+                        memoryRequirements.memoryTypeBits(),
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                    )
+                )
+
+            val pMemory = stack.mallocLong(1)
+            val allocResult = vkAllocateMemory(deviceHandle, allocInfo, null, pMemory)
+            check(allocResult == VK_SUCCESS) { "vkAllocateMemory failed with error code $allocResult" }
+            memoryHandle = pMemory[0]
+
+            val bindResult = vkBindImageMemory(deviceHandle, imageHandle, memoryHandle, 0)
+            check(bindResult == VK_SUCCESS) { "vkBindImageMemory failed with error code $bindResult" }
+        }
+    }
+
+    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView {
+        if (imageHandle == VK_NULL_HANDLE) {
+            initialise()
+        }
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for image view creation")
+        MemoryStack.stackPush().use { stack ->
+            val viewInfo = VkImageViewCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
+                .image(imageHandle)
+                .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                .format((descriptor.format ?: this.descriptor.format).toVulkan())
+
+            viewInfo.components()
+                .r(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .g(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .b(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .a(VK_COMPONENT_SWIZZLE_IDENTITY)
+
+            val mipLevels = descriptor.mipLevelCount ?: this.descriptor.mipLevelCount
+            val arrayLayers = descriptor.arrayLayerCount ?: 1
+
+            viewInfo.subresourceRange()
+                .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseMipLevel(descriptor.baseMipLevel)
+                .levelCount(mipLevels)
+                .baseArrayLayer(descriptor.baseArrayLayer)
+                .layerCount(arrayLayers)
+
+            val pImageView = stack.mallocLong(1)
+            val result = vkCreateImageView(deviceHandle, viewInfo, null, pImageView)
+            check(result == VK_SUCCESS) { "vkCreateImageView failed with error code $result" }
+
+            val handle = pImageView[0]
+            imageViewRecords += ImageViewRecord(handle, owned = true)
+            return GpuTextureView(this, descriptor).apply { attach(handle) }
+        }
+    }
 
     actual fun destroy() {
-        // Textures not yet backed by renderer resources on JVM.
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice ?: return
+        imageViewRecords.forEach { record ->
+            if (record.owned) {
+                vkDestroyImageView(deviceHandle, record.handle, null)
+            }
+        }
+        imageViewRecords.clear()
+        if (ownsImage && imageHandle != VK_NULL_HANDLE) {
+            vkDestroyImage(deviceHandle, imageHandle, null)
+            imageHandle = VK_NULL_HANDLE
+        }
+        if (ownsImage && memoryHandle != VK_NULL_HANDLE) {
+            vkFreeMemory(deviceHandle, memoryHandle, null)
+            memoryHandle = VK_NULL_HANDLE
+        }
+        ownsImage = false
+    }
+
+    internal fun wrapExternalImage(image: Long) {
+        imageHandle = image
+        memoryHandle = VK_NULL_HANDLE
+        ownsImage = false
+    }
+
+    internal fun attachExternalView(
+        handle: Long,
+        descriptor: GpuTextureViewDescriptor
+    ): GpuTextureView {
+        imageViewRecords += ImageViewRecord(handle, owned = false)
+        return GpuTextureView(this, descriptor).apply { attach(handle) }
     }
 }
 
 actual class GpuTextureView actual constructor(
     actual val texture: GpuTexture,
     actual val descriptor: GpuTextureViewDescriptor
-)
+) {
+    internal var handle: Long = VK_NULL_HANDLE
+        private set
+
+    internal fun attach(handle: Long) {
+        this.handle = handle
+    }
+}
 
 actual class GpuSampler actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuSamplerDescriptor
-)
+) {
+    internal var samplerHandle: Long = VK_NULL_HANDLE
+
+    internal fun initialise() {
+        if (samplerHandle != VK_NULL_HANDLE) return
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for sampler creation")
+        MemoryStack.stackPush().use { stack ->
+            val samplerInfo = VkSamplerCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO)
+                .magFilter(descriptor.magFilter.toVulkan())
+                .minFilter(descriptor.minFilter.toVulkan())
+                .mipmapMode(descriptor.mipmapFilter.toVulkan())
+                .addressModeU(descriptor.addressModeU.toVulkan())
+                .addressModeV(descriptor.addressModeV.toVulkan())
+                .addressModeW(descriptor.addressModeW.toVulkan())
+                .mipLodBias(0f)
+                .anisotropyEnable(false)
+                .compareEnable(false)
+                .minLod(descriptor.lodMinClamp)
+                .maxLod(descriptor.lodMaxClamp)
+
+            val pSampler = stack.mallocLong(1)
+            val result = vkCreateSampler(deviceHandle, samplerInfo, null, pSampler)
+            check(result == VK_SUCCESS) { "vkCreateSampler failed with error code $result" }
+            samplerHandle = pSampler[0]
+        }
+    }
+}
 
 actual class GpuCommandEncoder actual internal constructor(
     actual val device: GpuDevice,
@@ -346,8 +743,12 @@ actual class GpuCommandEncoder actual internal constructor(
         }
     }
 
-    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder =
-        GpuRenderPassEncoder(this, descriptor)
+    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder {
+        check(!finished) { "Cannot begin render pass after encoder has been finished" }
+        return GpuRenderPassEncoder(this, descriptor)
+    }
+
+    internal fun vkCommandBuffer(): VkCommandBuffer = commandBuffer
 }
 
 actual class GpuCommandBuffer actual internal constructor(
@@ -421,7 +822,137 @@ actual class GpuBindGroup actual constructor(
 actual class GpuRenderPipeline actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuRenderPipelineDescriptor
-)
+) {
+    internal val renderPassKey: RenderPassKey
+    internal val renderPassHandle: Long
+    internal val pipelineHandle: Long
+    private val pipelineLayoutHandle: Long
+
+    init {
+        val colorKeys = descriptor.colorFormats.ifEmpty {
+            listOf(GpuTextureFormat.BGRA8_UNORM)
+        }.map { format ->
+            ColorAttachmentKey(format, GpuLoadOp.CLEAR, GpuStoreOp.STORE)
+        }
+        renderPassKey = RenderPassKey(colorKeys, descriptor.depthStencilFormat)
+        renderPassHandle = device.obtainRenderPass(renderPassKey)
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for pipeline creation")
+        MemoryStack.stackPush().use { stack ->
+            val pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO)
+                .pSetLayouts(null)
+                .pPushConstantRanges(null)
+
+            val pPipelineLayout = stack.mallocLong(1)
+            val layoutResult = vkCreatePipelineLayout(deviceHandle, pipelineLayoutInfo, null, pPipelineLayout)
+            check(layoutResult == VK_SUCCESS) { "vkCreatePipelineLayout failed with error code $layoutResult" }
+            pipelineLayoutHandle = pPipelineLayout[0]
+
+            val stages = VkPipelineShaderStageCreateInfo.calloc(2, stack)
+            stages[0]
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO)
+                .stage(VK_SHADER_STAGE_VERTEX_BIT)
+                .module(descriptor.vertexShader.handle)
+                .pName(stack.UTF8("main"))
+            val fragmentShader = descriptor.fragmentShader
+                ?: error("Fragment shader required for Vulkan render pipeline")
+            stages[1]
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO)
+                .stage(VK_SHADER_STAGE_FRAGMENT_BIT)
+                .module(fragmentShader.handle)
+                .pName(stack.UTF8("main"))
+
+            val bindingDescriptions = VkVertexInputBindingDescription.calloc(1, stack)
+            bindingDescriptions[0]
+                .binding(0)
+                .stride(3 * Float.SIZE_BYTES)
+                .inputRate(VK_VERTEX_INPUT_RATE_VERTEX)
+
+            val attributeDescriptions = VkVertexInputAttributeDescription.calloc(1, stack)
+            attributeDescriptions[0]
+                .binding(0)
+                .location(0)
+                .format(VK_FORMAT_R32G32B32_SFLOAT)
+                .offset(0)
+
+            val vertexInputInfo = VkPipelineVertexInputStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO)
+                .pVertexBindingDescriptions(bindingDescriptions)
+                .pVertexAttributeDescriptions(attributeDescriptions)
+
+            val inputAssembly = VkPipelineInputAssemblyStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO)
+                .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                .primitiveRestartEnable(false)
+
+            val viewportState = org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO)
+                .viewportCount(1)
+                .scissorCount(1)
+
+            val rasterizer = VkPipelineRasterizationStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO)
+                .polygonMode(VK_POLYGON_MODE_FILL)
+                .cullMode(VK_CULL_MODE_NONE)
+                .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+                .lineWidth(1f)
+
+            val multisampling = VkPipelineMultisampleStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO)
+                .rasterizationSamples(VK_SAMPLE_COUNT_1_BIT)
+
+            val colorBlendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack)
+            colorBlendAttachment[0]
+                .colorWriteMask(
+                    VK_COLOR_COMPONENT_R_BIT or
+                        VK_COLOR_COMPONENT_G_BIT or
+                        VK_COLOR_COMPONENT_B_BIT or
+                        VK_COLOR_COMPONENT_A_BIT
+                )
+                .blendEnable(false)
+
+            val colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO)
+                .pAttachments(colorBlendAttachment)
+
+            val dynamicStates = stack.ints(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR)
+            val dynamicState = VkPipelineDynamicStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO)
+                .pDynamicStates(dynamicStates)
+
+            val pipelineInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack)
+                .sType(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO)
+                .pStages(stages)
+                .pVertexInputState(vertexInputInfo)
+                .pInputAssemblyState(inputAssembly)
+                .pViewportState(viewportState)
+                .pRasterizationState(rasterizer)
+                .pMultisampleState(multisampling)
+                .pColorBlendState(colorBlending)
+                .pDynamicState(dynamicState)
+                .layout(pipelineLayoutHandle)
+                .renderPass(renderPassHandle)
+                .subpass(0)
+
+            val pPipeline = stack.mallocLong(1)
+            val pipelineResult = vkCreateGraphicsPipelines(deviceHandle, VK_NULL_HANDLE, pipelineInfo, null, pPipeline)
+            check(pipelineResult == VK_SUCCESS) { "vkCreateGraphicsPipelines failed with error code $pipelineResult" }
+            pipelineHandle = pPipeline[0]
+        }
+    }
+
+    internal fun destroyInternal() {
+        val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice ?: return
+        if (pipelineHandle != VK_NULL_HANDLE) {
+            vkDestroyPipeline(deviceHandle, pipelineHandle, null)
+        }
+        if (pipelineLayoutHandle != VK_NULL_HANDLE) {
+            vkDestroyPipelineLayout(deviceHandle, pipelineLayoutHandle, null)
+        }
+        device.unregisterPipeline(this)
+    }
+}
 
 actual class GpuComputePipeline actual constructor(
     actual val device: GpuDevice,
@@ -432,11 +963,209 @@ actual class GpuRenderPassEncoder actual constructor(
     actual val encoder: GpuCommandEncoder,
     actual val descriptor: GpuRenderPassDescriptor
 ) {
-    actual fun setPipeline(pipeline: GpuRenderPipeline) {}
+    private val commandBuffer: VkCommandBuffer = encoder.vkCommandBuffer()
+    private val device: GpuDevice = encoder.device
+    private val deviceHandle: VkDevice =
+        device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for render pass encoding")
+    private val renderPassKey: RenderPassKey
+    private var framebufferHandle: Long = VK_NULL_HANDLE
+    private var activePipeline: GpuRenderPipeline? = null
+    private var ended = false
 
-    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {}
+    init {
+        if (descriptor.colorAttachments.isEmpty()) {
+            error("GpuRenderPassDescriptor requires at least one color attachment")
+        }
 
-    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {}
+        val colorKeys = descriptor.colorAttachments.map { attachment ->
+            ColorAttachmentKey(
+                format = attachment.view.texture.descriptor.format,
+                loadOp = attachment.loadOp,
+                storeOp = attachment.storeOp
+            )
+        }
+        renderPassKey = RenderPassKey(colorKeys, null)
+        val renderPassHandle = device.obtainRenderPass(renderPassKey)
 
-    actual fun end() {}
+        MemoryStack.stackPush().use { stack ->
+            val attachments = stack.mallocLong(descriptor.colorAttachments.size)
+            descriptor.colorAttachments.forEachIndexed { index, attachment ->
+                attachments.put(index, attachment.view.handle)
+            }
+
+            val firstAttachment = descriptor.colorAttachments.first()
+            val width = firstAttachment.view.texture.descriptor.size.first
+            val height = firstAttachment.view.texture.descriptor.size.second
+
+            val framebufferInfo = VkFramebufferCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO)
+                .renderPass(renderPassHandle)
+                .pAttachments(attachments)
+                .width(width)
+                .height(height)
+                .layers(1)
+
+            val pFramebuffer = stack.mallocLong(1)
+            val framebufferResult = vkCreateFramebuffer(deviceHandle, framebufferInfo, null, pFramebuffer)
+            check(framebufferResult == VK_SUCCESS) { "vkCreateFramebuffer failed with error code $framebufferResult" }
+            framebufferHandle = pFramebuffer[0]
+
+            val clearValues = VkClearValue.calloc(descriptor.colorAttachments.size, stack)
+            descriptor.colorAttachments.forEachIndexed { index, attachment ->
+                val clear = attachment.clearColor
+                clearValues[index].color()
+                    .float32(0, clear.getOrElse(0) { 0f })
+                    .float32(1, clear.getOrElse(1) { 0f })
+                    .float32(2, clear.getOrElse(2) { 0f })
+                    .float32(3, clear.getOrElse(3) { 1f })
+            }
+
+            val renderPassInfo = VkRenderPassBeginInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO)
+                .renderPass(renderPassHandle)
+                .framebuffer(framebufferHandle)
+                .renderArea { area ->
+                    area.offset().set(0, 0)
+                    area.extent().set(width, height)
+                }
+                .pClearValues(clearValues)
+
+            vkCmdBeginRenderPass(commandBuffer, renderPassInfo, VK_SUBPASS_CONTENTS_INLINE)
+
+            val viewport = VkViewport.calloc(1, stack)
+            viewport[0]
+                .x(0f)
+                .y(0f)
+                .width(width.toFloat())
+                .height(height.toFloat())
+                .minDepth(0f)
+                .maxDepth(1f)
+            vkCmdSetViewport(commandBuffer, 0, viewport)
+
+            val scissor = VkRect2D.calloc(1, stack)
+            scissor[0].offset().set(0, 0)
+            scissor[0].extent().set(width, height)
+            vkCmdSetScissor(commandBuffer, 0, scissor)
+        }
+    }
+
+    actual fun setPipeline(pipeline: GpuRenderPipeline) {
+        check(!ended) { "Render pass already ended" }
+        require(pipeline.renderPassKey == renderPassKey) {
+            "Pipeline render pass configuration is incompatible with the active render pass"
+        }
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineHandle)
+        activePipeline = pipeline
+    }
+
+    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {
+        check(!ended) { "Render pass already ended" }
+        val native = buffer.nativeBuffer()
+        MemoryStack.stackPush().use { stack ->
+            val buffers = stack.mallocLong(1).put(0, native.buffer)
+            val offsets = stack.mallocLong(1).put(0, 0L)
+            vkCmdBindVertexBuffers(commandBuffer, slot, buffers, offsets)
+        }
+    }
+
+    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {
+        check(!ended) { "Render pass already ended" }
+        check(activePipeline != null) { "No pipeline bound before draw() call" }
+        vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance)
+    }
+
+    actual fun end() {
+        if (ended) return
+        vkCmdEndRenderPass(commandBuffer)
+        vkDestroyFramebuffer(deviceHandle, framebufferHandle, null)
+        framebufferHandle = VK_NULL_HANDLE
+        ended = true
+    }
+}
+
+internal data class RenderPassKey(
+    val colorAttachments: List<ColorAttachmentKey>,
+    val depthFormat: GpuTextureFormat?
+)
+
+internal data class ColorAttachmentKey(
+    val format: GpuTextureFormat,
+    val loadOp: GpuLoadOp,
+    val storeOp: GpuStoreOp
+)
+
+private fun GpuTextureFormat.toVulkan(): Int = when (this) {
+    GpuTextureFormat.RGBA8_UNORM -> VK_FORMAT_R8G8B8A8_UNORM
+    GpuTextureFormat.BGRA8_UNORM -> VK_FORMAT_B8G8R8A8_UNORM
+    GpuTextureFormat.RGBA16_FLOAT -> VK_FORMAT_R16G16B16A16_SFLOAT
+    GpuTextureFormat.DEPTH24_PLUS -> VK_FORMAT_D24_UNORM_S8_UINT
+}
+
+private fun Int.toGpuTextureFormat(): GpuTextureFormat = when (this) {
+    VK_FORMAT_R8G8B8A8_UNORM -> GpuTextureFormat.RGBA8_UNORM
+    VK_FORMAT_B8G8R8A8_UNORM -> GpuTextureFormat.BGRA8_UNORM
+    VK_FORMAT_R16G16B16A16_SFLOAT -> GpuTextureFormat.RGBA16_FLOAT
+    VK_FORMAT_D24_UNORM_S8_UINT -> GpuTextureFormat.DEPTH24_PLUS
+    else -> GpuTextureFormat.BGRA8_UNORM
+}
+
+private fun GpuTextureUsageFlags.toVulkanImageUsage(): Int {
+    var usage = 0
+    if (this and GpuTextureUsage.COPY_SRC.mask != 0) usage = usage or VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+    if (this and GpuTextureUsage.COPY_DST.mask != 0) usage = usage or VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    if (this and GpuTextureUsage.TEXTURE_BINDING.mask != 0) usage = usage or VK_IMAGE_USAGE_SAMPLED_BIT
+    if (this and GpuTextureUsage.STORAGE_BINDING.mask != 0) usage = usage or VK_IMAGE_USAGE_STORAGE_BIT
+    if (this and GpuTextureUsage.RENDER_ATTACHMENT.mask != 0) usage = usage or VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+    return usage
+}
+
+private fun GpuLoadOp.toVulkan(): Int = when (this) {
+    GpuLoadOp.LOAD -> VK_ATTACHMENT_LOAD_OP_LOAD
+    GpuLoadOp.CLEAR -> VK_ATTACHMENT_LOAD_OP_CLEAR
+}
+
+private fun GpuStoreOp.toVulkan(): Int = when (this) {
+    GpuStoreOp.STORE -> VK_ATTACHMENT_STORE_OP_STORE
+    GpuStoreOp.DISCARD -> VK_ATTACHMENT_STORE_OP_DONT_CARE
+}
+
+private fun GpuFilterMode.toVulkan(): Int = when (this) {
+    GpuFilterMode.NEAREST -> VK_FILTER_NEAREST
+    GpuFilterMode.LINEAR -> VK_FILTER_LINEAR
+}
+
+private fun GpuMipmapFilterMode.toVulkan(): Int = when (this) {
+    GpuMipmapFilterMode.NEAREST -> VK_SAMPLER_MIPMAP_MODE_NEAREST
+    GpuMipmapFilterMode.LINEAR -> VK_SAMPLER_MIPMAP_MODE_LINEAR
+}
+
+private fun GpuAddressMode.toVulkan(): Int = when (this) {
+    GpuAddressMode.CLAMP_TO_EDGE -> VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+    GpuAddressMode.REPEAT -> VK_SAMPLER_ADDRESS_MODE_REPEAT
+    GpuAddressMode.MIRROR_REPEAT -> VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT
+}
+
+private fun findMemoryType(
+    physicalDevice: VkPhysicalDevice,
+    typeFilter: Int,
+    properties: Int
+): Int {
+    MemoryStack.stackPush().use { stack ->
+        val memProperties = VkPhysicalDeviceMemoryProperties.malloc(stack)
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, memProperties)
+
+        for (i in 0 until memProperties.memoryTypeCount()) {
+            val suitable = (typeFilter and (1 shl i)) != 0
+            val hasProps = (memProperties.memoryTypes(i).propertyFlags() and properties) == properties
+            if (suitable && hasProps) {
+                return i
+            }
+        }
+    }
+    throw IllegalStateException("Failed to find suitable Vulkan memory type")
+}
+
+actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
+    renderSurface = surface
 }

@@ -1,5 +1,6 @@
 package io.kreekt.gpu
 
+import io.kreekt.renderer.RenderSurface
 
 /**
  * Primary GPU backend selector. Mirrors WebGPU semantics while allowing Vulkan/MoltenVK adapters.
@@ -119,3 +120,5 @@ data class GpuSurfaceFrame(
     val texture: GpuTexture,
     val view: GpuTextureView
 )
+
+expect fun GpuSurface.attachRenderSurface(surface: RenderSurface)

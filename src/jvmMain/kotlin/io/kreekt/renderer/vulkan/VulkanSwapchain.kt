@@ -307,6 +307,16 @@ class VulkanSwapchain(
         return framebuffers[index]
     }
 
+    fun getImageView(index: Int): Long {
+        if (swapchainImageViews.isEmpty()) {
+            throw SwapchainException("Image views not created")
+        }
+        if (index !in swapchainImageViews.indices) {
+            throw IndexOutOfBoundsException("Swapchain image view index out of bounds: $index")
+        }
+        return swapchainImageViews[index]
+    }
+
     fun createFramebuffers(renderPass: Long): List<VulkanFramebufferData> {
         if (swapchainImageViews.isEmpty()) {
             throw SwapchainException("Image views not created, cannot build framebuffers")

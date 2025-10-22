@@ -31,6 +31,7 @@ kotlin {
                 implementation(libs.kotlinx.atomicfu)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(project(":"))
             }
         }
 

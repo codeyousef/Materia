@@ -1,10 +1,12 @@
 package io.kreekt.gpu
 
+import io.kreekt.renderer.RenderSurface
 import kotlin.js.Promise
 import kotlin.js.jsTypeOf
 import kotlinx.coroutines.await
 import org.khronos.webgl.Float32Array
 import org.khronos.webgl.Uint8Array
+import org.w3c.dom.HTMLCanvasElement
 
 private fun navigatorGpu(): dynamic = js("typeof navigator !== 'undefined' && navigator.gpu ? navigator.gpu : null")
 private fun currentDocument(): dynamic = js("typeof document !== 'undefined' ? document : null")
@@ -323,8 +325,9 @@ actual class GpuSurface actual constructor(
 ) {
     private var configuration: GpuSurfaceConfiguration? = null
     private var configuredDevice: GpuDevice? = null
-    private var canvas: dynamic = null
+    internal var canvas: dynamic = null
     private var context: dynamic = null
+    internal var attachedSurface: RenderSurface? = null
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
@@ -389,6 +392,19 @@ actual class GpuSurface actual constructor(
             configureCanvas(canvas, width, height)
         }
         configuration = configuration?.copy(width = width, height = height)
+    }
+}
+
+actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
+    attachedSurface = surface
+    val handle = surface.getHandle()
+    val canvasElement = when (handle) {
+        is HTMLCanvasElement -> handle
+        else -> handle as? HTMLCanvasElement
+    } ?: error("RenderSurface handle is not an HTMLCanvasElement")
+    canvas = canvasElement
+    configuration?.let {
+        configureCanvas(canvasElement, it.width, it.height)
     }
 }
 
