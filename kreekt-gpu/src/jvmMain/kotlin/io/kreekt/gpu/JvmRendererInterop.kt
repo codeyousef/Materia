@@ -10,7 +10,6 @@ import io.kreekt.renderer.gpu.GpuSamplerFilter as RendererGpuSamplerFilter
 import io.kreekt.renderer.gpu.GpuTextureDescriptor as RendererGpuTextureDescriptor
 import io.kreekt.renderer.gpu.GpuTextureDimension as RendererGpuTextureDimension
 import io.kreekt.renderer.gpu.GpuTextureViewDescriptor as RendererGpuTextureViewDescriptor
-import io.kreekt.renderer.gpu.GpuTextureViewDimension as RendererGpuTextureViewDimension
 
 internal fun RendererGpuDeviceInfo.toAdapterInfo(): GpuAdapterInfo =
     GpuAdapterInfo(
@@ -80,22 +79,13 @@ internal fun GpuTextureViewDescriptor.toRendererDescriptor(): RendererGpuTexture
     RendererGpuTextureViewDescriptor(
         label = label,
         format = format?.toRendererFormatString(),
-        dimension = dimension?.toRendererViewDimension(),
-        aspect = aspect,
+        dimension = null,
+        aspect = null,
         baseMipLevel = baseMipLevel,
         mipLevelCount = mipLevelCount,
         baseArrayLayer = baseArrayLayer,
         arrayLayerCount = arrayLayerCount
     )
-
-private fun GpuTextureViewDimension.toRendererViewDimension(): RendererGpuTextureViewDimension = when (this) {
-    GpuTextureViewDimension.D1 -> RendererGpuTextureViewDimension.D1
-    GpuTextureViewDimension.D2 -> RendererGpuTextureViewDimension.D2
-    GpuTextureViewDimension.D2_ARRAY -> RendererGpuTextureViewDimension.D2_ARRAY
-    GpuTextureViewDimension.CUBE -> RendererGpuTextureViewDimension.CUBE
-    GpuTextureViewDimension.CUBE_ARRAY -> RendererGpuTextureViewDimension.CUBE_ARRAY
-    GpuTextureViewDimension.D3 -> RendererGpuTextureViewDimension.D3
-}
 
 internal fun GpuTextureFormat.toRendererFormatString(): String = when (this) {
     GpuTextureFormat.RGBA8_UNORM -> "rgba8unorm"

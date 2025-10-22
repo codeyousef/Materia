@@ -310,6 +310,9 @@ expect fun GpuDevice.unwrapDescriptorPool(): Any?
 /** Retrieves the queue family index associated with this device */
 expect fun GpuDevice.queueFamilyIndex(): Int
 
+/** Retrieves the command pool handle associated with this device */
+expect fun GpuDevice.commandPoolHandle(): Long
+
 /** Retrieves the queue family index associated with this queue */
 expect fun GpuQueue.queueFamilyIndex(): Int
 

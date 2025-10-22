@@ -13,7 +13,8 @@ actual class GpuDevice internal constructor(
     internal val physicalDeviceHandle: VkPhysicalDevice? = null,
     internal val instanceHandle: org.lwjgl.vulkan.VkInstance? = null,
     internal val descriptorPoolHandle: Long? = null,
-    internal val queueFamilyIndex: Int = 0
+    internal val queueFamilyIndex: Int = 0,
+    internal val commandPoolRawHandle: Long? = null
 ) {
     actual fun createBuffer(descriptor: GpuBufferDescriptor, data: ByteArray?): GpuBuffer {
         val vkDevice = handle as? VkDevice ?: error("Vulkan device handle unavailable")
@@ -118,7 +119,8 @@ actual object GpuDeviceFactory {
             physicalDeviceHandle = result.physicalDevice,
             instanceHandle = result.instance,
             descriptorPoolHandle = result.descriptorPool,
-            queueFamilyIndex = result.queueFamilyIndex
+            queueFamilyIndex = result.queueFamilyIndex,
+            commandPoolRawHandle = result.commandPool
         )
         val gpuQueue = GpuQueue(
             backend = GpuBackend.VULKAN,
@@ -213,6 +215,8 @@ actual fun GpuDevice.unwrapDescriptorPool(): Any? = descriptorPoolHandle
 actual fun GpuDevice.queueFamilyIndex(): Int = queueFamilyIndex
 
 actual fun GpuQueue.queueFamilyIndex(): Int = queueFamilyIndex
+
+actual fun GpuDevice.commandPoolHandle(): Long = commandPoolRawHandle ?: VK_NULL_HANDLE
 
 private fun findMemoryType(
     physicalDevice: VkPhysicalDevice,

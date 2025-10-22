@@ -383,6 +383,8 @@ actual fun GpuDevice.queueFamilyIndex(): Int = 0
 
 actual fun GpuQueue.queueFamilyIndex(): Int = 0
 
+actual fun GpuDevice.commandPoolHandle(): Long = 0L
+
 private fun extractAdapterInfo(adapter: GPUAdapter): GpuDeviceInfo {
     val dynamicAdapter = adapter.asDynamic()
     val info = dynamicAdapter.info

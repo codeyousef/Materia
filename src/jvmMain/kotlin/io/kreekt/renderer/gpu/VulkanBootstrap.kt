@@ -12,6 +12,7 @@ import org.lwjgl.vulkan.VK12
 import org.lwjgl.vulkan.VkApplicationInfo
 import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo
 import org.lwjgl.vulkan.VkDescriptorPoolSize
+import org.lwjgl.vulkan.VkCommandPoolCreateInfo
 import org.lwjgl.vulkan.VkDevice
 import org.lwjgl.vulkan.VkDeviceCreateInfo
 import org.lwjgl.vulkan.VkDeviceQueueCreateInfo
@@ -32,6 +33,7 @@ internal data class VulkanBootstrapResult(
     val queue: VkQueue,
     val queueFamilyIndex: Int,
     val descriptorPool: Long,
+    val commandPool: Long,
     val info: GpuDeviceInfo,
     val limits: GpuLimits
 )
@@ -56,6 +58,7 @@ internal object VulkanBootstrap {
                 try {
                     val queue = obtainQueue(logicalDevice, queueFamilyIndex)
                     val descriptorPool = createDescriptorPool(logicalDevice)
+                    val commandPool = createCommandPool(logicalDevice, queueFamilyIndex)
                     val info = buildDeviceInfo(physicalDevice)
                     val limits = buildLimits(physicalDevice)
 
@@ -71,6 +74,7 @@ internal object VulkanBootstrap {
                         queue = queue,
                         queueFamilyIndex = queueFamilyIndex,
                         descriptorPool = descriptorPool,
+                        commandPool = commandPool,
                         info = info,
                         limits = limits
                     )
@@ -82,6 +86,21 @@ internal object VulkanBootstrap {
                 vkDestroyInstance(instance, null)
                 throw t
             }
+        }
+    }
+    private fun createCommandPool(device: VkDevice, queueFamilyIndex: Int): Long {
+        return MemoryStack.stackPush().use { stack ->
+            val createInfo = VkCommandPoolCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO)
+                .flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
+                .queueFamilyIndex(queueFamilyIndex)
+
+            val pCommandPool = stack.mallocLong(1)
+            val result = vkCreateCommandPool(device, createInfo, null, pCommandPool)
+            if (result != VK_SUCCESS) {
+                throw IllegalStateException("Failed to create command pool (vkCreateCommandPool=$result)")
+            }
+            pCommandPool[0]
         }
     }
 

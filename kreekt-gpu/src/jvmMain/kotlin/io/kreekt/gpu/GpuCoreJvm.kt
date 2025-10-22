@@ -5,17 +5,21 @@ import io.kreekt.renderer.gpu.GpuContext as RendererGpuContext
 import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
 import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
+import io.kreekt.renderer.gpu.commandPoolHandle
 import io.kreekt.renderer.gpu.unwrapHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
-import org.lwjgl.vulkan.VK10.VK_SUCCESS
-import org.lwjgl.vulkan.VK10.vkDestroyBuffer
-import org.lwjgl.vulkan.VK10.vkFreeMemory
-import org.lwjgl.vulkan.VK10.vkMapMemory
-import org.lwjgl.vulkan.VK10.vkUnmapMemory
+import org.lwjgl.vulkan.VK10.*
+import org.lwjgl.vulkan.VkCommandBuffer
+import org.lwjgl.vulkan.VkCommandBufferAllocateInfo
+import org.lwjgl.vulkan.VkCommandBufferBeginInfo
 import org.lwjgl.vulkan.VkDevice
+import org.lwjgl.vulkan.VkQueue
+import org.lwjgl.vulkan.VkShaderModuleCreateInfo
+import org.lwjgl.vulkan.VkSubmitInfo
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
     withContext(Dispatchers.Default) {
@@ -76,12 +80,15 @@ actual class GpuDevice actual constructor(
 ) {
     private lateinit var rendererContext: RendererGpuContext
 
-    private val rendererDevice: RendererGpuDevice
+    internal val rendererDevice: RendererGpuDevice
         get() = rendererContext.device
+
+    internal var commandPool: Long = VK_NULL_HANDLE
 
     internal fun attachContext(context: RendererGpuContext) {
         rendererContext = context
-        queue.attachQueue(context.queue)
+        commandPool = context.device.commandPoolHandle()
+        queue.attachQueue(context.queue, this)
     }
 
     actual val queue: GpuQueue = GpuQueue(descriptor.label)
@@ -135,18 +142,77 @@ actual class GpuDevice actual constructor(
         vkDestroyBuffer(handle, buffer.buffer, null)
         vkFreeMemory(handle, buffer.memory, null)
     }
+
+    internal fun allocateCommandBuffer(): VkCommandBuffer {
+        val deviceHandle = rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for command buffer allocation")
+        check(commandPool != VK_NULL_HANDLE) { "Command pool not initialised for device" }
+
+        MemoryStack.stackPush().use { stack ->
+            val allocInfo = VkCommandBufferAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO)
+                .commandPool(commandPool)
+                .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+                .commandBufferCount(1)
+
+            val pCommandBuffer = stack.mallocPointer(1)
+            val result = vkAllocateCommandBuffers(deviceHandle, allocInfo, pCommandBuffer)
+            check(result == VK_SUCCESS) { "vkAllocateCommandBuffers failed with error code $result" }
+
+            return VkCommandBuffer(pCommandBuffer[0], deviceHandle)
+        }
+    }
+
+    internal fun freeCommandBuffers(buffers: List<VkCommandBuffer>) {
+        if (buffers.isEmpty()) return
+        val deviceHandle = rendererDevice.unwrapHandle() as? VkDevice ?: return
+        MemoryStack.stackPush().use { stack ->
+            val pointerBuffer = stack.mallocPointer(buffers.size)
+            buffers.forEach { buffer ->
+                pointerBuffer.put(buffer.address())
+            }
+            pointerBuffer.flip()
+            vkFreeCommandBuffers(deviceHandle, commandPool, pointerBuffer)
+        }
+    }
 }
 
 actual class GpuQueue actual constructor(
     actual val label: String?
 ) {
-    internal fun attachQueue(queue: RendererGpuQueue) {
-        // Queue linkage will be wired once renderer submissions are exposed through the abstraction.
+    private lateinit var rendererQueue: RendererGpuQueue
+    private var vkQueue: VkQueue? = null
+    private var device: GpuDevice? = null
+
+    internal fun attachQueue(queue: RendererGpuQueue, device: GpuDevice) {
+        rendererQueue = queue
+        vkQueue = queue.unwrapHandle() as? VkQueue
+        this.device = device
     }
 
     actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
-        // Submission path is not yet wired through the renderer abstractions for JVM.
-        // Intentionally no-op for the MVP scaffolding.
+        if (commandBuffers.isEmpty()) return
+        val queueHandle = vkQueue ?: error("Vulkan queue handle unavailable for submission")
+        val deviceRef = device ?: error("GpuDevice reference unavailable for queue submission")
+
+        MemoryStack.stackPush().use { stack ->
+            val pointerBuffer = stack.mallocPointer(commandBuffers.size)
+            val vkBuffers = commandBuffers.map { it.handle }
+            vkBuffers.forEach { buffer ->
+                pointerBuffer.put(buffer.address())
+            }
+            pointerBuffer.flip()
+
+            val submitInfo = VkSubmitInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
+                .pCommandBuffers(pointerBuffer)
+
+            val result = vkQueueSubmit(queueHandle, submitInfo, VK_NULL_HANDLE)
+            check(result == VK_SUCCESS) { "vkQueueSubmit failed with error code $result" }
+
+            vkQueueWaitIdle(queueHandle)
+            deviceRef.freeCommandBuffers(vkBuffers)
+        }
     }
 }
 
@@ -252,26 +318,95 @@ actual class GpuSampler actual constructor(
     actual val descriptor: GpuSamplerDescriptor
 )
 
-actual class GpuCommandEncoder actual constructor(
+actual class GpuCommandEncoder actual internal constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuCommandEncoderDescriptor?
 ) {
-    actual fun finish(label: String?): GpuCommandBuffer =
-        GpuCommandBuffer(device, label ?: descriptor?.label)
+    private val commandBuffer: VkCommandBuffer = device.allocateCommandBuffer()
+    private var finished = false
+
+    init {
+        MemoryStack.stackPush().use { stack ->
+            val beginInfo = VkCommandBufferBeginInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO)
+                .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+
+            val result = vkBeginCommandBuffer(commandBuffer, beginInfo)
+            check(result == VK_SUCCESS) { "vkBeginCommandBuffer failed with error code $result" }
+        }
+    }
+
+    actual fun finish(label: String?): GpuCommandBuffer {
+        check(!finished) { "Command encoder already finished" }
+        val result = vkEndCommandBuffer(commandBuffer)
+        check(result == VK_SUCCESS) { "vkEndCommandBuffer failed with error code $result" }
+        finished = true
+        return GpuCommandBuffer(device, label ?: descriptor?.label).also {
+            it.handle = commandBuffer
+        }
+    }
 
     actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder =
         GpuRenderPassEncoder(this, descriptor)
 }
 
-actual class GpuCommandBuffer actual constructor(
+actual class GpuCommandBuffer actual internal constructor(
     actual val device: GpuDevice,
     actual val label: String?
-)
+) {
+    internal lateinit var handle: VkCommandBuffer
+}
 
 actual class GpuShaderModule actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuShaderModuleDescriptor
-)
+) {
+    internal val handle: Long = createShaderModule(device, descriptor)
+
+    private fun createShaderModule(device: GpuDevice, descriptor: GpuShaderModuleDescriptor): Long {
+        val vkDevice = device.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for shader module creation")
+
+        val spirvBytes = loadSpirvBytes(descriptor)
+        require(spirvBytes.size % 4 == 0) {
+            "SPIR-V module size must be a multiple of 4 bytes (label=${descriptor.label})"
+        }
+
+        MemoryStack.stackPush().use { stack ->
+            val codeBuffer = stack.malloc(spirvBytes.size)
+            codeBuffer.put(spirvBytes)
+            codeBuffer.flip()
+
+            val createInfo = VkShaderModuleCreateInfo.calloc(stack)
+                .sType(org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
+                .pCode(codeBuffer)
+
+            val pShaderModule = stack.mallocLong(1)
+            val result = vkCreateShaderModule(vkDevice, createInfo, null, pShaderModule)
+            if (result != VK_SUCCESS) {
+                throw IllegalStateException("vkCreateShaderModule failed with error code $result (label=${descriptor.label})")
+            }
+
+            return pShaderModule[0]
+        }
+    }
+
+    private fun loadSpirvBytes(descriptor: GpuShaderModuleDescriptor): ByteArray {
+        val label = descriptor.label
+            ?: error("Shader module descriptor requires a label to locate compiled SPIR-V")
+
+        val resourceName = "/shaders/${label}.main.spv"
+        val stream = GpuShaderModule::class.java.getResourceAsStream(resourceName)
+            ?: error("Compiled SPIR-V resource not found for shader label '$label' at '$resourceName'. Did you run ./gradlew compileShaders?")
+
+        return stream.use { it.readBytes() }
+    }
+
+    internal fun destroy() {
+        val vkDevice = device.rendererDevice.unwrapHandle() as? VkDevice ?: return
+        vkDestroyShaderModule(vkDevice, handle, null)
+    }
+}
 
 actual class GpuBindGroupLayout actual constructor(
     actual val device: GpuDevice,
