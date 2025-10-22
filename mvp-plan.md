@@ -9,11 +9,13 @@ targets.
 ## 📋 Remaining Work Snapshot
 
 1. **GPU layer unification** – replace the placeholder `:kreekt-gpu` expect/actuals with delegates to the existing
-   Vulkan/WebGPU implementations (`io.kreekt.renderer.gpu.*`), including swapchain/surface handling.
+   Vulkan/WebGPU implementations (`io.kreekt.renderer.gpu.*`).
+   - Shader modules and command buffer/queue submission now bridge through the renderer layer.
+   - **Remaining**: surface/swapchain integration, render-pass encoding, pipeline creation, textures/bind groups.
 2. **Triangle smoke via real backend** – boot the example through `RendererFactory`/`RenderSurface` so the Vulkan/WebGPU
    renderers drive the frame instead of the stub submission.
 3. **Materials & bindings** – hook `UnlitColorMaterial` / `UnlitPointsMaterial` into backend bind-group & pipeline
-   layouts; validate geometry stride/offset handling.
+   layouts; validate geometry stride/offset handling. (Blocked on Vulkan bind group/texture plumbing.)
 4. **Instanced points + galaxy/force demos** – build the point-cloud pipeline, baked data loaders, and scene wiring for
    Embedding Galaxy and Force Graph.
 5. **Target bootstraps & docs/tests** – flesh out per-platform launchers, math/scene tests, and MVP documentation once
