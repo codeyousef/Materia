@@ -32,7 +32,7 @@ import io.kreekt.gpu.GpuTextureUsage
 import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.gpu.gpuTextureUsage
 import io.kreekt.gpu.createGpuInstance
-import io.kreekt.gpu.attachRenderSurface
+import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.renderer.RenderSurface
 
 data class TriangleBootLog(
