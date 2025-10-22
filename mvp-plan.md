@@ -132,7 +132,7 @@ resources/shaders/*.wgsl
 
 * [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
 * [x] `GpuCommandBuffer`, `GpuQueue.submit()`
-* [ ] Minimal hidden sync (fences/events on Vulkan/MVK)
+* [x] Minimal hidden sync (fences/events on Vulkan/MVK)
 * [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
 * [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
 * [x] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`

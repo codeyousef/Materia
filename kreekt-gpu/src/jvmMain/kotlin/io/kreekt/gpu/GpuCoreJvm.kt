@@ -39,6 +39,7 @@ import org.lwjgl.vulkan.VkCommandBuffer
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo
 import org.lwjgl.vulkan.VkDevice
+import org.lwjgl.vulkan.VkFenceCreateInfo
 import org.lwjgl.vulkan.VkFramebufferCreateInfo
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo
 import org.lwjgl.vulkan.VkImageCreateInfo
@@ -324,6 +325,8 @@ actual class GpuQueue actual constructor(
         if (commandBuffers.isEmpty()) return
         val queueHandle = vkQueue ?: error("Vulkan queue handle unavailable for submission")
         val deviceRef = device ?: error("GpuDevice reference unavailable for queue submission")
+        val deviceHandle = deviceRef.rendererDevice.unwrapHandle() as? VkDevice
+            ?: error("Vulkan device handle unavailable for queue submission")
 
         MemoryStack.stackPush().use { stack ->
             val pointerBuffer = stack.mallocPointer(commandBuffers.size)
@@ -337,10 +340,22 @@ actual class GpuQueue actual constructor(
                 .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
                 .pCommandBuffers(pointerBuffer)
 
-            val result = vkQueueSubmit(queueHandle, submitInfo, VK_NULL_HANDLE)
+            val fenceInfo = VkFenceCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO)
+
+            val pFence = stack.mallocLong(1)
+            val createFenceResult = vkCreateFence(deviceHandle, fenceInfo, null, pFence)
+            check(createFenceResult == VK_SUCCESS) { "vkCreateFence failed with error code $createFenceResult" }
+
+            val fence = pFence[0]
+
+            val result = vkQueueSubmit(queueHandle, submitInfo, fence)
             check(result == VK_SUCCESS) { "vkQueueSubmit failed with error code $result" }
 
-            vkQueueWaitIdle(queueHandle)
+            val waitResult = vkWaitForFences(deviceHandle, fence, true, Long.MAX_VALUE)
+            check(waitResult == VK_SUCCESS) { "vkWaitForFences failed with error code $waitResult" }
+
+            vkDestroyFence(deviceHandle, fence, null)
             deviceRef.freeCommandBuffers(vkBuffers)
         }
     }
