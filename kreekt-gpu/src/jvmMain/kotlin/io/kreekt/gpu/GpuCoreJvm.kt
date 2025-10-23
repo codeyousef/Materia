@@ -951,7 +951,7 @@ actual class GpuRenderPipeline actual constructor(
     internal val renderPassKey: RenderPassKey
     internal val renderPassHandle: Long
     internal val pipelineHandle: Long
-    private val pipelineLayoutHandle: Long
+    internal val pipelineLayoutHandle: Long
 
     init {
         val colorKeys = descriptor.colorFormats.ifEmpty {
@@ -1233,6 +1233,25 @@ actual class GpuRenderPassEncoder actual constructor(
             val buffers = stack.mallocLong(1).put(0, native.buffer)
             val offsets = stack.mallocLong(1).put(0, 0L)
             vkCmdBindVertexBuffers(commandBuffer, slot, buffers, offsets)
+        }
+    }
+
+    actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
+        check(!ended) { "Render pass already ended" }
+        val pipeline = activePipeline ?: error("No pipeline bound before setBindGroup() call")
+        val descriptorSet = bindGroup.descriptorSet
+        check(descriptorSet != VK_NULL_HANDLE) { "Bind group descriptor set is not allocated" }
+
+        MemoryStack.stackPush().use { stack ->
+            val pSets = stack.longs(descriptorSet)
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipeline.pipelineLayoutHandle,
+                index,
+                pSets,
+                null
+            )
         }
     }
 

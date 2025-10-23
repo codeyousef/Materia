@@ -52,6 +52,7 @@ expect class GpuRenderPassEncoder internal constructor(
 
     fun setPipeline(pipeline: GpuRenderPipeline)
     fun setVertexBuffer(slot: Int, buffer: GpuBuffer)
+    fun setBindGroup(index: Int, bindGroup: GpuBindGroup)
     fun draw(vertexCount: Int, instanceCount: Int = 1, firstVertex: Int = 0, firstInstance: Int = 0)
     fun end()
 }

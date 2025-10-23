@@ -36,29 +36,13 @@ fun main() {
 
         document.body?.appendChild(pre)
 
-        fun resizeCanvas() {
+        window.onresize = {
             val width = canvas.clientWidth.takeIf { it > 0 } ?: canvas.width
             val height = canvas.clientHeight.takeIf { it > 0 } ?: canvas.height
             canvas.width = width
             canvas.height = height
-            example.resize(width, height)
-        }
-
-        resizeCanvas()
-        window.onresize = {
-            resizeCanvas()
             null
         }
-
-        var lastTimestamp: Double? = null
-        fun tick(timestamp: Double) {
-            val deltaSeconds = lastTimestamp?.let { ((timestamp - it) / 1000.0).toFloat() } ?: 0f
-            lastTimestamp = timestamp
-            example.renderFrame(deltaSeconds)
-            window.requestAnimationFrame { next -> tick(next) }
-        }
-
-        window.requestAnimationFrame { start -> tick(start) }
     }
 }
 

@@ -821,6 +821,10 @@ actual class GpuRenderPassEncoder actual constructor(
         handle().setVertexBuffer(slot, buffer.handle())
     }
 
+    actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
+        handle().setBindGroup(index, bindGroup.handle())
+    }
+
     actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {
         handle().draw(vertexCount, instanceCount, firstVertex, firstInstance)
     }

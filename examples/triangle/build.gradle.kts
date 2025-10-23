@@ -29,6 +29,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(project(":kreekt-gpu"))
+                implementation(project(":kreekt-engine"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(project(":"))
             }

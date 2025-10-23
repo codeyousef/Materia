@@ -121,7 +121,7 @@ object UnlitPipelineFactory {
                 label = label,
                 layout = layout,
                 entries = listOf(
-                    io.kreekt.gpu.GpuBindGroupEntry(
+                    GpuBindGroupEntry(
                         binding = 0,
                         resource = GpuBindingResource.Buffer(uniformBuffer)
                     )

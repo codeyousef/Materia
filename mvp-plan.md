@@ -150,7 +150,7 @@ resources/shaders/*.wgsl
     * [ ] **InstancedPoints** (per‑instance: position, color, size, extra0)
 * [ ] Materials
 
-    * [ ] `UnlitColorMaterial`
+    * [x] `UnlitColorMaterial`
     * [ ] `UnlitPointsMaterial` (VS quad expansion; distance attenuation)
 * [ ] Pipeline state helpers: depth test/write, culling, alpha/additive blending
 * [ ] Optional post: **FXAA** (toggle)
