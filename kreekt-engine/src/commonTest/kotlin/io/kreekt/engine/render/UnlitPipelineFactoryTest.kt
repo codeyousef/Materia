@@ -1,5 +1,9 @@
 package io.kreekt.engine.render
 
+import io.kreekt.engine.material.RenderState
+import io.kreekt.engine.material.UnlitColorMaterial
+import io.kreekt.engine.material.UnlitPointsMaterial
+import io.kreekt.gpu.GpuPrimitiveTopology
 import io.kreekt.gpu.GpuVertexFormat
 import io.kreekt.gpu.GpuVertexStepMode
 import kotlin.test.Test
@@ -30,5 +34,18 @@ class UnlitPipelineFactoryTest {
 
         assertEquals(Float.SIZE_BYTES * 7, extraAttr.offset)
         assertEquals(GpuVertexFormat.FLOAT32x4, extraAttr.format)
+    }
+
+    @Test
+    fun materialBlueprintsExposeExpectedLayouts() {
+        val colorBlueprint = UnlitColorMaterial(label = "color", renderState = RenderState()).toBindingBlueprint()
+        val pointsBlueprint = UnlitPointsMaterial(label = "points").toBindingBlueprint()
+
+        assertEquals(GpuVertexStepMode.VERTEX, colorBlueprint.vertexLayout.stepMode)
+        assertEquals(GpuVertexStepMode.INSTANCE, pointsBlueprint.vertexLayout.stepMode)
+        assertEquals(GpuPrimitiveTopology.TRIANGLE_LIST, colorBlueprint.primitiveTopology)
+        assertEquals(GpuPrimitiveTopology.POINT_LIST, pointsBlueprint.primitiveTopology)
+        assertEquals(Float.SIZE_BYTES * 6, colorBlueprint.vertexLayout.arrayStride)
+        assertEquals(Float.SIZE_BYTES * 11, pointsBlueprint.vertexLayout.arrayStride)
     }
 }
