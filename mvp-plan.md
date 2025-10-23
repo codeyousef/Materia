@@ -127,17 +127,17 @@ resources/shaders/*.wgsl
     * [x] JVM texture allocation binds Vulkan `VkImage`/memory and exposes image views
 * [ ] Shaders & pipelines
 
-    * [ ] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
-    * [ ] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
-    * [ ] `GpuRenderPipeline`, `GpuComputePipeline`
+    * [x] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
+    * [x] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
+* [x] `GpuRenderPipeline`, `GpuComputePipeline`
 * [ ] Command encoding & submit
 
-    * [ ] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
-    * [ ] `GpuCommandBuffer`, `GpuQueue.submit()`
-* [ ] Minimal hidden sync (fences/events on Vulkan/MVK)
+* [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
+* [x] `GpuCommandBuffer`, `GpuQueue.submit()`
+* [x] Minimal hidden sync (fences/events on Vulkan/MVK)
 * [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
 * [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
-* [ ] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
+* [x] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
 
 ### 2) Rendering Engine (common)
 

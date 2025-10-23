@@ -26,11 +26,14 @@ import io.kreekt.gpu.GpuRequestAdapterOptions
 import io.kreekt.gpu.GpuShaderModuleDescriptor
 import io.kreekt.gpu.GpuSurface
 import io.kreekt.gpu.GpuSurfaceConfiguration
+import io.kreekt.gpu.GpuSurfaceFactory
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.GpuTextureUsage
 import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.gpu.gpuTextureUsage
 import io.kreekt.gpu.createGpuInstance
+import io.kreekt.gpu.gpuBufferUsage
+import io.kreekt.renderer.RenderSurface
 
 data class TriangleBootLog(
     val backend: GpuBackend,
@@ -56,7 +59,24 @@ class TriangleExample(
     private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
 ) {
     private var orbitController: OrbitController? = null
-    suspend fun boot(): TriangleBootLog {
+    suspend fun boot(
+        renderSurface: RenderSurface? = null,
+        widthOverride: Int? = null,
+        heightOverride: Int? = null
+    ): TriangleBootLog {
+        if (renderSurface == null) {
+            val (scene, camera) = buildScene()
+            scene.update(0f)
+            return TriangleBootLog(
+                backend = preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,
+                adapterName = "Stub Adapter",
+                deviceLabel = "Stub Device",
+                pipelineLabel = "triangle-pipeline",
+                meshCount = scene.children.count { it is Mesh },
+                cameraPosition = camera.transform.position.copy()
+            )
+        }
+
         val instance = createGpuInstance(
             GpuInstanceDescriptor(
                 preferredBackends = preferredBackends,
@@ -91,24 +111,27 @@ class TriangleExample(
             )
         )
 
+        val targetWidth = widthOverride ?: renderSurface.width.takeIf { it > 0 } ?: 640
+        val targetHeight = heightOverride ?: renderSurface.height.takeIf { it > 0 } ?: 480
+        val surface = GpuSurfaceFactory.create(
+            device = device,
+            renderSurface = renderSurface,
+            label = "triangle-surface",
+            configuration = GpuSurfaceConfiguration(
+                format = GpuTextureFormat.BGRA8_UNORM,
+                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
+                width = targetWidth,
+                height = targetHeight
+            )
+        )
+        val surfaceFormat = surface.getPreferredFormat(adapter)
+
         val pipeline = device.createRenderPipeline(
             GpuRenderPipelineDescriptor(
                 label = "triangle-pipeline",
                 vertexShader = vertexShader,
                 fragmentShader = fragmentShader,
-                colorFormats = listOf(GpuTextureFormat.BGRA8_UNORM)
-            )
-        )
-
-        val surface = GpuSurface(label = "triangle-surface")
-        val preferredFormat = surface.getPreferredFormat(adapter)
-        surface.configure(
-            device,
-            GpuSurfaceConfiguration(
-                format = preferredFormat,
-                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
-                width = 640,
-                height = 480
+                colorFormats = listOf(surfaceFormat)
             )
         )
         val frame = surface.acquireFrame()
