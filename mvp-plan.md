@@ -166,13 +166,13 @@ resources/shaders/*.wgsl
 
 ### 4) IO & Data
 
-* [ ] `loadJson(urlOrPath)` (fetch on web; file on JVM/native; assets on Android/iOS)
+* [x] `loadJson(urlOrPath)` (fetch on web; file on JVM/native; assets on Android/iOS)
 * [ ] Data models
 
-    * [ ] `EmbeddingData(dims: Int, vectors: FloatArray, labels?: List<String>, clusters?: IntArray)`
-    * [ ] `GraphData(nodes: List<NodeInfo>, edges: List<EdgeInfo>, weights?: FloatArray)`
+    * [x] `EmbeddingData(dims: Int, vectors: FloatArray, labels?: List<String>, clusters?: IntArray)`
+    * [x] `GraphData(nodes: List<NodeInfo>, edges: List<EdgeInfo>, weights?: FloatArray)`
 * [x] Synthetic generators (clustered embeddings; small graph)
-* [ ] (JVM/Native) `saveJson(path, obj)` for baked layouts
+* [x] (JVM/Native) `saveJson(path, obj)` for baked layouts
 
 ### 5) Examples (adoption funnel)
 
