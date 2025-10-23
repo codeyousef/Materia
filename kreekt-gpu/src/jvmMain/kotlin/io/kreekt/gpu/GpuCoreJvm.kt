@@ -5,6 +5,7 @@ import io.kreekt.renderer.gpu.GpuContext as RendererGpuContext
 import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
 import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
+import io.kreekt.renderer.gpu.GpuSampler as RendererGpuSampler
 import io.kreekt.renderer.gpu.commandPoolHandle
 import io.kreekt.renderer.gpu.unwrapHandle
 import kotlinx.coroutines.Dispatchers
@@ -102,8 +103,11 @@ actual class GpuDevice actual constructor(
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture =
         GpuTexture(this, descriptor)
 
-    actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler =
-        GpuSampler(this, descriptor)
+    actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
+        val rendererDescriptor = descriptor.toRendererDescriptor()
+        val rendererSampler = rendererDevice.createSampler(rendererDescriptor)
+        return GpuSampler(this, descriptor).apply { attach(rendererSampler) }
+    }
 
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
         GpuCommandEncoder(this, descriptor)
@@ -316,7 +320,13 @@ actual class GpuTextureView actual constructor(
 actual class GpuSampler actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuSamplerDescriptor
-)
+) {
+    private lateinit var rendererSampler: RendererGpuSampler
+
+    internal fun attach(sampler: RendererGpuSampler) {
+        rendererSampler = sampler
+    }
+}
 
 actual class GpuCommandEncoder actual internal constructor(
     actual val device: GpuDevice,

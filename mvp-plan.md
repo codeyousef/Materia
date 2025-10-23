@@ -123,6 +123,7 @@ resources/shaders/*.wgsl
 * [ ] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
 * [ ] `GpuSurface` (configure, present, resize)
 * [ ] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
+    * [x] JVM sampler creation delegates to Vulkan (`vkCreateSampler`)
 * [ ] Shaders & pipelines
 
     * [ ] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)

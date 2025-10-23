@@ -81,7 +81,36 @@ actual class GpuDevice internal constructor(
     }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
-        throw UnsupportedOperationException("Vulkan sampler abstraction pending")
+        val vkDevice = handle as? VkDevice ?: error("Vulkan device handle unavailable")
+        MemoryStack.stackPush().use { stack ->
+            val createInfo = VkSamplerCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO)
+                .magFilter(descriptor.magFilter.toVkFilter())
+                .minFilter(descriptor.minFilter.toVkFilter())
+                .mipmapMode(descriptor.mipmapFilter.toVkMipmapMode())
+                .addressModeU(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+                .addressModeV(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+                .addressModeW(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+                .mipLodBias(0f)
+                .anisotropyEnable(false)
+                .compareEnable(false)
+                .minLod(descriptor.lodMinClamp)
+                .maxLod(descriptor.lodMaxClamp)
+                .borderColor(VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK)
+                .unnormalizedCoordinates(false)
+
+            val pSampler = stack.mallocLong(1)
+            val result = vkCreateSampler(vkDevice, createInfo, null, pSampler)
+            if (result != VK_SUCCESS) {
+                throw IllegalStateException("Failed to create Vulkan sampler (vkCreateSampler=$result)")
+            }
+
+            return GpuSampler(
+                device = vkDevice,
+                handle = pSampler[0],
+                descriptor = descriptor
+            )
+        }
     }
 
     actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout {
@@ -180,9 +209,17 @@ actual class GpuTexture internal constructor(
 
 actual fun GpuTexture.unwrapHandle(): Any? = null
 
-actual class GpuSampler internal constructor()
+actual class GpuSampler internal constructor(
+    internal val device: VkDevice,
+    internal val handle: Long,
+    internal val descriptor: GpuSamplerDescriptor
+) {
+    internal fun destroy() {
+        vkDestroySampler(device, handle, null)
+    }
+}
 
-actual fun GpuSampler.unwrapHandle(): Any? = null
+actual fun GpuSampler.unwrapHandle(): Any? = handle
 
 actual class GpuBindGroupLayout internal constructor(
     internal val handle: Any? = null
@@ -236,4 +273,14 @@ private fun findMemoryType(
         }
     }
     throw IllegalStateException("Failed to find suitable Vulkan memory type")
+}
+
+private fun GpuSamplerFilter.toVkFilter(): Int = when (this) {
+    GpuSamplerFilter.NEAREST -> VK_FILTER_NEAREST
+    GpuSamplerFilter.LINEAR -> VK_FILTER_LINEAR
+}
+
+private fun GpuSamplerFilter.toVkMipmapMode(): Int = when (this) {
+    GpuSamplerFilter.NEAREST -> VK_SAMPLER_MIPMAP_MODE_NEAREST
+    GpuSamplerFilter.LINEAR -> VK_SAMPLER_MIPMAP_MODE_LINEAR
 }
