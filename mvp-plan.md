@@ -236,9 +236,9 @@ resources/shaders/*.wgsl
 ### 10) Docs (minimum)
 
 * [ ] Root **README**: supported targets, drivers, per‑target quickstart
-* [ ] **API_STYLE.md**: idioms, nullability, defaults, context receivers, errors
-* [ ] **PERF_NOTES.md**: persistent maps, ring buffers, descriptor/pipeline caches
-* [ ] **MVP_STATUS.md** (this file) with checkboxes
+* [x] **API_STYLE.md**: idioms, nullability, defaults, context receivers, errors
+* [x] **PERF_NOTES.md**: persistent maps, ring buffers, descriptor/pipeline caches
+* [x] **MVP_STATUS.md** (this file) with checkboxes
 * [ ] Example READMEs: expected FPS, config knobs, keybinds
 
 ### 11) Non‑Goals for MVP
