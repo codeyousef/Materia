@@ -141,7 +141,7 @@ resources/shaders/*.wgsl
 
 ### 2) Rendering Engine (common)
 
-* [ ] Scene graph: `Node` (TRS, hierarchy, dirty flags), `Scene.update(dt)`
+* [x] Scene graph: `Node` (TRS, hierarchy, dirty flags), `Scene.update(dt)`
 * [ ] Camera: `PerspectiveCamera` + **OrbitController**
 * [ ] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
 * [ ] Drawables

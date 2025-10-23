@@ -2,6 +2,7 @@ package io.kreekt.examples.triangle
 
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.core.math.Color
+import io.kreekt.core.math.Matrix4
 import io.kreekt.core.math.Vector3
 import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Mesh
@@ -74,6 +75,7 @@ class TriangleExample(
 
         val (scene, camera, mesh) = buildScene(aspect)
         scene.updateWorldMatrix(true)
+        camera.updateMatrixWorld(true)
         camera.updateProjectionMatrix()
         val meshCount = scene.children.count { it is Mesh }
 

@@ -10,9 +10,13 @@ class Transform {
 
     private val matrixCache = FloatArray(16) { 0f }
     private var dirty = true
+    var changeListener: (() -> Unit)? = null
 
     fun markDirty() {
-        dirty = true
+        if (!dirty) {
+            dirty = true
+            changeListener?.invoke()
+        }
     }
 
     fun matrix(): FloatArray {
@@ -67,21 +71,26 @@ class Transform {
         return matrixCache
     }
 
+    fun isDirty(): Boolean = dirty
+
     fun setPosition(x: Float, y: Float, z: Float): Transform {
         position.set(x, y, z)
         dirty = true
+        changeListener?.invoke()
         return this
     }
 
     fun setRotationEuler(x: Float, y: Float, z: Float): Transform {
         rotationEuler.set(x, y, z)
         dirty = true
+        changeListener?.invoke()
         return this
     }
 
     fun setScale(x: Float, y: Float, z: Float): Transform {
         scale.set(x, y, z)
         dirty = true
+        changeListener?.invoke()
         return this
     }
 }

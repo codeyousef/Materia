@@ -10,6 +10,7 @@ open class Node(
     val transform: Transform = Transform()
     private val worldMatrix: FloatArray = MatrixOps.identity()
     private val tmpMatrix: FloatArray = FloatArray(16)
+    private var worldMatrixDirty: Boolean = true
 
     var parent: Node? = null
         private set
@@ -17,11 +18,16 @@ open class Node(
     private val _children: MutableList<Node> = mutableListOf()
     val children: List<Node> get() = _children
 
+    init {
+        transform.changeListener = { markWorldMatrixDirty() }
+    }
+
     fun add(child: Node) {
         if (child.parent === this) return
         child.parent?.remove(child)
         child.parent = this
         _children += child
+        child.markWorldMatrixDirty()
     }
 
     fun remove(child: Node) {
@@ -32,14 +38,21 @@ open class Node(
 
     open fun updateWorldMatrix(force: Boolean = false) {
         val parentMatrix = parent?.getWorldMatrix()
+        val localDirty = transform.isDirty()
+        val needsUpdate = force || worldMatrixDirty || localDirty
         val localMatrix = transform.matrix()
-        if (parentMatrix != null) {
-            MatrixOps.multiply(tmpMatrix, parentMatrix, localMatrix)
-            tmpMatrix.copyInto(worldMatrix)
-        } else {
-            localMatrix.copyInto(worldMatrix)
+
+        if (needsUpdate) {
+            if (parentMatrix != null) {
+                MatrixOps.multiply(tmpMatrix, parentMatrix, localMatrix)
+                tmpMatrix.copyInto(worldMatrix)
+            } else {
+                localMatrix.copyInto(worldMatrix)
+            }
+            worldMatrixDirty = false
         }
-        val childForce = force || parentMatrix != null
+
+        val childForce = needsUpdate || parentMatrix != null
         children.forEach { it.updateWorldMatrix(childForce) }
     }
 
@@ -55,5 +68,12 @@ open class Node(
     fun traverse(action: (Node) -> Unit) {
         action(this)
         children.forEach { it.traverse(action) }
+    }
+
+    private fun markWorldMatrixDirty() {
+        if (!worldMatrixDirty) {
+            worldMatrixDirty = true
+            children.forEach { it.markWorldMatrixDirty() }
+        }
     }
 }
