@@ -119,7 +119,8 @@ class TriangleExample(
 
         val surfaceFormat = surface.getPreferredFormat(adapter)
 
-        val pipelineResources = UnlitPipelineFactory.createUnlitColorPipeline(device, surfaceFormat)
+        val colorPipeline = UnlitPipelineFactory.createUnlitColorPipeline(device, surfaceFormat)
+        val pointsPipeline = UnlitPipelineFactory.createUnlitPointsPipeline(device, surfaceFormat)
         val uniformBuffer = device.createBuffer(
             GpuBufferDescriptor(
                 label = "triangle-mvp",
@@ -129,11 +130,17 @@ class TriangleExample(
         )
         uniformBuffer.writeFloats(IDENTITY_MATRIX)
 
-        val bindGroup = UnlitPipelineFactory.createUniformBindGroup(
+        val colorBindGroup = UnlitPipelineFactory.createUniformBindGroup(
             device = device,
-            layout = pipelineResources.bindGroupLayout,
+            layout = colorPipeline.bindGroupLayout,
             uniformBuffer = uniformBuffer,
             label = "triangle-bind-group"
+        )
+        val pointsBindGroup = UnlitPipelineFactory.createUniformBindGroup(
+            device = device,
+            layout = pointsPipeline.bindGroupLayout,
+            uniformBuffer = uniformBuffer,
+            label = "triangle-points-bind-group"
         )
 
         val vertexBuffer = device.createBuffer(
@@ -144,6 +151,15 @@ class TriangleExample(
             )
         )
         vertexBuffer.writeFloats(GPU_TRIANGLE_VERTEX_DATA)
+
+        val pointsVertexBuffer = device.createBuffer(
+            GpuBufferDescriptor(
+                label = "triangle-points-buffer",
+                size = GPU_POINTS_VERTEX_DATA.size * Float.SIZE_BYTES.toLong(),
+                usage = gpuBufferUsage(GpuBufferUsage.VERTEX)
+            )
+        )
+        pointsVertexBuffer.writeFloats(GPU_POINTS_VERTEX_DATA)
 
         val frame = surface.acquireFrame()
         val encoder = device.createCommandEncoder(
@@ -162,10 +178,15 @@ class TriangleExample(
                 label = "triangle-pass"
             )
         )
-        pass.setPipeline(pipelineResources.pipeline)
+        pass.setPipeline(colorPipeline.pipeline)
         pass.setVertexBuffer(0, vertexBuffer)
-        pass.setBindGroup(0, bindGroup)
+        pass.setBindGroup(0, colorBindGroup)
         pass.draw(GPU_TRIANGLE_VERTEX_COUNT)
+
+        pass.setPipeline(pointsPipeline.pipeline)
+        pass.setVertexBuffer(0, pointsVertexBuffer)
+        pass.setBindGroup(0, pointsBindGroup)
+        pass.draw(GPU_POINTS_VERTEX_COUNT)
         pass.end()
 
         val commandBuffer = encoder.finish()
@@ -174,6 +195,7 @@ class TriangleExample(
 
         uniformBuffer.destroy()
         vertexBuffer.destroy()
+        pointsVertexBuffer.destroy()
         instance.dispose()
 
         scene.updateMatrixWorld(true)
@@ -248,6 +270,15 @@ class TriangleExample(
             -0.5f, -0.5f, 0f,
             0.5f, -0.5f, 0f
         )
+
+        private val GPU_POINTS_VERTEX_DATA = floatArrayOf(
+            -0.75f, 0.6f, 0f, 0.3f, 0.9f, 0.5f,
+            0.0f, 0.85f, 0f, 0.6f, 0.9f, 0.2f,
+            0.65f, 0.55f, 0f, 0.2f, 0.8f, 1.0f,
+            -0.6f, -0.65f, 0f, 0.95f, 0.4f, 0.2f,
+            0.7f, -0.7f, 0f, 0.8f, 0.3f, 0.9f
+        )
+        private val GPU_POINTS_VERTEX_COUNT = GPU_POINTS_VERTEX_DATA.size / GPU_TRIANGLE_COMPONENTS
 
         private val IDENTITY_MATRIX = floatArrayOf(
             1f, 0f, 0f, 0f,
