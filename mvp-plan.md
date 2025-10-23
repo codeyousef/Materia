@@ -198,16 +198,16 @@ resources/shaders/*.wgsl
 * [ ] macOS/iOS: CAMetalLayer via MoltenVK; robust swapchain re‑create
 * [ ] Android: Activity + SurfaceView; lifecycle‑safe teardown/recreate
 
-### 7) Shader Toolchain (single‑source WGSL)
+### 7) Shader Toolchain (single-source WGSL)
 
-* [ ] Store shaders in `resources/shaders/*.wgsl`
-* [ ] Web: use WGSL directly
-* [ ] Vulkan/MVK: WGSL → SPIR‑V (Tint/Naga) at build or first run
-* [ ] Minimal set
+* [x] Store shaders in `resources/shaders/*.wgsl`
+* [x] Web: use WGSL directly
+* [x] Vulkan/MVK: WGSL → SPIR-V (Tint/Naga) at build or first run
+* [x] Minimal set
 
-    * [ ] `unlit_points.vert.wgsl`, `unlit_points.frag.wgsl`
-    * [ ] `unlit_color.vert.wgsl`,  `unlit_color.frag.wgsl`
-    * [ ] `fullscreen_fxaa.vert.wgsl`, `fullscreen_fxaa.frag.wgsl` (optional)
+    * [x] `unlit_points.vert.wgsl`, `unlit_points.frag.wgsl`
+    * [x] `unlit_color.vert.wgsl`,  `unlit_color.frag.wgsl`
+    * [x] `fullscreen_fxaa.vert.wgsl`, `fullscreen_fxaa.frag.wgsl` (optional)
 
 ### 8) Tooling, Build & CI
 
