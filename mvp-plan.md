@@ -171,7 +171,7 @@ resources/shaders/*.wgsl
 
     * [ ] `EmbeddingData(dims: Int, vectors: FloatArray, labels?: List<String>, clusters?: IntArray)`
     * [ ] `GraphData(nodes: List<NodeInfo>, edges: List<EdgeInfo>, weights?: FloatArray)`
-* [ ] Synthetic generators (clustered embeddings; small graph)
+* [x] Synthetic generators (clustered embeddings; small graph)
 * [ ] (JVM/Native) `saveJson(path, obj)` for baked layouts
 
 ### 5) Examples (adoption funnel)
