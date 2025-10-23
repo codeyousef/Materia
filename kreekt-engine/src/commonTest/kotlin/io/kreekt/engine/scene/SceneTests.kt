@@ -1,6 +1,5 @@
 package io.kreekt.engine.scene
 
-import io.kreekt.engine.math.Vector3f
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

@@ -159,7 +159,7 @@ resources/shaders/*.wgsl
 
 ### 3) Math & Utils
 
-* [ ] `Vec2/3/4`, `Mat4`, `Quat`, `Color` — value classes, inline ops
+* [x] `Vec2/3/4`, `Mat4`, `Quat`, `Color` — value classes, inline ops
 * [ ] `Spline` (Catmull–Rom) for camera rails + easing functions
 * [ ] AABB & frustum (CPU) for coarse culling
 * [ ] Frame‑local **Arena** + **uniform ring buffers**

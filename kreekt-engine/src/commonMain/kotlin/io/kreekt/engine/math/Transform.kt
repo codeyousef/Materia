@@ -1,14 +1,11 @@
 package io.kreekt.engine.math
 
-import kotlin.math.cos
-import kotlin.math.sin
-
 class Transform {
-    val position: Vector3f = Vector3f()
-    val rotationEuler: Vector3f = Vector3f()
-    val scale: Vector3f = Vector3f(1f, 1f, 1f)
+    val position: Vec3 = vec3()
+    val rotationEuler: Vec3 = vec3()
+    val scale: Vec3 = vec3(1f, 1f, 1f)
 
-    private val matrixCache = FloatArray(16) { 0f }
+    private val matrixCache = mat4()
     private var dirty = true
     var changeListener: (() -> Unit)? = null
 
@@ -19,8 +16,9 @@ class Transform {
         }
     }
 
-    fun matrix(): FloatArray {
+    fun matrix(): Mat4 {
         if (!dirty) return matrixCache
+        val matrix = matrixCache
         val sx = scale.x
         val sy = scale.y
         val sz = scale.z
@@ -28,12 +26,12 @@ class Transform {
         val ry = rotationEuler.y
         val rz = rotationEuler.z
 
-        val cx = cos(rx)
-        val sxSin = sin(rx)
-        val cy = cos(ry)
-        val sySin = sin(ry)
-        val cz = cos(rz)
-        val szSin = sin(rz)
+        val cx = kotlin.math.cos(rx)
+        val sxSin = kotlin.math.sin(rx)
+        val cy = kotlin.math.cos(ry)
+        val sySin = kotlin.math.sin(ry)
+        val cz = kotlin.math.cos(rz)
+        val szSin = kotlin.math.sin(rz)
 
         val m00 = cy * cz
         val m01 = cy * szSin
@@ -47,28 +45,28 @@ class Transform {
         val m21 = cx * sySin * szSin - sxSin * cz
         val m22 = cx * cy
 
-        matrixCache[0] = m00 * sx
-        matrixCache[1] = m10 * sx
-        matrixCache[2] = m20 * sx
-        matrixCache[3] = 0f
+        matrix[0] = m00 * sx
+        matrix[1] = m10 * sx
+        matrix[2] = m20 * sx
+        matrix[3] = 0f
 
-        matrixCache[4] = m01 * sy
-        matrixCache[5] = m11 * sy
-        matrixCache[6] = m21 * sy
-        matrixCache[7] = 0f
+        matrix[4] = m01 * sy
+        matrix[5] = m11 * sy
+        matrix[6] = m21 * sy
+        matrix[7] = 0f
 
-        matrixCache[8] = m02 * sz
-        matrixCache[9] = m12 * sz
-        matrixCache[10] = m22 * sz
-        matrixCache[11] = 0f
+        matrix[8] = m02 * sz
+        matrix[9] = m12 * sz
+        matrix[10] = m22 * sz
+        matrix[11] = 0f
 
-        matrixCache[12] = position.x
-        matrixCache[13] = position.y
-        matrixCache[14] = position.z
-        matrixCache[15] = 1f
+        matrix[12] = position.x
+        matrix[13] = position.y
+        matrix[14] = position.z
+        matrix[15] = 1f
 
         dirty = false
-        return matrixCache
+        return matrix
     }
 
     fun isDirty(): Boolean = dirty

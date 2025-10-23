@@ -1,15 +1,17 @@
 package io.kreekt.engine.scene
 
-import io.kreekt.engine.math.MatrixOps
+import io.kreekt.engine.math.Mat4
 import io.kreekt.engine.math.Transform
-import io.kreekt.engine.math.Vector3f
+import io.kreekt.engine.math.Vec3
+import io.kreekt.engine.math.mat4
+import io.kreekt.engine.math.vec3
 
 open class Node(
     var name: String = "Node"
 ) {
     val transform: Transform = Transform()
-    private val worldMatrix: FloatArray = MatrixOps.identity()
-    private val tmpMatrix: FloatArray = FloatArray(16)
+    private val worldMatrix: Mat4 = mat4().setIdentity()
+    private val tmpMatrix: Mat4 = mat4()
     private var worldMatrixDirty: Boolean = true
 
     var parent: Node? = null
@@ -44,10 +46,10 @@ open class Node(
 
         if (needsUpdate) {
             if (parentMatrix != null) {
-                MatrixOps.multiply(tmpMatrix, parentMatrix, localMatrix)
-                tmpMatrix.copyInto(worldMatrix)
+                tmpMatrix.multiply(parentMatrix, localMatrix)
+                worldMatrix.copyFrom(tmpMatrix)
             } else {
-                localMatrix.copyInto(worldMatrix)
+                worldMatrix.copyFrom(localMatrix)
             }
             worldMatrixDirty = false
         }
@@ -56,10 +58,10 @@ open class Node(
         children.forEach { it.updateWorldMatrix(childForce) }
     }
 
-    fun getWorldMatrix(): FloatArray = worldMatrix
+    fun getWorldMatrix(): Mat4 = worldMatrix
 
-    fun positionWorld(out: Vector3f = Vector3f()): Vector3f {
-        val m = worldMatrix
+    fun positionWorld(out: Vec3 = vec3()): Vec3 {
+        val m = worldMatrix.data
         return out.set(m[12], m[13], m[14])
     }
 

@@ -1,6 +1,6 @@
 package io.kreekt.engine.material
 
-import io.kreekt.engine.math.Vector3f
+import io.kreekt.engine.math.Color
 
 sealed class Material(
     val label: String,
@@ -9,13 +9,13 @@ sealed class Material(
 
 class UnlitColorMaterial(
     label: String,
-    val color: Vector3f = Vector3f(1f, 1f, 1f),
+    val color: Color = Color.White,
     renderState: RenderState = RenderState()
 ) : Material(label, renderState)
 
 class UnlitPointsMaterial(
     label: String,
-    val baseColor: Vector3f = Vector3f(1f, 1f, 1f),
+    val baseColor: Color = Color.White,
     val size: Float = 1f,
     renderState: RenderState = RenderState(blendMode = BlendMode.Additive, depthWrite = false)
 ) : Material(label, renderState)
