@@ -59,6 +59,7 @@ import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo
 import org.lwjgl.vulkan.VkPipelineMultisampleStateCreateInfo
 import org.lwjgl.vulkan.VkPipelineRasterizationStateCreateInfo
 import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo
+import org.lwjgl.vulkan.VkPipelineDepthStencilStateCreateInfo
 import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo
 import org.lwjgl.vulkan.VkPhysicalDevice
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties
@@ -1076,12 +1077,25 @@ actual class GpuRenderPipeline actual constructor(
                         VK_COLOR_COMPONENT_G_BIT or
                         VK_COLOR_COMPONENT_B_BIT or
                         VK_COLOR_COMPONENT_A_BIT
-                )
-                .blendEnable(false)
+                ).apply {
+                    descriptor.blendMode.applyTo(this)
+                }
 
             val colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO)
                 .pAttachments(colorBlendAttachment)
+
+            val depthStateInfo = descriptor.depthState?.let { depth ->
+                VkPipelineDepthStencilStateCreateInfo.calloc(stack)
+                    .sType(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO)
+                    .depthTestEnable(true)
+                    .depthWriteEnable(depth.depthWriteEnabled)
+                    .depthCompareOp(depth.depthCompare.toVulkan())
+                    .depthBoundsTestEnable(false)
+                    .stencilTestEnable(false)
+                    .minDepthBounds(0f)
+                    .maxDepthBounds(1f)
+            }
 
             val dynamicStates = stack.ints(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR)
             val dynamicState = VkPipelineDynamicStateCreateInfo.calloc(stack)
@@ -1101,6 +1115,10 @@ actual class GpuRenderPipeline actual constructor(
                 .layout(pipelineLayoutHandle)
                 .renderPass(renderPassHandle)
                 .subpass(0)
+
+            if (depthStateInfo != null) {
+                pipelineInfo.pDepthStencilState(depthStateInfo)
+            }
 
             val pPipeline = stack.mallocLong(1)
             val pipelineResult = vkCreateGraphicsPipelines(deviceHandle, VK_NULL_HANDLE, pipelineInfo, null, pPipeline)
@@ -1325,6 +1343,32 @@ private fun GpuVertexFormat.toVulkanFormat(): Int = when (this) {
     GpuVertexFormat.SINT32x2 -> VK_FORMAT_R32G32_SINT
     GpuVertexFormat.SINT32x3 -> VK_FORMAT_R32G32B32_SINT
     GpuVertexFormat.SINT32x4 -> VK_FORMAT_R32G32B32A32_SINT
+}
+
+private fun GpuCompareFunction.toVulkan(): Int = when (this) {
+    GpuCompareFunction.ALWAYS -> VK_COMPARE_OP_ALWAYS
+    GpuCompareFunction.LESS -> VK_COMPARE_OP_LESS
+    GpuCompareFunction.LESS_EQUAL -> VK_COMPARE_OP_LESS_OR_EQUAL
+}
+
+private fun GpuBlendMode.applyTo(attachment: VkPipelineColorBlendAttachmentState): VkPipelineColorBlendAttachmentState = when (this) {
+    GpuBlendMode.DISABLED -> attachment.blendEnable(false)
+    GpuBlendMode.ALPHA -> attachment
+        .blendEnable(true)
+        .srcColorBlendFactor(VK_BLEND_FACTOR_SRC_ALPHA)
+        .dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+        .colorBlendOp(VK_BLEND_OP_ADD)
+        .srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE)
+        .dstAlphaBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+        .alphaBlendOp(VK_BLEND_OP_ADD)
+    GpuBlendMode.ADDITIVE -> attachment
+        .blendEnable(true)
+        .srcColorBlendFactor(VK_BLEND_FACTOR_ONE)
+        .dstColorBlendFactor(VK_BLEND_FACTOR_ONE)
+        .colorBlendOp(VK_BLEND_OP_ADD)
+        .srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE)
+        .dstAlphaBlendFactor(VK_BLEND_FACTOR_ONE)
+        .alphaBlendOp(VK_BLEND_OP_ADD)
 }
 
 private fun Int.toGpuTextureFormat(): GpuTextureFormat = when (this) {

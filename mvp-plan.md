@@ -152,7 +152,7 @@ resources/shaders/*.wgsl
 
     * [x] `UnlitColorMaterial`
     * [x] `UnlitPointsMaterial` (VS quad expansion; distance attenuation)
-* [ ] Pipeline state helpers: depth test/write, culling, alpha/additive blending
+* [x] Pipeline state helpers: depth test/write, culling, alpha/additive blending
 * [ ] Optional post: **FXAA** (toggle)
 * [ ] Material bindings → shader pipeline layout (bridging to backend descriptor sets)
 * [ ] Integrate engine drawables with real renderer submission (Geometry → vertex/index buffers)

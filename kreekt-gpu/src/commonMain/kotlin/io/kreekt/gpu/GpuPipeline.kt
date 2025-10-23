@@ -114,6 +114,24 @@ enum class GpuCullMode {
     BACK
 }
 
+enum class GpuCompareFunction {
+    ALWAYS,
+    LESS,
+    LESS_EQUAL
+}
+
+data class GpuDepthState(
+    val format: GpuTextureFormat = GpuTextureFormat.DEPTH24_PLUS,
+    val depthWriteEnabled: Boolean = true,
+    val depthCompare: GpuCompareFunction = GpuCompareFunction.LESS
+)
+
+enum class GpuBlendMode {
+    DISABLED,
+    ALPHA,
+    ADDITIVE
+}
+
 data class GpuRenderPipelineDescriptor(
     val label: String? = null,
     val vertexShader: GpuShaderModule,
@@ -124,7 +142,9 @@ data class GpuRenderPipelineDescriptor(
     val primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST,
     val frontFace: GpuFrontFace = GpuFrontFace.CCW,
     val cullMode: GpuCullMode = GpuCullMode.NONE,
-    val bindGroupLayouts: List<GpuBindGroupLayout> = emptyList()
+    val bindGroupLayouts: List<GpuBindGroupLayout> = emptyList(),
+    val depthState: GpuDepthState? = null,
+    val blendMode: GpuBlendMode = GpuBlendMode.DISABLED
 )
 
 data class GpuComputePipelineDescriptor(

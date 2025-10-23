@@ -3,6 +3,8 @@ package io.kreekt.examples.triangle
 import io.kreekt.camera.PerspectiveCamera
 import io.kreekt.core.math.Color
 import io.kreekt.core.math.Matrix4
+import io.kreekt.engine.material.BlendMode
+import io.kreekt.engine.material.RenderState
 import io.kreekt.core.math.Vector3
 import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Mesh
@@ -123,8 +125,23 @@ class TriangleExample(
 
         val surfaceFormat = surface.getPreferredFormat(adapter)
 
-        val colorPipeline = UnlitPipelineFactory.createUnlitColorPipeline(device, surfaceFormat)
-        val pointsPipeline = UnlitPipelineFactory.createUnlitPointsPipeline(device, surfaceFormat)
+        val colorRenderState = RenderState(depthTest = false, depthWrite = false)
+        val pointsRenderState = RenderState(
+            depthTest = false,
+            depthWrite = false,
+            blendMode = BlendMode.Additive
+        )
+
+        val colorPipeline = UnlitPipelineFactory.createUnlitColorPipeline(
+            device,
+            surfaceFormat,
+            colorRenderState
+        )
+        val pointsPipeline = UnlitPipelineFactory.createUnlitPointsPipeline(
+            device,
+            surfaceFormat,
+            pointsRenderState
+        )
         val uniformBuffer = device.createBuffer(
             GpuBufferDescriptor(
                 label = "triangle-mvp",

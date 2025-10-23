@@ -322,6 +322,14 @@ actual class GpuDevice actual constructor(
         } else {
             pipelineDescriptor.asDynamic().layout = "auto"
         }
+        descriptor.depthState?.let { depthState ->
+            val depthStencil = emptyObject()
+            depthStencil.asDynamic().format = depthState.format.toWebGpuFormat()
+            depthStencil.asDynamic().depthWriteEnabled = depthState.depthWriteEnabled
+            depthStencil.asDynamic().depthCompare = depthState.depthCompare.toWebGpu()
+            pipelineDescriptor.asDynamic().depthStencil = depthStencil
+        }
+
         val vertexState = emptyObject()
         vertexState.asDynamic().module = descriptor.vertexShader.handle()
         vertexState.asDynamic().entryPoint = "main"
@@ -352,6 +360,9 @@ actual class GpuDevice actual constructor(
             descriptor.colorFormats.forEach { format ->
                 val target = emptyObject()
                 target.asDynamic().format = format.toWebGpuFormat()
+                descriptor.blendMode.toWebGpu()?.let { blend ->
+                    target.asDynamic().blend = blend
+                }
                 targets.asDynamic().push(target)
             }
             fragmentState.asDynamic().targets = targets
@@ -839,6 +850,40 @@ private fun GpuTextureFormat.toWebGpuFormat(): String = when (this) {
     GpuTextureFormat.BGRA8_UNORM -> "bgra8unorm"
     GpuTextureFormat.RGBA16_FLOAT -> "rgba16float"
     GpuTextureFormat.DEPTH24_PLUS -> "depth24plus"
+}
+
+private fun GpuCompareFunction.toWebGpu(): String = when (this) {
+    GpuCompareFunction.ALWAYS -> "always"
+    GpuCompareFunction.LESS -> "less"
+    GpuCompareFunction.LESS_EQUAL -> "less-equal"
+}
+
+private fun GpuBlendMode.toWebGpu(): dynamic? = when (this) {
+    GpuBlendMode.DISABLED -> null
+    GpuBlendMode.ALPHA -> emptyObject().apply {
+        val color = emptyObject()
+        color.asDynamic().srcFactor = "src-alpha"
+        color.asDynamic().dstFactor = "one-minus-src-alpha"
+        color.asDynamic().operation = "add"
+        val alpha = emptyObject()
+        alpha.asDynamic().srcFactor = "one"
+        alpha.asDynamic().dstFactor = "one-minus-src-alpha"
+        alpha.asDynamic().operation = "add"
+        this.asDynamic().color = color
+        this.asDynamic().alpha = alpha
+    }
+    GpuBlendMode.ADDITIVE -> emptyObject().apply {
+        val color = emptyObject()
+        color.asDynamic().srcFactor = "one"
+        color.asDynamic().dstFactor = "one"
+        color.asDynamic().operation = "add"
+        val alpha = emptyObject()
+        alpha.asDynamic().srcFactor = "one"
+        alpha.asDynamic().dstFactor = "one"
+        alpha.asDynamic().operation = "add"
+        this.asDynamic().color = color
+        this.asDynamic().alpha = alpha
+    }
 }
 
 private fun GpuLoadOp.toWebGpu(): String = when (this) {

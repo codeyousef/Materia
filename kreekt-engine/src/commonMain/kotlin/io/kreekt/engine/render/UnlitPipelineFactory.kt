@@ -1,5 +1,8 @@
 package io.kreekt.engine.render
 
+import io.kreekt.engine.material.BlendMode
+import io.kreekt.engine.material.CullMode
+import io.kreekt.engine.material.RenderState
 import io.kreekt.gpu.GpuBindGroup
 import io.kreekt.gpu.GpuBindGroupDescriptor
 import io.kreekt.gpu.GpuBindGroupEntry
@@ -8,7 +11,11 @@ import io.kreekt.gpu.GpuBindGroupLayoutDescriptor
 import io.kreekt.gpu.GpuBindGroupLayoutEntry
 import io.kreekt.gpu.GpuBindingResource
 import io.kreekt.gpu.GpuBindingResourceType
+import io.kreekt.gpu.GpuBlendMode
 import io.kreekt.gpu.GpuBuffer
+import io.kreekt.gpu.GpuCompareFunction
+import io.kreekt.gpu.GpuCullMode
+import io.kreekt.gpu.GpuDepthState
 import io.kreekt.gpu.GpuDevice
 import io.kreekt.gpu.GpuPrimitiveTopology
 import io.kreekt.gpu.GpuRenderPipeline
@@ -40,7 +47,8 @@ object UnlitPipelineFactory {
      */
     suspend fun createUnlitColorPipeline(
         device: GpuDevice,
-        colorFormat: GpuTextureFormat
+        colorFormat: GpuTextureFormat,
+        renderState: RenderState = RenderState()
     ): PipelineResources {
         val layout = createUniformLayout(device, label = "unlit-color-layout")
         val vertexModule = device.createShaderModule(
@@ -63,7 +71,10 @@ object UnlitPipelineFactory {
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
                 vertexBuffers = listOf(vertexLayoutWithColor()),
-                bindGroupLayouts = listOf(layout)
+                bindGroupLayouts = listOf(layout),
+                cullMode = renderState.toCullMode(),
+                depthState = renderState.toDepthState(),
+                blendMode = renderState.toBlendMode()
             )
         )
 
@@ -75,7 +86,8 @@ object UnlitPipelineFactory {
      */
     suspend fun createUnlitPointsPipeline(
         device: GpuDevice,
-        colorFormat: GpuTextureFormat
+        colorFormat: GpuTextureFormat,
+        renderState: RenderState = RenderState()
     ): PipelineResources {
         val layout = createUniformLayout(device, label = "unlit-points-layout")
         val vertexModule = device.createShaderModule(
@@ -99,7 +111,10 @@ object UnlitPipelineFactory {
                 colorFormats = listOf(colorFormat),
                 vertexBuffers = listOf(vertexLayoutWithColor()),
                 primitiveTopology = GpuPrimitiveTopology.POINT_LIST,
-                bindGroupLayouts = listOf(layout)
+                bindGroupLayouts = listOf(layout),
+                cullMode = renderState.toCullMode(),
+                depthState = renderState.toDepthState(),
+                blendMode = renderState.toBlendMode()
             )
         )
 
@@ -161,4 +176,25 @@ object UnlitPipelineFactory {
                 )
             )
         )
+}
+
+private fun RenderState.toCullMode(): GpuCullMode = when (cullMode) {
+    CullMode.NONE -> GpuCullMode.NONE
+    CullMode.FRONT -> GpuCullMode.FRONT
+    CullMode.BACK -> GpuCullMode.BACK
+}
+
+private fun RenderState.toBlendMode(): GpuBlendMode = when (blendMode) {
+    BlendMode.Opaque -> GpuBlendMode.DISABLED
+    BlendMode.Alpha -> GpuBlendMode.ALPHA
+    BlendMode.Additive -> GpuBlendMode.ADDITIVE
+}
+
+private fun RenderState.toDepthState() = if (depthTest) {
+    io.kreekt.gpu.GpuDepthState(
+        depthWriteEnabled = depthWrite,
+        depthCompare = if (depthWrite) io.kreekt.gpu.GpuCompareFunction.LESS else io.kreekt.gpu.GpuCompareFunction.LESS_EQUAL
+    )
+} else {
+    null
 }
