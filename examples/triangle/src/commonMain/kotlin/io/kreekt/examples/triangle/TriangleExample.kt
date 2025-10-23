@@ -9,6 +9,7 @@ import io.kreekt.core.math.Vector3
 import io.kreekt.core.scene.Background
 import io.kreekt.core.scene.Mesh
 import io.kreekt.core.scene.Scene
+import io.kreekt.engine.render.PostProcessPipelineFactory
 import io.kreekt.engine.render.UnlitPipelineFactory
 import io.kreekt.geometry.BufferAttribute
 import io.kreekt.geometry.BufferGeometry
@@ -26,10 +27,14 @@ import io.kreekt.gpu.GpuPowerPreference
 import io.kreekt.gpu.GpuRenderPassColorAttachment
 import io.kreekt.gpu.GpuRenderPassDescriptor
 import io.kreekt.gpu.GpuRequestAdapterOptions
+import io.kreekt.gpu.GpuSamplerDescriptor
 import io.kreekt.gpu.GpuSurfaceConfiguration
 import io.kreekt.gpu.GpuSurfaceFactory
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.GpuTextureUsage
+import io.kreekt.gpu.GpuTextureDescriptor
+import io.kreekt.gpu.GpuTextureDimension
+import io.kreekt.gpu.GpuFilterMode
 import io.kreekt.gpu.createGpuInstance
 import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.gpu.gpuTextureUsage
@@ -63,7 +68,8 @@ data class TriangleBootLog(
 
 class TriangleExample(
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
-    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
+    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
+    private val enableFxaa: Boolean = true
 ) {
 
     suspend fun boot(
@@ -142,6 +148,9 @@ class TriangleExample(
             surfaceFormat,
             pointsRenderState
         )
+        val fxaaResources = if (enableFxaa) {
+            PostProcessPipelineFactory.createFxaaPipeline(device, surfaceFormat)
+        } else null
         val uniformBuffer = device.createBuffer(
             GpuBufferDescriptor(
                 label = "triangle-mvp",
@@ -183,6 +192,25 @@ class TriangleExample(
         pointsVertexBuffer.writeFloats(GPU_POINTS_VERTEX_DATA)
 
         val frame = surface.acquireFrame()
+        val offscreenTexture = if (enableFxaa) {
+            device.createTexture(
+                GpuTextureDescriptor(
+                    label = "triangle-offscreen",
+                    size = Triple(targetWidth, targetHeight, 1),
+                    mipLevelCount = 1,
+                    sampleCount = 1,
+                    dimension = GpuTextureDimension.D2,
+                    format = surfaceFormat,
+                    usage = gpuTextureUsage(
+                        GpuTextureUsage.RENDER_ATTACHMENT,
+                        GpuTextureUsage.TEXTURE_BINDING,
+                        GpuTextureUsage.COPY_SRC
+                    )
+                )
+            )
+        } else null
+        val offscreenView = offscreenTexture?.createView()
+
         val encoder = device.createCommandEncoder(
             GpuCommandEncoderDescriptor(label = "triangle-encoder")
         )
@@ -191,7 +219,7 @@ class TriangleExample(
             GpuRenderPassDescriptor(
                 colorAttachments = listOf(
                     GpuRenderPassColorAttachment(
-                        view = frame.view,
+                        view = offscreenView ?: frame.view,
                         loadOp = GpuLoadOp.CLEAR,
                         clearColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
                     )
@@ -210,6 +238,39 @@ class TriangleExample(
         pass.draw(GPU_POINTS_VERTEX_COUNT)
         pass.end()
 
+        if (enableFxaa && fxaaResources != null && offscreenView != null) {
+            val sampler = device.createSampler(
+                GpuSamplerDescriptor(
+                    label = "fxaa-sampler",
+                    magFilter = GpuFilterMode.LINEAR,
+                    minFilter = GpuFilterMode.LINEAR
+                )
+            )
+            val bindGroup = PostProcessPipelineFactory.createFxaaBindGroup(
+                device,
+                fxaaResources.bindGroupLayout,
+                offscreenView,
+                sampler
+            )
+
+            val fxaaPass = encoder.beginRenderPass(
+                GpuRenderPassDescriptor(
+                    colorAttachments = listOf(
+                        GpuRenderPassColorAttachment(
+                            view = frame.view,
+                            loadOp = GpuLoadOp.CLEAR,
+                            clearColor = floatArrayOf(0f, 0f, 0f, 1f)
+                        )
+                    ),
+                    label = "fxaa-pass"
+                )
+            )
+            fxaaPass.setPipeline(fxaaResources.pipeline)
+            fxaaPass.setBindGroup(0, bindGroup)
+            fxaaPass.draw(3)
+            fxaaPass.end()
+        }
+
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))
         surface.present(frame)
@@ -217,6 +278,7 @@ class TriangleExample(
         uniformBuffer.destroy()
         vertexBuffer.destroy()
         pointsVertexBuffer.destroy()
+        offscreenTexture?.destroy()
         instance.dispose()
 
         scene.updateMatrixWorld(true)
