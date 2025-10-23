@@ -1,12 +1,12 @@
 package io.kreekt.engine.camera
 
-import io.kreekt.engine.math.Vector3f
+import io.kreekt.engine.math.Vec3
 import kotlin.math.cos
 import kotlin.math.sin
 
 class OrbitController(
     private val camera: PerspectiveCamera,
-    private val target: Vector3f = Vector3f.Zero.copy(),
+    private val target: Vec3 = Vec3.Zero.copy(),
     radius: Float = 5f,
     theta: Float = 0f,
     phi: Float = 0.5f
