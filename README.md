@@ -1,7 +1,6 @@
 # 🚀 KreeKt
 
-> **A production-ready Kotlin Multiplatform 3D graphics library bringing Three.js-like capabilities to native platforms
-**
+> Kotlin Multiplatform rendering stack for WebGPU + Vulkan, shipping Three.js-style ergonomics across every target.
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org)
 [![Multiplatform](https://img.shields.io/badge/Multiplatform-JVM%20|%20JS%20|%20Native-brightgreen.svg)](https://kotlinlang.org/docs/multiplatform.html)
@@ -12,93 +11,76 @@
 
 ---
 
-## ✨ Features
+# ✨ Highlights
 
-**KreeKt** enables developers to create stunning 3D graphics applications with a familiar Three.js-inspired API, deployable across all major platforms from a single codebase.
-
-## 🔄 What Changed
-
-- Added `kreekt-examples-common` with shared HUD, camera rail, and runner helpers for showcase scenes.
-- Introduced the **Embedding Galaxy** example highlighting query shockwaves across 20k instanced points (JVM + JS).
-- Introduced the **Force Graph Re-rank** example with TF-IDF vs semantic weighting toggle and baked force-layouts.
-
-### 🎯 **Core Capabilities**
-- 🔹 **Unified 3D API** - Write once, run everywhere with Three.js-compatible patterns
-- 🔹 **Modern Rendering** - WebGPU-first with WebGL2/Vulkan fallbacks
-- 🔹 **Cross-Platform Physics** - Rapier (Web) and Bullet (Native) integration
-- 🔹 **Advanced Animation** - Skeletal animation, IK, and state machines
-- 🔹 **Immersive XR** - VR/AR support via WebXR and native APIs
-- 🔹 **High Performance** - 60 FPS with 100k+ triangles target
-
-### 🏗️ **Platform Support**
-
-| Platform | Status | Renderer | Physics | XR |
-|----------|--------|----------|---------|-----|
-| **🌐 Web** | ✅ Ready | WebGPU/WebGL2 | Rapier | WebXR |
-| **☕ JVM** | ✅ Ready | Vulkan (LWJGL) | Bullet | - |
-| **🍎 iOS** | ✅ Ready | MoltenVK | Bullet | ARKit |
-| **🤖 Android** | 🚧 In Progress | Vulkan | Bullet | ARCore |
-| **🍎 macOS** | ✅ Ready | MoltenVK | Bullet | - |
-| **🐧 Linux** | ✅ Ready | Vulkan | Bullet | - |
-| **🪟 Windows** | ✅ Ready | Vulkan | Bullet | - |
+- **Unified API:** WebGPU semantics with expect/actual bindings for Vulkan and MoltenVK.
+- **Instancing-first:** Catmull–Rom rails, arena allocators, and uniform ring buffers keep large point clouds smooth.
+- **Renderer integration:** `RendererFactory` auto-detects the best backend per platform.
+- **Examples:** Triangle smoke test, Embedding Galaxy (20k instanced points), and Force Graph re-rank (TF‑IDF vs semantic).
 
 ---
 
-## 🚀 Quick Start
+## 🎯 Supported Targets
 
-### Installation
+| Target | Backend | Shader Path | Surface | Status |
+|--------|---------|-------------|---------|--------|
+| wasmJs (Browser) | WebGPU (WebGL fallback) | WGSL | HTMLCanvas + `navigator.gpu` | ✅ |
+| JVM / LinuxX64 / Windows / macOS | Vulkan | WGSL → SPIR-V | GLFW window | ✅ |
+| macOS / iOS | MoltenVK | WGSL → SPIR-V → MVK | CAMetalLayer | 🚧 (Bring-up) |
+| Android | Vulkan | WGSL → SPIR-V | SurfaceView | 🚧 |
 
-Add KreeKt to your Kotlin Multiplatform project:
+See `mvp-plan.md` and `docs/MVP_STATUS.md` for the current backlog snapshot.
 
-```kotlin
-// build.gradle.kts
-dependencies {
-    commonMain {
-        implementation("io.kreekt:kreekt-core:0.1.0-alpha01")
-    }
-}
+---
+
+## 🛠 First Pixels Quickstart
+
+These commands boot the showcase examples and should render in under five minutes per target.
+
+### Web (wasmJs + WebGPU)
+
+```bash
+./gradlew :examples:triangle:wasmJsBrowserRun
+./gradlew :examples:embedding-galaxy:wasmJsBrowserRun
+./gradlew :examples:force-graph:wasmJsBrowserRun
 ```
 
-### Basic Usage
+> Requires a WebGPU-capable browser (Chrome 120+, Edge 120+, Safari TP). Hot reload is enabled.
 
-```kotlin
-import io.kreekt.core.scene.*
-import io.kreekt.core.math.*
-import io.kreekt.geometry.*
-import io.kreekt.material.*
-import io.kreekt.renderer.*
+### Desktop (JVM Vulkan)
 
-// Create a scene
-val scene = Scene()
-
-// Add a rotating cube with PBR material
-val cube = Mesh().apply {
-    geometry = BoxGeometry(1f, 1f, 1f)
-    material = PBRMaterial().apply {
-        baseColor = Color(0xff6b46c1)
-        metallic = 0.3f
-        roughness = 0.4f
-    }
-}
-scene.add(cube)
-
-// Set up camera and renderer
-val camera = PerspectiveCamera(75f, aspectRatio, 0.1f, 1000f)
-camera.position.z = 5f
-
-val renderer = createRenderer(canvas)
-renderer.setSize(width, height)
-
-// Animation loop
-fun animate() {
-    cube.rotation.x += 0.01f
-    cube.rotation.y += 0.01f
-
-    renderer.render(scene, camera)
-    requestAnimationFrame(::animate)
-}
-animate()
+```bash
+./gradlew :examples:triangle:run
+./gradlew :examples:embedding-galaxy:run
+./gradlew :examples:force-graph:run
 ```
+
+> Opens a GLFW window with vsync enabled. Resizes and DPI scaling are handled automatically.
+
+### Android (Vulkan)
+
+```bash
+./gradlew :examples:triangle:installDebug
+adb shell am start -n com.kreekt.examples.triangle/.MainActivity
+```
+
+> Replace `triangle` with other example modules to install different demos.
+
+### iOS / macOS (MoltenVK)
+
+- iOS: Generate an Xcode workspace via Gradle and run the `triangle` scheme (Simulator supported).
+- macOS: Launch the native MoltenVK target (`./gradlew :examples:triangle:runNative` once target bindings land).
+
+---
+
+## 📚 Documentation
+
+- API style guidance: [`docs/API_STYLE.md`](docs/API_STYLE.md)
+- Performance cheatsheet: [`docs/PERF_NOTES.md`](docs/PERF_NOTES.md)
+- MVP status overview: [`docs/MVP_STATUS.md`](docs/MVP_STATUS.md)
+- Full roadmap & daily checkpoints: [`mvp-plan.md`](mvp-plan.md)
+
+Example-specific READMEs live beside each module (`examples/<name>/README.md`).
 
 ---
 
