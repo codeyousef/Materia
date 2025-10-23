@@ -77,7 +77,83 @@ actual class GpuDevice internal constructor(
     }
 
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture {
-        throw UnsupportedOperationException("Vulkan texture abstraction pending")
+        val vkDevice = handle as? VkDevice ?: error("Vulkan device handle unavailable")
+        val physicalDevice = physicalDeviceHandle ?: error("Vulkan physical device unavailable")
+
+        val formatInfo = descriptor.format.toVulkanFormatInfo()
+        val usageFlags = descriptor.usage.toVulkanUsageFlags(formatInfo)
+        val imageType = descriptor.dimension.toVulkanImageType()
+        val sampleCount = descriptor.sampleCount.toVulkanSampleCount()
+        val (extentDepth, arrayLayers) = descriptor.extentDepthAndLayers()
+
+        MemoryStack.stackPush().use { stack ->
+            val createInfo = VkImageCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
+                .imageType(imageType)
+                .mipLevels(descriptor.mipLevelCount)
+                .arrayLayers(arrayLayers)
+                .format(formatInfo.vkFormat)
+                .tiling(VK_IMAGE_TILING_OPTIMAL)
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                .usage(usageFlags)
+                .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+                .samples(sampleCount)
+
+            createInfo.extent()
+                .width(descriptor.width)
+                .height(descriptor.height)
+                .depth(extentDepth)
+
+            val pImage = stack.mallocLong(1)
+            val createResult = vkCreateImage(vkDevice, createInfo, null, pImage)
+            if (createResult != VK_SUCCESS) {
+                throw IllegalStateException("Failed to create Vulkan image (vkCreateImage=$createResult)")
+            }
+            val imageHandle = pImage[0]
+
+            val memoryRequirements = VkMemoryRequirements.malloc(stack)
+            vkGetImageMemoryRequirements(vkDevice, imageHandle, memoryRequirements)
+
+            val allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                .allocationSize(memoryRequirements.size())
+                .memoryTypeIndex(
+                    findMemoryType(
+                        physicalDevice,
+                        memoryRequirements.memoryTypeBits(),
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                    )
+                )
+
+            val pMemory = stack.mallocLong(1)
+            val allocResult = vkAllocateMemory(vkDevice, allocInfo, null, pMemory)
+            if (allocResult != VK_SUCCESS) {
+                vkDestroyImage(vkDevice, imageHandle, null)
+                throw IllegalStateException("Failed to allocate Vulkan image memory (vkAllocateMemory=$allocResult)")
+            }
+            val memoryHandle = pMemory[0]
+
+            val bindResult = vkBindImageMemory(vkDevice, imageHandle, memoryHandle, 0)
+            if (bindResult != VK_SUCCESS) {
+                vkDestroyImage(vkDevice, imageHandle, null)
+                vkFreeMemory(vkDevice, memoryHandle, null)
+                throw IllegalStateException("Failed to bind Vulkan image memory (vkBindImageMemory=$bindResult)")
+            }
+
+            return GpuTexture(
+                width = descriptor.width,
+                height = descriptor.height,
+                depth = descriptor.depthOrArrayLayers,
+                format = descriptor.format,
+                mipLevelCount = descriptor.mipLevelCount,
+                device = vkDevice,
+                image = imageHandle,
+                memory = memoryHandle,
+                baseAspectMask = formatInfo.aspectMask,
+                baseDimension = descriptor.dimension,
+                arrayLayers = arrayLayers
+            )
+        }
     }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
@@ -196,18 +272,89 @@ actual class GpuTexture internal constructor(
     actual val height: Int,
     actual val depth: Int,
     actual val format: String,
-    actual val mipLevelCount: Int
+    actual val mipLevelCount: Int,
+    private val device: VkDevice,
+    internal val image: Long,
+    private val memory: Long,
+    private val baseAspectMask: Int,
+    internal val baseDimension: GpuTextureDimension,
+    internal val arrayLayers: Int
 ) {
+    private val views = mutableListOf<GpuTextureView>()
+    private var destroyed = false
+
     actual fun createView(descriptor: GpuTextureViewDescriptor?): GpuTextureView {
-        throw UnsupportedOperationException("Vulkan texture view abstraction pending")
+        check(!destroyed) { "Cannot create view from destroyed texture" }
+
+        val params = descriptor ?: GpuTextureViewDescriptor()
+        val viewFormat = params.format ?: format
+        val viewFormatInfo = viewFormat.toVulkanFormatInfo()
+        val aspect = if (viewFormatInfo.aspectMask != 0) viewFormatInfo.aspectMask else baseAspectMask
+        val viewType = params.dimension.toVulkanImageViewType(this)
+        val baseMip = params.baseMipLevel
+        val mipCount = params.mipLevelCount ?: (mipLevelCount - baseMip)
+        val baseLayer = params.baseArrayLayer
+        val layerCount = params.arrayLayerCount ?: (effectiveArrayLayers() - baseLayer)
+
+        MemoryStack.stackPush().use { stack ->
+            val components = VkComponentMapping.calloc(stack)
+                .r(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .g(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .b(VK_COMPONENT_SWIZZLE_IDENTITY)
+                .a(VK_COMPONENT_SWIZZLE_IDENTITY)
+
+            val subresource = VkImageSubresourceRange.calloc(stack)
+                .aspectMask(aspect)
+                .baseMipLevel(baseMip)
+                .levelCount(mipCount)
+                .baseArrayLayer(baseLayer)
+                .layerCount(layerCount)
+
+            val createInfo = VkImageViewCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
+                .image(image)
+                .viewType(viewType)
+                .format(viewFormatInfo.vkFormat)
+                .components(components)
+                .subresourceRange(subresource)
+
+            val pView = stack.mallocLong(1)
+            val result = vkCreateImageView(device, createInfo, null, pView)
+            if (result != VK_SUCCESS) {
+                throw IllegalStateException("Failed to create Vulkan image view (vkCreateImageView=$result)")
+            }
+
+            return GpuTextureView(
+                device = device,
+                handle = pView[0],
+                aspectMask = aspect
+            ).also { views += it }
+        }
     }
 
     actual fun destroy() {
-        // Vulkan textures are currently stubs; nothing to dispose.
+        if (destroyed) return
+        views.forEach { it.destroy() }
+        views.clear()
+        vkDestroyImage(device, image, null)
+        vkFreeMemory(device, memory, null)
+        destroyed = true
+    }
+
+    private fun effectiveArrayLayers(): Int =
+        when (baseDimension) {
+            GpuTextureDimension.D3 -> 1
+            else -> arrayLayers
+        }
+
+    internal fun defaultViewDimension(): GpuTextureViewDimension = when (baseDimension) {
+        GpuTextureDimension.D1 -> GpuTextureViewDimension.D1
+        GpuTextureDimension.D2 -> if (arrayLayers > 1) GpuTextureViewDimension.D2_ARRAY else GpuTextureViewDimension.D2
+        GpuTextureDimension.D3 -> GpuTextureViewDimension.D3
     }
 }
 
-actual fun GpuTexture.unwrapHandle(): Any? = null
+actual fun GpuTexture.unwrapHandle(): Any? = image
 
 actual class GpuSampler internal constructor(
     internal val device: VkDevice,
@@ -240,8 +387,18 @@ actual class GpuPipelineLayout internal constructor(
 actual fun GpuPipelineLayout.unwrapHandle(): Any? = handle
 
 actual class GpuTextureView internal constructor(
-    internal val handle: Any? = null
-)
+    private val device: VkDevice,
+    internal val handle: Long,
+    internal val aspectMask: Int
+) {
+    private var destroyed = false
+
+    internal fun destroy() {
+        if (destroyed) return
+        vkDestroyImageView(device, handle, null)
+        destroyed = true
+    }
+}
 
 actual fun GpuTextureView.unwrapHandle(): Any? = handle
 
@@ -273,6 +430,87 @@ private fun findMemoryType(
         }
     }
     throw IllegalStateException("Failed to find suitable Vulkan memory type")
+}
+
+private data class VulkanFormatInfo(
+    val vkFormat: Int,
+    val aspectMask: Int
+)
+
+private fun String.toVulkanFormatInfo(): VulkanFormatInfo {
+    return when (lowercase()) {
+        "rgba8unorm" -> VulkanFormatInfo(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT)
+        "bgra8unorm" -> VulkanFormatInfo(VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT)
+        "rgba16float" -> VulkanFormatInfo(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT)
+        "depth24plus" -> VulkanFormatInfo(
+            VK_FORMAT_D24_UNORM_S8_UINT,
+            VK_IMAGE_ASPECT_DEPTH_BIT or VK_IMAGE_ASPECT_STENCIL_BIT
+        )
+        else -> throw IllegalArgumentException("Unsupported texture format '$this'")
+    }
+}
+
+private fun Int.toVulkanUsageFlags(formatInfo: VulkanFormatInfo): Int {
+    var flags = 0
+    if (hasUsage(GpuTextureUsage.COPY_SRC)) {
+        flags = flags or VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+    }
+    if (hasUsage(GpuTextureUsage.COPY_DST)) {
+        flags = flags or VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    }
+    if (hasUsage(GpuTextureUsage.TEXTURE_BINDING)) {
+        flags = flags or VK_IMAGE_USAGE_SAMPLED_BIT
+    }
+    if (hasUsage(GpuTextureUsage.STORAGE_BINDING)) {
+        flags = flags or VK_IMAGE_USAGE_STORAGE_BIT
+    }
+    if (hasUsage(GpuTextureUsage.RENDER_ATTACHMENT)) {
+        flags = flags or if (formatInfo.aspectMask.isDepthFormat()) {
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+        } else {
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+        }
+    }
+    require(flags != 0) { "Texture usage mask must include at least one usage flag" }
+    return flags
+}
+
+private fun Int.hasUsage(usage: GpuTextureUsage): Boolean = (this and usage.bits) != 0
+
+private fun Int.isDepthFormat(): Boolean = (this and VK_IMAGE_ASPECT_DEPTH_BIT) != 0
+
+private fun GpuTextureDescriptor.extentDepthAndLayers(): Pair<Int, Int> {
+    return when (dimension) {
+        GpuTextureDimension.D1 -> 1 to depthOrArrayLayers
+        GpuTextureDimension.D2 -> 1 to depthOrArrayLayers
+        GpuTextureDimension.D3 -> depthOrArrayLayers to 1
+    }
+}
+
+private fun GpuTextureDimension.toVulkanImageType(): Int = when (this) {
+    GpuTextureDimension.D1 -> VK_IMAGE_TYPE_1D
+    GpuTextureDimension.D2 -> VK_IMAGE_TYPE_2D
+    GpuTextureDimension.D3 -> VK_IMAGE_TYPE_3D
+}
+
+private fun Int.toVulkanSampleCount(): Int = when (this) {
+    1 -> VK_SAMPLE_COUNT_1_BIT
+    2 -> VK_SAMPLE_COUNT_2_BIT
+    4 -> VK_SAMPLE_COUNT_4_BIT
+    8 -> VK_SAMPLE_COUNT_8_BIT
+    16 -> VK_SAMPLE_COUNT_16_BIT
+    else -> throw IllegalArgumentException("Unsupported sample count $this")
+}
+
+private fun GpuTextureViewDimension?.toVulkanImageViewType(texture: GpuTexture): Int {
+    return when (this ?: texture.defaultViewDimension()) {
+        GpuTextureViewDimension.D1 -> VK_IMAGE_VIEW_TYPE_1D
+        GpuTextureViewDimension.D2 -> VK_IMAGE_VIEW_TYPE_2D
+        GpuTextureViewDimension.D2_ARRAY -> VK_IMAGE_VIEW_TYPE_2D_ARRAY
+        GpuTextureViewDimension.D3 -> VK_IMAGE_VIEW_TYPE_3D
+        GpuTextureViewDimension.CUBE,
+        GpuTextureViewDimension.CUBE_ARRAY -> throw IllegalArgumentException("Cube image views are not yet supported")
+    }
 }
 
 private fun GpuSamplerFilter.toVkFilter(): Int = when (this) {

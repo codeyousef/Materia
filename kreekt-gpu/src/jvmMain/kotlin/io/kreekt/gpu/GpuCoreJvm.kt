@@ -5,6 +5,8 @@ import io.kreekt.renderer.gpu.GpuContext as RendererGpuContext
 import io.kreekt.renderer.gpu.GpuDevice as RendererGpuDevice
 import io.kreekt.renderer.gpu.GpuDeviceFactory as RendererGpuDeviceFactory
 import io.kreekt.renderer.gpu.GpuQueue as RendererGpuQueue
+import io.kreekt.renderer.gpu.GpuTexture as RendererGpuTexture
+import io.kreekt.renderer.gpu.GpuTextureView as RendererGpuTextureView
 import io.kreekt.renderer.gpu.GpuSampler as RendererGpuSampler
 import io.kreekt.renderer.gpu.commandPoolHandle
 import io.kreekt.renderer.gpu.unwrapHandle
@@ -100,8 +102,11 @@ actual class GpuDevice actual constructor(
         return GpuBuffer(this, descriptor).apply { attach(rendererBuffer) }
     }
 
-    actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture =
-        GpuTexture(this, descriptor)
+    actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture {
+        val rendererDescriptor = descriptor.toRendererDescriptor()
+        val rendererTexture = rendererDevice.createTexture(rendererDescriptor)
+        return GpuTexture(this, descriptor).apply { attach(rendererTexture) }
+    }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
         val rendererDescriptor = descriptor.toRendererDescriptor()
@@ -304,18 +309,45 @@ actual class GpuTexture actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuTextureDescriptor
 ) {
-    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView =
-        GpuTextureView(this, descriptor)
+    private lateinit var rendererTexture: RendererGpuTexture
+    private var destroyed = false
+
+    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView {
+        val renderer = rendererTextureOrThrow()
+        val rendererDescriptor = descriptor.toRendererDescriptor()
+        val rendererView = renderer.createView(rendererDescriptor)
+        return GpuTextureView(this, descriptor).apply { attach(rendererView) }
+    }
 
     actual fun destroy() {
-        // Textures not yet backed by renderer resources on JVM.
+        if (!::rendererTexture.isInitialized || destroyed) return
+        rendererTexture.destroy()
+        destroyed = true
+    }
+
+    internal fun attach(texture: RendererGpuTexture) {
+        rendererTexture = texture
+    }
+
+    internal fun rendererTextureOrThrow(): RendererGpuTexture {
+        check(::rendererTexture.isInitialized) { "Renderer texture not attached" }
+        return rendererTexture
     }
 }
 
 actual class GpuTextureView actual constructor(
     actual val texture: GpuTexture,
     actual val descriptor: GpuTextureViewDescriptor
-)
+) {
+    private lateinit var rendererView: RendererGpuTextureView
+
+    internal fun attach(view: RendererGpuTextureView) {
+        rendererView = view
+    }
+
+    internal fun rendererViewOrNull(): RendererGpuTextureView? =
+        if (::rendererView.isInitialized) rendererView else null
+}
 
 actual class GpuSampler actual constructor(
     actual val device: GpuDevice,

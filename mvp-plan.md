@@ -124,6 +124,7 @@ resources/shaders/*.wgsl
 * [ ] `GpuSurface` (configure, present, resize)
 * [ ] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
     * [x] JVM sampler creation delegates to Vulkan (`vkCreateSampler`)
+    * [x] JVM texture allocation binds Vulkan `VkImage`/memory and exposes image views
 * [ ] Shaders & pipelines
 
     * [ ] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
