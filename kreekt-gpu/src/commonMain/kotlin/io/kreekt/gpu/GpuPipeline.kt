@@ -123,7 +123,8 @@ data class GpuRenderPipelineDescriptor(
     val vertexBuffers: List<GpuVertexBufferLayout> = emptyList(),
     val primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST,
     val frontFace: GpuFrontFace = GpuFrontFace.CCW,
-    val cullMode: GpuCullMode = GpuCullMode.NONE
+    val cullMode: GpuCullMode = GpuCullMode.NONE,
+    val bindGroupLayouts: List<GpuBindGroupLayout> = emptyList()
 )
 
 data class GpuComputePipelineDescriptor(

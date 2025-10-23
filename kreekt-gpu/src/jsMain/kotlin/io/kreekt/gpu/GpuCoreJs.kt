@@ -309,7 +309,19 @@ actual class GpuDevice actual constructor(
     actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline {
         val pipelineDescriptor = emptyObject()
         descriptor.label?.let { pipelineDescriptor.asDynamic().label = it }
-        pipelineDescriptor.asDynamic().layout = "auto"
+
+        if (descriptor.bindGroupLayouts.isNotEmpty()) {
+            val layoutDescriptor = emptyObject()
+            val layouts = JsArray()
+            descriptor.bindGroupLayouts.forEach { layout ->
+                layouts.asDynamic().push(layout.handle())
+            }
+            layoutDescriptor.asDynamic().bindGroupLayouts = layouts
+            val pipelineLayout = handle().createPipelineLayout(layoutDescriptor)
+            pipelineDescriptor.asDynamic().layout = pipelineLayout
+        } else {
+            pipelineDescriptor.asDynamic().layout = "auto"
+        }
         val vertexState = emptyObject()
         vertexState.asDynamic().module = descriptor.vertexShader.handle()
         vertexState.asDynamic().entryPoint = "main"

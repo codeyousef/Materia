@@ -964,9 +964,17 @@ actual class GpuRenderPipeline actual constructor(
         val deviceHandle = device.rendererDevice.unwrapHandle() as? VkDevice
             ?: error("Vulkan device handle unavailable for pipeline creation")
         MemoryStack.stackPush().use { stack ->
+            val layoutHandles = if (descriptor.bindGroupLayouts.isNotEmpty()) {
+                val buffer = stack.mallocLong(descriptor.bindGroupLayouts.size)
+                descriptor.bindGroupLayouts.forEachIndexed { index, layout ->
+                    buffer.put(index, layout.handle)
+                }
+                buffer
+            } else null
+
             val pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO)
-                .pSetLayouts(null)
+                .pSetLayouts(layoutHandles)
                 .pPushConstantRanges(null)
 
             val pPipelineLayout = stack.mallocLong(1)
