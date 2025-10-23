@@ -73,6 +73,8 @@ class TriangleExample(
         val aspect = targetWidth.toFloat() / max(1, targetHeight).toFloat()
 
         val (scene, camera, mesh) = buildScene(aspect)
+        scene.updateWorldMatrix(true)
+        camera.updateProjectionMatrix()
         val meshCount = scene.children.count { it is Mesh }
 
         if (renderSurface == null) {
@@ -124,11 +126,11 @@ class TriangleExample(
         val uniformBuffer = device.createBuffer(
             GpuBufferDescriptor(
                 label = "triangle-mvp",
-                size = IDENTITY_MATRIX.size * Float.SIZE_BYTES.toLong(),
+                size = UNIFORM_MATRIX_FLOATS * Float.SIZE_BYTES.toLong(),
                 usage = gpuBufferUsage(GpuBufferUsage.UNIFORM)
             )
         )
-        uniformBuffer.writeFloats(IDENTITY_MATRIX)
+        uniformBuffer.writeFloats(computeModelViewProjection(camera))
 
         val colorBindGroup = UnlitPipelineFactory.createUniformBindGroup(
             device = device,
@@ -235,8 +237,6 @@ class TriangleExample(
             lookAt(Vector3(0f, 0f, 0f))
         }
         scene.add(camera)
-        scene.updateMatrixWorld(true)
-        camera.updateMatrixWorld(true)
 
         return Triple(scene, camera, mesh)
     }
@@ -280,11 +280,12 @@ class TriangleExample(
         )
         private val GPU_POINTS_VERTEX_COUNT = GPU_POINTS_VERTEX_DATA.size / GPU_TRIANGLE_COMPONENTS
 
-        private val IDENTITY_MATRIX = floatArrayOf(
-            1f, 0f, 0f, 0f,
-            0f, 1f, 0f, 0f,
-            0f, 0f, 1f, 0f,
-            0f, 0f, 0f, 1f
-        )
+        private const val UNIFORM_MATRIX_FLOATS = 16
+    }
+
+    private fun computeModelViewProjection(camera: PerspectiveCamera): FloatArray {
+        val projection = camera.projectionMatrix.clone()
+        val mvp = projection.multiply(camera.matrixWorldInverse)
+        return mvp.elements.copyOf()
     }
 }
