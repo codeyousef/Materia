@@ -109,7 +109,7 @@ object UnlitPipelineFactory {
                 vertexShader = vertexModule,
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
-                vertexBuffers = listOf(vertexLayoutWithColor()),
+                vertexBuffers = listOf(instancedPointsLayout()),
                 primitiveTopology = GpuPrimitiveTopology.POINT_LIST,
                 bindGroupLayouts = listOf(layout),
                 cullMode = renderState.toCullMode(),
@@ -159,7 +159,7 @@ object UnlitPipelineFactory {
             )
         )
 
-    private fun vertexLayoutWithColor(): GpuVertexBufferLayout =
+    internal fun vertexLayoutWithColor(): GpuVertexBufferLayout =
         GpuVertexBufferLayout(
             arrayStride = Float.SIZE_BYTES * 6,
             stepMode = GpuVertexStepMode.VERTEX,
@@ -173,6 +173,34 @@ object UnlitPipelineFactory {
                     shaderLocation = 1,
                     format = GpuVertexFormat.FLOAT32x3,
                     offset = Float.SIZE_BYTES * 3
+                )
+            )
+        )
+
+    internal fun instancedPointsLayout(): GpuVertexBufferLayout =
+        GpuVertexBufferLayout(
+            arrayStride = Float.SIZE_BYTES * 11,
+            stepMode = GpuVertexStepMode.INSTANCE,
+            attributes = listOf(
+                GpuVertexAttribute(
+                    shaderLocation = 0,
+                    format = GpuVertexFormat.FLOAT32x3,
+                    offset = 0
+                ),
+                GpuVertexAttribute(
+                    shaderLocation = 1,
+                    format = GpuVertexFormat.FLOAT32x3,
+                    offset = Float.SIZE_BYTES * 3
+                ),
+                GpuVertexAttribute(
+                    shaderLocation = 2,
+                    format = GpuVertexFormat.FLOAT32,
+                    offset = Float.SIZE_BYTES * 6
+                ),
+                GpuVertexAttribute(
+                    shaderLocation = 3,
+                    format = GpuVertexFormat.FLOAT32x4,
+                    offset = Float.SIZE_BYTES * 7
                 )
             )
         )

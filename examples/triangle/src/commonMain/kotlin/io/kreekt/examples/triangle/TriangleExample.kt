@@ -339,6 +339,7 @@ class TriangleExample(
         private const val DEFAULT_HEIGHT = 480
         private const val TRIANGLE_COMPONENTS = 3
         private const val GPU_TRIANGLE_COMPONENTS = 6
+        private const val GPU_POINTS_COMPONENTS = 11
         private val GPU_TRIANGLE_VERTEX_DATA = floatArrayOf(
             0f, 0.5f, 0f, 1f, 0.4f, 0.2f,
             -0.5f, -0.5f, 0f, 1f, 0.4f, 0.2f,
@@ -353,13 +354,13 @@ class TriangleExample(
         )
 
         private val GPU_POINTS_VERTEX_DATA = floatArrayOf(
-            -0.75f, 0.6f, 0f, 0.3f, 0.9f, 0.5f,
-            0.0f, 0.85f, 0f, 0.6f, 0.9f, 0.2f,
-            0.65f, 0.55f, 0f, 0.2f, 0.8f, 1.0f,
-            -0.6f, -0.65f, 0f, 0.95f, 0.4f, 0.2f,
-            0.7f, -0.7f, 0f, 0.8f, 0.3f, 0.9f
+            -0.75f, 0.6f, 0f, 0.3f, 0.9f, 0.5f, 1f, 0f, 0f, 0f, 0f,
+            0.0f, 0.85f, 0f, 0.6f, 0.9f, 0.2f, 1.2f, 0.1f, 0f, 0f, 0f,
+            0.65f, 0.55f, 0f, 0.2f, 0.8f, 1.0f, 0.9f, 0.2f, 0f, 0f, 0f,
+            -0.6f, -0.65f, 0f, 0.95f, 0.4f, 0.2f, 1.1f, 0.3f, 0f, 0f, 0f,
+            0.7f, -0.7f, 0f, 0.8f, 0.3f, 0.9f, 1.4f, 0.4f, 0f, 0f, 0f
         )
-        private val GPU_POINTS_VERTEX_COUNT = GPU_POINTS_VERTEX_DATA.size / GPU_TRIANGLE_COMPONENTS
+        private val GPU_POINTS_VERTEX_COUNT = GPU_POINTS_VERTEX_DATA.size / GPU_POINTS_COMPONENTS
 
         private const val UNIFORM_MATRIX_FLOATS = 16
     }
