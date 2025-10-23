@@ -313,7 +313,23 @@ actual class GpuDevice actual constructor(
         val vertexState = emptyObject()
         vertexState.asDynamic().module = descriptor.vertexShader.handle()
         vertexState.asDynamic().entryPoint = "main"
-        vertexState.asDynamic().buffers = JsArray()
+        val vertexBuffers = JsArray()
+        descriptor.vertexBuffers.forEach { layout ->
+            val bufferLayout = emptyObject()
+            bufferLayout.asDynamic().arrayStride = layout.arrayStride
+            bufferLayout.asDynamic().stepMode = layout.stepMode.toWebGpu()
+            val attributes = JsArray()
+            layout.attributes.forEach { attribute ->
+                val attributeDesc = emptyObject()
+                attributeDesc.asDynamic().shaderLocation = attribute.shaderLocation
+                attributeDesc.asDynamic().offset = attribute.offset
+                attributeDesc.asDynamic().format = attribute.format.toWebGpuFormat()
+                attributes.asDynamic().push(attributeDesc)
+            }
+            bufferLayout.asDynamic().attributes = attributes
+            vertexBuffers.asDynamic().push(bufferLayout)
+        }
+        vertexState.asDynamic().buffers = vertexBuffers
         pipelineDescriptor.asDynamic().vertex = vertexState
 
         descriptor.fragmentShader?.let { fragment ->
@@ -331,9 +347,9 @@ actual class GpuDevice actual constructor(
         }
 
         val primitive = emptyObject()
-        primitive.asDynamic().topology = "triangle-list"
-        primitive.asDynamic().cullMode = "none"
-        primitive.asDynamic().frontFace = "ccw"
+        primitive.asDynamic().topology = descriptor.primitiveTopology.toWebGpu()
+        primitive.asDynamic().cullMode = descriptor.cullMode.toWebGpu()
+        primitive.asDynamic().frontFace = descriptor.frontFace.toWebGpu()
         pipelineDescriptor.asDynamic().primitive = primitive
 
         descriptor.depthStencilFormat?.let { depthFormat ->
@@ -817,4 +833,43 @@ private fun GpuLoadOp.toWebGpu(): String = when (this) {
 private fun GpuStoreOp.toWebGpu(): String = when (this) {
     GpuStoreOp.STORE -> "store"
     GpuStoreOp.DISCARD -> "discard"
+}
+
+private fun GpuVertexStepMode.toWebGpu(): String = when (this) {
+    GpuVertexStepMode.VERTEX -> "vertex"
+    GpuVertexStepMode.INSTANCE -> "instance"
+}
+
+private fun GpuVertexFormat.toWebGpuFormat(): String = when (this) {
+    GpuVertexFormat.FLOAT32 -> "float32"
+    GpuVertexFormat.FLOAT32x2 -> "float32x2"
+    GpuVertexFormat.FLOAT32x3 -> "float32x3"
+    GpuVertexFormat.FLOAT32x4 -> "float32x4"
+    GpuVertexFormat.UINT32 -> "uint32"
+    GpuVertexFormat.UINT32x2 -> "uint32x2"
+    GpuVertexFormat.UINT32x3 -> "uint32x3"
+    GpuVertexFormat.UINT32x4 -> "uint32x4"
+    GpuVertexFormat.SINT32 -> "sint32"
+    GpuVertexFormat.SINT32x2 -> "sint32x2"
+    GpuVertexFormat.SINT32x3 -> "sint32x3"
+    GpuVertexFormat.SINT32x4 -> "sint32x4"
+}
+
+private fun GpuPrimitiveTopology.toWebGpu(): String = when (this) {
+    GpuPrimitiveTopology.POINT_LIST -> "point-list"
+    GpuPrimitiveTopology.LINE_LIST -> "line-list"
+    GpuPrimitiveTopology.LINE_STRIP -> "line-strip"
+    GpuPrimitiveTopology.TRIANGLE_LIST -> "triangle-list"
+    GpuPrimitiveTopology.TRIANGLE_STRIP -> "triangle-strip"
+}
+
+private fun GpuCullMode.toWebGpu(): String = when (this) {
+    GpuCullMode.NONE -> "none"
+    GpuCullMode.FRONT -> "front"
+    GpuCullMode.BACK -> "back"
+}
+
+private fun GpuFrontFace.toWebGpu(): String = when (this) {
+    GpuFrontFace.CCW -> "ccw"
+    GpuFrontFace.CW -> "cw"
 }

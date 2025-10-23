@@ -63,12 +63,67 @@ sealed class GpuBindingResource {
     ) : GpuBindingResource()
 }
 
+enum class GpuVertexStepMode {
+    VERTEX,
+    INSTANCE
+}
+
+enum class GpuVertexFormat {
+    FLOAT32,
+    FLOAT32x2,
+    FLOAT32x3,
+    FLOAT32x4,
+    UINT32,
+    UINT32x2,
+    UINT32x3,
+    UINT32x4,
+    SINT32,
+    SINT32x2,
+    SINT32x3,
+    SINT32x4
+}
+
+data class GpuVertexAttribute(
+    val shaderLocation: Int,
+    val format: GpuVertexFormat,
+    val offset: Int
+)
+
+data class GpuVertexBufferLayout(
+    val arrayStride: Int,
+    val stepMode: GpuVertexStepMode = GpuVertexStepMode.VERTEX,
+    val attributes: List<GpuVertexAttribute> = emptyList()
+)
+
+enum class GpuPrimitiveTopology {
+    POINT_LIST,
+    LINE_LIST,
+    LINE_STRIP,
+    TRIANGLE_LIST,
+    TRIANGLE_STRIP
+}
+
+enum class GpuFrontFace {
+    CCW,
+    CW
+}
+
+enum class GpuCullMode {
+    NONE,
+    FRONT,
+    BACK
+}
+
 data class GpuRenderPipelineDescriptor(
     val label: String? = null,
     val vertexShader: GpuShaderModule,
     val fragmentShader: GpuShaderModule? = null,
     val colorFormats: List<GpuTextureFormat> = emptyList(),
-    val depthStencilFormat: GpuTextureFormat? = null
+    val depthStencilFormat: GpuTextureFormat? = null,
+    val vertexBuffers: List<GpuVertexBufferLayout> = emptyList(),
+    val primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST,
+    val frontFace: GpuFrontFace = GpuFrontFace.CCW,
+    val cullMode: GpuCullMode = GpuCullMode.NONE
 )
 
 data class GpuComputePipelineDescriptor(

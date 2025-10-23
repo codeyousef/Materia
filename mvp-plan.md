@@ -177,8 +177,8 @@ resources/shaders/*.wgsl
 ### 5) Examples (adoption funnel)
 
 * [ ] **Triangle** (smoke): clear + draw + resize on every target
-    * [ ] Boot via `RendererFactory` / `SurfaceFactory` (Vulkan/WebGPU actual implementations)
-    * [ ] Replace placeholder GPU submission with backend-rendered frame
+    * [x] Boot via `RendererFactory` / `SurfaceFactory` (Vulkan/WebGPU actual implementations)
+    * [x] Replace placeholder GPU submission with backend-rendered frame
 * [ ] **Embedding Galaxy** (wow)
 
     * [ ] 20k InstancedPoints; 5–6 clusters; camera spline

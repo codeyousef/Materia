@@ -178,6 +178,12 @@ actual class GpuDevice actual constructor(
         return GpuSampler(this, descriptor).apply { attach(rendererSampler) }
     }
 
+    actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout =
+        GpuBindGroupLayout(this, descriptor).also { registerBindGroupLayout(it) }
+
+    actual fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup =
+        GpuBindGroup(descriptor.layout, descriptor).also { registerBindGroup(it) }
+
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
         GpuCommandEncoder(this, descriptor)
 
@@ -633,6 +639,9 @@ actual class GpuTexture actual constructor(
 ) {
     private lateinit var rendererTexture: RendererGpuTexture
     private var destroyed = false
+    private var externalImageHandle: Long? = null
+    private val externalViews = mutableListOf<ImageViewRecord>()
+    private var ownsImage = true
 
     actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView {
         val renderer = rendererTextureOrThrow()
@@ -642,18 +651,33 @@ actual class GpuTexture actual constructor(
     }
 
     actual fun destroy() {
-        if (!::rendererTexture.isInitialized || destroyed) return
-        rendererTexture.destroy()
+        if (destroyed) return
+        if (::rendererTexture.isInitialized && ownsImage) {
+            rendererTexture.destroy()
+        }
+        externalViews.clear()
         destroyed = true
     }
 
     internal fun attach(texture: RendererGpuTexture) {
         rendererTexture = texture
+        ownsImage = true
     }
 
     internal fun rendererTextureOrThrow(): RendererGpuTexture {
         check(::rendererTexture.isInitialized) { "Renderer texture not attached" }
         return rendererTexture
+    }
+
+    internal fun wrapExternalImage(imageHandle: Long) {
+        externalImageHandle = imageHandle
+        ownsImage = false
+    }
+
+    internal fun attachExternalView(viewHandle: Long, descriptor: GpuTextureViewDescriptor): GpuTextureView {
+        val view = GpuTextureView(this, descriptor).apply { attachExternal(viewHandle) }
+        externalViews += ImageViewRecord(viewHandle, owned = false)
+        return view
     }
 }
 
@@ -662,13 +686,20 @@ actual class GpuTextureView actual constructor(
     actual val descriptor: GpuTextureViewDescriptor
 ) {
     private lateinit var rendererView: RendererGpuTextureView
+    internal var handle: Long = VK_NULL_HANDLE
+        private set
 
     internal fun attach(view: RendererGpuTextureView) {
         rendererView = view
+        handle = (view.unwrapHandle() as? Long) ?: VK_NULL_HANDLE
     }
 
     internal fun rendererViewOrNull(): RendererGpuTextureView? =
         if (::rendererView.isInitialized) rendererView else null
+
+    internal fun attachExternal(viewHandle: Long) {
+        handle = viewHandle
+    }
 }
 
 actual class GpuSampler actual constructor(
@@ -680,6 +711,9 @@ actual class GpuSampler actual constructor(
     internal fun attach(sampler: RendererGpuSampler) {
         rendererSampler = sampler
     }
+
+    internal val samplerHandle: Long
+        get() = (rendererSampler.unwrapHandle() as? Long) ?: VK_NULL_HANDLE
 }
 
 actual class GpuCommandEncoder actual internal constructor(
@@ -954,27 +988,61 @@ actual class GpuRenderPipeline actual constructor(
                 .module(fragmentShader.handle)
                 .pName(stack.UTF8("main"))
 
-            val bindingDescriptions = VkVertexInputBindingDescription.calloc(1, stack)
-            bindingDescriptions[0]
-                .binding(0)
-                .stride(3 * Float.SIZE_BYTES)
-                .inputRate(VK_VERTEX_INPUT_RATE_VERTEX)
+            val vertexLayouts = descriptor.vertexBuffers
+            val bindingDescriptions = if (vertexLayouts.isNotEmpty()) {
+                VkVertexInputBindingDescription.calloc(vertexLayouts.size, stack).also { bindings ->
+                    vertexLayouts.forEachIndexed { bindingIndex, layout ->
+                        bindings[bindingIndex]
+                            .binding(bindingIndex)
+                            .stride(layout.arrayStride)
+                            .inputRate(layout.stepMode.toVulkanInputRate())
+                    }
+                }
+            } else {
+                VkVertexInputBindingDescription.calloc(1, stack).also { bindings ->
+                    bindings[0]
+                        .binding(0)
+                        .stride(3 * Float.SIZE_BYTES)
+                        .inputRate(VK_VERTEX_INPUT_RATE_VERTEX)
+                }
+            }
 
-            val attributeDescriptions = VkVertexInputAttributeDescription.calloc(1, stack)
-            attributeDescriptions[0]
-                .binding(0)
-                .location(0)
-                .format(VK_FORMAT_R32G32B32_SFLOAT)
-                .offset(0)
+            val attributeDescriptions = if (vertexLayouts.isNotEmpty()) {
+                val totalAttributes = vertexLayouts.sumOf { it.attributes.size }
+                if (totalAttributes > 0) {
+                    VkVertexInputAttributeDescription.calloc(totalAttributes, stack).also { attributes ->
+                        var attributeIndex = 0
+                        vertexLayouts.forEachIndexed { bindingIndex, layout ->
+                            layout.attributes.forEach { attribute ->
+                                attributes[attributeIndex]
+                                    .binding(bindingIndex)
+                                    .location(attribute.shaderLocation)
+                                    .format(attribute.format.toVulkanFormat())
+                                    .offset(attribute.offset)
+                                attributeIndex += 1
+                            }
+                        }
+                    }
+                } else null
+            } else {
+                VkVertexInputAttributeDescription.calloc(1, stack).also { attributes ->
+                    attributes[0]
+                        .binding(0)
+                        .location(0)
+                        .format(VK_FORMAT_R32G32B32_SFLOAT)
+                        .offset(0)
+                }
+            }
 
             val vertexInputInfo = VkPipelineVertexInputStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO)
                 .pVertexBindingDescriptions(bindingDescriptions)
-                .pVertexAttributeDescriptions(attributeDescriptions)
+
+            attributeDescriptions?.let { vertexInputInfo.pVertexAttributeDescriptions(it) }
 
             val inputAssembly = VkPipelineInputAssemblyStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO)
-                .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                .topology(descriptor.primitiveTopology.toVulkan())
                 .primitiveRestartEnable(false)
 
             val viewportState = org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo.calloc(stack)
@@ -985,8 +1053,8 @@ actual class GpuRenderPipeline actual constructor(
             val rasterizer = VkPipelineRasterizationStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO)
                 .polygonMode(VK_POLYGON_MODE_FILL)
-                .cullMode(VK_CULL_MODE_NONE)
-                .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+                .cullMode(descriptor.cullMode.toVulkan())
+                .frontFace(descriptor.frontFace.toVulkan())
                 .lineWidth(1f)
 
             val multisampling = VkPipelineMultisampleStateCreateInfo.calloc(stack)
@@ -1191,6 +1259,45 @@ private fun GpuTextureFormat.toVulkan(): Int = when (this) {
     GpuTextureFormat.BGRA8_UNORM -> VK_FORMAT_B8G8R8A8_UNORM
     GpuTextureFormat.RGBA16_FLOAT -> VK_FORMAT_R16G16B16A16_SFLOAT
     GpuTextureFormat.DEPTH24_PLUS -> VK_FORMAT_D24_UNORM_S8_UINT
+}
+
+private fun GpuPrimitiveTopology.toVulkan(): Int = when (this) {
+    GpuPrimitiveTopology.POINT_LIST -> VK_PRIMITIVE_TOPOLOGY_POINT_LIST
+    GpuPrimitiveTopology.LINE_LIST -> VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+    GpuPrimitiveTopology.LINE_STRIP -> VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+    GpuPrimitiveTopology.TRIANGLE_LIST -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+    GpuPrimitiveTopology.TRIANGLE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+}
+
+private fun GpuCullMode.toVulkan(): Int = when (this) {
+    GpuCullMode.NONE -> VK_CULL_MODE_NONE
+    GpuCullMode.FRONT -> VK_CULL_MODE_FRONT_BIT
+    GpuCullMode.BACK -> VK_CULL_MODE_BACK_BIT
+}
+
+private fun GpuFrontFace.toVulkan(): Int = when (this) {
+    GpuFrontFace.CCW -> VK_FRONT_FACE_COUNTER_CLOCKWISE
+    GpuFrontFace.CW -> VK_FRONT_FACE_CLOCKWISE
+}
+
+private fun GpuVertexStepMode.toVulkanInputRate(): Int = when (this) {
+    GpuVertexStepMode.VERTEX -> VK_VERTEX_INPUT_RATE_VERTEX
+    GpuVertexStepMode.INSTANCE -> VK_VERTEX_INPUT_RATE_INSTANCE
+}
+
+private fun GpuVertexFormat.toVulkanFormat(): Int = when (this) {
+    GpuVertexFormat.FLOAT32 -> VK_FORMAT_R32_SFLOAT
+    GpuVertexFormat.FLOAT32x2 -> VK_FORMAT_R32G32_SFLOAT
+    GpuVertexFormat.FLOAT32x3 -> VK_FORMAT_R32G32B32_SFLOAT
+    GpuVertexFormat.FLOAT32x4 -> VK_FORMAT_R32G32B32A32_SFLOAT
+    GpuVertexFormat.UINT32 -> VK_FORMAT_R32_UINT
+    GpuVertexFormat.UINT32x2 -> VK_FORMAT_R32G32_UINT
+    GpuVertexFormat.UINT32x3 -> VK_FORMAT_R32G32B32_UINT
+    GpuVertexFormat.UINT32x4 -> VK_FORMAT_R32G32B32A32_UINT
+    GpuVertexFormat.SINT32 -> VK_FORMAT_R32_SINT
+    GpuVertexFormat.SINT32x2 -> VK_FORMAT_R32G32_SINT
+    GpuVertexFormat.SINT32x3 -> VK_FORMAT_R32G32B32_SINT
+    GpuVertexFormat.SINT32x4 -> VK_FORMAT_R32G32B32A32_SINT
 }
 
 private fun Int.toGpuTextureFormat(): GpuTextureFormat = when (this) {

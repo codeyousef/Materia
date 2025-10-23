@@ -1,240 +1,190 @@
 package io.kreekt.examples.triangle
 
-import io.kreekt.engine.camera.OrbitController
-import io.kreekt.engine.camera.PerspectiveCamera
-import io.kreekt.engine.geometry.AttributeSemantic
-import io.kreekt.engine.geometry.AttributeType
-import io.kreekt.engine.geometry.Geometry
-import io.kreekt.engine.geometry.GeometryAttribute
-import io.kreekt.engine.geometry.GeometryLayout
-import io.kreekt.engine.material.UnlitColorMaterial
-import io.kreekt.engine.math.Vector3f
-import io.kreekt.engine.scene.Mesh
-import io.kreekt.engine.scene.Scene
-import io.kreekt.gpu.GpuBackend
-import io.kreekt.gpu.GpuBufferDescriptor
-import io.kreekt.gpu.GpuBufferUsage
-import io.kreekt.gpu.GpuCommandEncoderDescriptor
-import io.kreekt.gpu.GpuDeviceDescriptor
-import io.kreekt.gpu.GpuInstanceDescriptor
-import io.kreekt.gpu.GpuLoadOp
-import io.kreekt.gpu.GpuPowerPreference
-import io.kreekt.gpu.GpuRenderPassColorAttachment
-import io.kreekt.gpu.GpuRenderPassDescriptor
-import io.kreekt.gpu.GpuRenderPipelineDescriptor
-import io.kreekt.gpu.GpuRequestAdapterOptions
-import io.kreekt.gpu.GpuShaderModuleDescriptor
-import io.kreekt.gpu.GpuSurface
-import io.kreekt.gpu.GpuSurfaceConfiguration
-import io.kreekt.gpu.GpuSurfaceFactory
-import io.kreekt.gpu.GpuTextureFormat
-import io.kreekt.gpu.GpuTextureUsage
-import io.kreekt.gpu.gpuBufferUsage
-import io.kreekt.gpu.gpuTextureUsage
-import io.kreekt.gpu.createGpuInstance
-import io.kreekt.gpu.gpuBufferUsage
+import io.kreekt.camera.PerspectiveCamera
+import io.kreekt.core.math.Color
+import io.kreekt.core.math.Vector3
+import io.kreekt.core.scene.Background
+import io.kreekt.core.scene.Mesh
+import io.kreekt.core.scene.Scene
+import io.kreekt.geometry.BufferAttribute
+import io.kreekt.geometry.BufferGeometry
+import io.kreekt.material.MeshBasicMaterial
+import io.kreekt.renderer.BackendType
+import io.kreekt.renderer.PowerPreference
 import io.kreekt.renderer.RenderSurface
+import io.kreekt.renderer.Renderer
+import io.kreekt.renderer.RendererConfig
+import io.kreekt.renderer.RendererFactory
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 data class TriangleBootLog(
-    val backend: GpuBackend,
-    val adapterName: String,
-    val deviceLabel: String?,
-    val pipelineLabel: String?,
+    val backend: BackendType,
+    val deviceName: String,
+    val driverVersion: String,
     val meshCount: Int,
-    val cameraPosition: Vector3f
+    val cameraPosition: Vector3,
+    val frameTimeMs: Double
 ) {
     fun pretty(): String = buildString {
         appendLine("🎯 Triangle MVP bootstrap complete")
         appendLine("  Backend : $backend")
-        appendLine("  Adapter : $adapterName")
-        appendLine("  Device  : ${deviceLabel ?: "n/a"}")
-        appendLine("  Pipeline: ${pipelineLabel ?: "n/a"}")
+        appendLine("  Device  : $deviceName")
+        appendLine("  Driver  : $driverVersion")
         appendLine("  Meshes  : $meshCount")
-        appendLine("  Camera  : (${cameraPosition.x}, ${cameraPosition.y}, ${cameraPosition.z})")
+        appendLine("  Frame   : ${frameTimeMs.asMsString()} ms")
+        appendLine(
+            "  Camera  : (${cameraPosition.x.format2f()}, " +
+                "${cameraPosition.y.format2f()}, ${cameraPosition.z.format2f()})"
+        )
     }
+
+    private fun Double.asMsString(): String = ((this * 100).roundToInt() / 100.0).toString()
+    private fun Float.format2f(): String = ((this * 100f).roundToInt() / 100f).toString()
 }
 
 class TriangleExample(
-    private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
-    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
+    private val preferredBackends: List<BackendType> = listOf(BackendType.WEBGPU),
+    private val powerPreference: PowerPreference = PowerPreference.HIGH_PERFORMANCE
 ) {
-    private var orbitController: OrbitController? = null
+    private var renderer: Renderer? = null
+    private var activeScene: Scene? = null
+    private var activeCamera: PerspectiveCamera? = null
+    private var triangleMesh: Mesh? = null
+
     suspend fun boot(
         renderSurface: RenderSurface? = null,
         widthOverride: Int? = null,
         heightOverride: Int? = null
     ): TriangleBootLog {
+        val targetWidth = widthOverride ?: renderSurface?.width?.takeIf { it > 0 } ?: DEFAULT_WIDTH
+        val targetHeight = heightOverride ?: renderSurface?.height?.takeIf { it > 0 } ?: DEFAULT_HEIGHT
+        val aspect = targetWidth.toFloat() / max(1, targetHeight).toFloat()
+
+        val (scene, camera, mesh) = buildScene(aspect)
+        val meshCount = scene.children.count { it is Mesh }
+
+        triangleMesh = mesh
+        activeScene = scene
+        activeCamera = camera
+
         if (renderSurface == null) {
-            val (scene, camera) = buildScene()
-            scene.update(0f)
             return TriangleBootLog(
-                backend = preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,
-                adapterName = "Stub Adapter",
-                deviceLabel = "Stub Device",
-                pipelineLabel = "triangle-pipeline",
-                meshCount = scene.children.count { it is Mesh },
-                cameraPosition = camera.transform.position.copy()
+                backend = preferredBackends.firstOrNull() ?: BackendType.WEBGPU,
+                deviceName = "Stub Device",
+                driverVersion = "n/a",
+                meshCount = meshCount,
+                cameraPosition = camera.position.clone(),
+                frameTimeMs = 0.0
             )
         }
 
-        val instance = createGpuInstance(
-            GpuInstanceDescriptor(
-                preferredBackends = preferredBackends,
-                label = "triangle-instance"
-            )
+        renderer?.dispose()
+        val config = RendererConfig(
+            preferredBackend = preferredBackends.firstOrNull(),
+            powerPreference = powerPreference
         )
 
-        val adapter = instance.requestAdapter(
-            GpuRequestAdapterOptions(
-                powerPreference = powerPreference,
-                label = "triangle-adapter"
-            )
-        )
+        val resolvedRenderer = RendererFactory.create(renderSurface, config).getOrThrow()
+        resolvedRenderer.initialize(config).getOrThrow()
+        if (targetHeight > 0) {
+            camera.aspect = targetWidth.toFloat() / targetHeight.toFloat()
+            camera.updateProjectionMatrix()
+        }
+        resolvedRenderer.resize(targetWidth, targetHeight)
 
-        val device = adapter.requestDevice(
-            GpuDeviceDescriptor(
-                label = "triangle-device"
-            )
-        )
+        scene.updateMatrixWorld(true)
+        resolvedRenderer.render(scene, camera)
 
-        val vertexShader = device.createShaderModule(
-            GpuShaderModuleDescriptor(
-                label = "triangle.vert",
-                code = loadShaderResource("shaders/triangle.vert.wgsl")
-            )
-        )
+        renderer = resolvedRenderer
 
-        val fragmentShader = device.createShaderModule(
-            GpuShaderModuleDescriptor(
-                label = "triangle.frag",
-                code = loadShaderResource("shaders/triangle.frag.wgsl")
-            )
-        )
-
-        val targetWidth = widthOverride ?: renderSurface.width.takeIf { it > 0 } ?: 640
-        val targetHeight = heightOverride ?: renderSurface.height.takeIf { it > 0 } ?: 480
-        val surface = GpuSurfaceFactory.create(
-            device = device,
-            renderSurface = renderSurface,
-            label = "triangle-surface",
-            configuration = GpuSurfaceConfiguration(
-                format = GpuTextureFormat.BGRA8_UNORM,
-                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
-                width = targetWidth,
-                height = targetHeight
-            )
-        )
-        val surfaceFormat = surface.getPreferredFormat(adapter)
-
-        val pipeline = device.createRenderPipeline(
-            GpuRenderPipelineDescriptor(
-                label = "triangle-pipeline",
-                vertexShader = vertexShader,
-                fragmentShader = fragmentShader,
-                colorFormats = listOf(surfaceFormat)
-            )
-        )
-        val frame = surface.acquireFrame()
-
-        val vertexBuffer = device.createBuffer(
-            GpuBufferDescriptor(
-                label = "triangle-vertex-buffer",
-                size = TRIANGLE_VERTICES.size * Float.SIZE_BYTES.toLong(),
-                usage = gpuBufferUsage(GpuBufferUsage.VERTEX)
-            )
-        )
-        vertexBuffer.writeFloats(TRIANGLE_VERTICES)
-
-        val encoder = device.createCommandEncoder(
-            GpuCommandEncoderDescriptor(label = "triangle-encoder")
-        )
-        val pass = encoder.beginRenderPass(
-            GpuRenderPassDescriptor(
-                colorAttachments = listOf(
-                    GpuRenderPassColorAttachment(
-                        view = frame.view,
-                        loadOp = GpuLoadOp.CLEAR,
-                        clearColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
-                    )
-                ),
-                label = "triangle-pass"
-            )
-        )
-        pass.setPipeline(pipeline)
-        pass.setVertexBuffer(0, vertexBuffer)
-        val triangleVertexCount = TRIANGLE_VERTICES.size / TRIANGLE_COMPONENTS
-        pass.draw(vertexCount = triangleVertexCount)
-        pass.end()
-        val commandBuffer = encoder.finish()
-        device.queue.submit(listOf(commandBuffer))
-        surface.present(frame)
-
-        val (scene, camera) = buildScene()
-        scene.update(0f)
+        val capabilities = resolvedRenderer.capabilities
+        val stats = resolvedRenderer.stats
 
         return TriangleBootLog(
-            backend = adapter.backend,
-            adapterName = adapter.info.name,
-            deviceLabel = device.descriptor.label,
-            pipelineLabel = pipeline.descriptor.label,
-            meshCount = scene.children.count { it is Mesh },
-            cameraPosition = camera.transform.position.copy()
+            backend = capabilities.backend,
+            deviceName = capabilities.deviceName,
+            driverVersion = capabilities.driverVersion,
+            meshCount = meshCount,
+            cameraPosition = camera.position.clone(),
+            frameTimeMs = stats.frameTime
         )
     }
 
-    private fun buildScene(): Pair<Scene, PerspectiveCamera> {
-        val scene = Scene(name = "TriangleScene").apply {
-            backgroundColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
+    fun renderFrame(deltaSeconds: Float = 0f) {
+        val renderer = renderer ?: return
+        val scene = activeScene ?: return
+        val camera = activeCamera ?: return
+
+        triangleMesh?.let { mesh ->
+            if (deltaSeconds > 0f) {
+                mesh.rotation.y += deltaSeconds * ROTATION_SPEED
+            }
         }
 
-        val geometry = Geometry(
-            vertexBuffer = io.kreekt.engine.scene.VertexBuffer(
-                data = TRIANGLE_VERTICES,
-                strideBytes = TRIANGLE_COMPONENTS * Float.SIZE_BYTES
-            ),
-            layout = GeometryLayout(
-                stride = TRIANGLE_COMPONENTS * Float.SIZE_BYTES,
-                attributes = mapOf(
-                    AttributeSemantic.POSITION to GeometryAttribute(
-                        offset = 0,
-                        components = 3,
-                        type = AttributeType.FLOAT32
-                    )
-                )
-            ),
-            indexBuffer = null
-        )
+        scene.updateMatrixWorld(true)
+        renderer.render(scene, camera)
+    }
 
-        val material = UnlitColorMaterial(
-            label = "TriangleMaterial",
-            color = Vector3f(1f, 0.4f, 0.2f)
-        )
+    fun resize(width: Int, height: Int) {
+        val renderer = renderer ?: return
+        val camera = activeCamera ?: return
+        if (width <= 0 || height <= 0) return
 
-        val mesh = Mesh(
-            name = "TriangleMesh",
-            geometry = geometry,
-            material = material
-        )
-        scene.add(mesh)
+        camera.aspect = width.toFloat() / height.toFloat()
+        camera.updateProjectionMatrix()
+        renderer.resize(width, height)
+    }
 
-        val camera = PerspectiveCamera(fovDegrees = 60f, aspect = 16f / 9f).apply {
-            transform.setPosition(0f, 0f, 2f)
-            lookAt(Vector3f(0f, 0f, 0f))
+    fun shutdown() {
+        renderer?.dispose()
+        renderer = null
+        activeScene = null
+        activeCamera = null
+        triangleMesh = null
+    }
+
+    private fun buildScene(aspect: Float): Triple<Scene, PerspectiveCamera, Mesh> {
+        val geometry = BufferGeometry().apply {
+            setAttribute("position", BufferAttribute(TRIANGLE_VERTICES.copyOf(), TRIANGLE_COMPONENTS))
+        }
+
+        val material = MeshBasicMaterial().apply {
+            color = Color(1f, 0.4f, 0.2f)
+            toneMapped = false
+        }
+
+        val mesh = Mesh(geometry, material).apply {
+            name = "TriangleMesh"
+        }
+
+        val scene = Scene().apply {
+            name = "TriangleScene"
+            background = Background.Color(Color(0.05f, 0.05f, 0.1f, 1f))
+            add(mesh)
+        }
+
+        val camera = PerspectiveCamera(fov = 60f, aspect = aspect).apply {
+            position.set(0f, 0f, 2f)
+            lookAt(Vector3(0f, 0f, 0f))
         }
         scene.add(camera)
+        scene.updateMatrixWorld(true)
+        camera.updateMatrixWorld(true)
 
-        orbitController = OrbitController(camera, target = Vector3f(0f, 0f, 0f), radius = 2f)
-
-        return scene to camera
+        return Triple(scene, camera, mesh)
     }
 
     companion object {
+        private const val DEFAULT_WIDTH = 640
+        private const val DEFAULT_HEIGHT = 480
+        private const val TRIANGLE_COMPONENTS = 3
+        private const val ROTATION_SPEED = 0.6f
+
         private val TRIANGLE_VERTICES = floatArrayOf(
             0f, 0.5f, 0f,
             -0.5f, -0.5f, 0f,
             0.5f, -0.5f, 0f
         )
-
-        private const val TRIANGLE_COMPONENTS = 3
     }
 }
