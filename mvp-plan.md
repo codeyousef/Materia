@@ -162,7 +162,7 @@ resources/shaders/*.wgsl
 * [x] `Vec2/3/4`, `Mat4`, `Quat`, `Color` — value classes, inline ops
 * [x] `Spline` (Catmull–Rom) for camera rails + easing functions
 * [x] AABB & frustum (CPU) for coarse culling
-* [ ] Frame‑local **Arena** + **uniform ring buffers**
+* [x] Frame‑local **Arena** + **uniform ring buffers**
 
 ### 4) IO & Data
 
