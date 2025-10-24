@@ -4,6 +4,7 @@ import io.kreekt.engine.scene.Mesh
 import io.kreekt.gpu.GpuBufferDescriptor
 import io.kreekt.gpu.GpuBufferUsage
 import io.kreekt.gpu.GpuDevice
+import io.kreekt.gpu.GpuIndexFormat
 import io.kreekt.gpu.GpuRenderPassEncoder
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.gpuBufferUsage
@@ -36,12 +37,16 @@ class SceneRenderer(
             pass.setBindGroup(0, resources.bindGroup)
             pass.setVertexBuffer(0, resources.geometry.vertexBuffer)
 
+            val indexBuffer = resources.geometry.indexBuffer
             val indexCount = resources.geometry.indexCount
-            if (indexCount != null && indexCount > 0) {
-                // Indexed draws not yet supported by GpuRenderPassEncoder expect/actual.
-                // Fallback to non-indexed draw using vertex count.
+            val indexFormat = resources.geometry.indexFormat
+
+            if (indexBuffer != null && indexCount != null && indexCount > 0 && indexFormat != null) {
+                pass.setIndexBuffer(indexBuffer, indexFormat, 0L)
+                pass.drawIndexed(indexCount)
+            } else {
+                pass.draw(resources.geometry.vertexCount)
             }
-            pass.draw(resources.geometry.vertexCount)
         }
     }
 
