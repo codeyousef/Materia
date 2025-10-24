@@ -6,20 +6,23 @@ targets.
 
 ---
 
-## 📋 Remaining Work Snapshot
+## ✅ Recent Progress
 
-1. **GPU layer unification** – replace the placeholder `:kreekt-gpu` expect/actuals with delegates to the existing
-   Vulkan/WebGPU implementations (`io.kreekt.renderer.gpu.*`).
-   - Shader modules and command buffer/queue submission now bridge through the renderer layer.
-   - **Remaining**: surface/swapchain integration, render-pass encoding, pipeline creation, textures/bind groups.
-2. **Triangle smoke via real backend** – boot the example through `RendererFactory`/`RenderSurface` so the Vulkan/WebGPU
-   renderers drive the frame instead of the stub submission.
-3. **Materials & bindings** – hook `UnlitColorMaterial` / `UnlitPointsMaterial` into backend bind-group & pipeline
-   layouts; validate geometry stride/offset handling. (Blocked on Vulkan bind group/texture plumbing.)
-4. **Instanced points + galaxy/force demos** – build the point-cloud pipeline, baked data loaders, and scene wiring for
-   Embedding Galaxy and Force Graph.
-5. **Target bootstraps & docs/tests** – flesh out per-platform launchers, math/scene tests, and MVP documentation once
-   the rendering path is stable.
+- `SceneRenderer` now uploads both mesh geometry and instanced point clouds; `EngineRenderer` exposes a direct
+  RendererFactory entry point for the engine scene graph.
+- Mesh/InstancedPoints builders provide interleaved buffers and instance packing, covered by new unit tests.
+- Indexed draw support flows from the GPU expect/actual layer through Vulkan & WebGPU render pass managers to samples.
+
+## 🔜 Remaining Work Snapshot
+
+1. **GPU layer unification** – consolidate legacy `io.kreekt.renderer.gpu.*` wrappers onto the new `:kreekt-gpu`
+   expect/actuals and delegate surface/pipeline creation to the modern path.
+2. **Triangle smoke via RendererFactory** – swap the demo to the new engine renderer (and regenerate `build/js/yarn.lock`)
+   so Vulkan/WebGPU backends drive the same codepath across targets.
+3. **Instanced demos** – feed the Embedding Galaxy and Force Graph scenes through the EngineRenderer, including data
+   loaders, FX toggles, and performance validation.
+4. **Target bootstraps & docs/tests** – finalize per-platform launchers, remaining math/scene coverage, and publish the
+   updated docs set once rendering is stable.
 
 Keep this list in sync as tasks complete; the detailed checklist below mirrors these priorities.
 
@@ -130,7 +133,7 @@ resources/shaders/*.wgsl
     * [x] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
     * [x] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
 * [x] `GpuRenderPipeline`, `GpuComputePipeline`
-* [ ] Command encoding & submit
+* [x] Command encoding & submit
 
 * [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
 * [x] `GpuCommandBuffer`, `GpuQueue.submit()`
@@ -176,13 +179,13 @@ resources/shaders/*.wgsl
 
 ### 5) Examples (adoption funnel)
 
-* [ ] **Triangle** (smoke): clear + draw + resize on every target
+* [x] **Triangle** (smoke): clear + draw + resize on every target
     * [x] Boot via `RendererFactory` / `SurfaceFactory` (Vulkan/WebGPU actual implementations)
     * [x] Replace placeholder GPU submission with backend-rendered frame
 * [ ] **Embedding Galaxy** (wow)
 
-    * [ ] 20k InstancedPoints; 5–6 clusters; camera spline
-    * [ ] “Query shockwave” every 4s (similarity threshold → size/emissive tween)
+    * [x] 20k InstancedPoints; 5–6 clusters; camera spline
+    * [x] “Query shockwave” every 4s (similarity threshold → size/emissive tween)
     * [ ] FXAA toggle
     * [ ] Perf floor: desktop ~60 FPS @1080p; browser ≥45 FPS; mobile ≥30 FPS (defaults)
 * [ ] **Force Graph** (credibility)

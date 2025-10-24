@@ -5,6 +5,9 @@ import io.kreekt.engine.geometry.AttributeType
 import io.kreekt.engine.geometry.Geometry
 import io.kreekt.engine.geometry.GeometryAttribute
 import io.kreekt.engine.geometry.GeometryLayout
+import io.kreekt.engine.math.Mat4
+import io.kreekt.engine.math.mat4
+import io.kreekt.engine.material.RenderState
 import io.kreekt.engine.scene.InstancedPoints
 import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.VertexBuffer
@@ -15,10 +18,6 @@ import io.kreekt.gpu.GpuIndexFormat
 import io.kreekt.gpu.GpuRenderPassEncoder
 import io.kreekt.gpu.GpuTextureFormat
 import io.kreekt.gpu.gpuBufferUsage
-import io.kreekt.engine.math.Mat4
-import io.kreekt.engine.math.mat4
-import io.kreekt.engine.material.RenderState
-import kotlinx.coroutines.runBlocking
 import kotlin.reflect.KClass
 
 class SceneRenderer(
@@ -31,13 +30,13 @@ class SceneRenderer(
     private val meshCache = mutableMapOf<Mesh, MeshResources>()
     private val pointsCache = mutableMapOf<InstancedPoints, PointsResources>()
 
-    suspend fun prepare(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
+    fun prepare(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
         meshes.forEach { ensureMeshResources(it) }
         points.forEach { ensurePointsResources(it) }
     }
 
     fun prepareBlocking(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
-        runBlocking { prepare(meshes, points) }
+        prepare(meshes, points)
     }
 
     fun record(
@@ -91,7 +90,7 @@ class SceneRenderer(
         pipelineCache.clear()
     }
 
-    private suspend fun ensureMeshResources(mesh: Mesh): MeshResources {
+    private fun ensureMeshResources(mesh: Mesh): MeshResources {
         meshCache[mesh]?.let { return it }
         val blueprint = mesh.material.toBindingBlueprint()
         val pipeline = pipelineCache.getOrPut(PipelineKey(blueprint::class, blueprint.renderState, colorFormat)) {
@@ -119,7 +118,7 @@ class SceneRenderer(
         return resources
     }
 
-    private suspend fun ensurePointsResources(node: InstancedPoints): PointsResources {
+    private fun ensurePointsResources(node: InstancedPoints): PointsResources {
         pointsCache[node]?.let { return it }
 
         require(node.componentsPerInstance == 11) {

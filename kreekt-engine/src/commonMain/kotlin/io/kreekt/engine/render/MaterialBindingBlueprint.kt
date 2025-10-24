@@ -15,7 +15,7 @@ sealed class MaterialBindingBlueprint(
     abstract val vertexLayout: GpuVertexBufferLayout
     abstract val primitiveTopology: GpuPrimitiveTopology
 
-    suspend fun createPipeline(device: GpuDevice, colorFormat: GpuTextureFormat): UnlitPipelineFactory.PipelineResources =
+    fun createPipeline(device: GpuDevice, colorFormat: GpuTextureFormat): UnlitPipelineFactory.PipelineResources =
         when (this) {
             is UnlitColor -> UnlitPipelineFactory.createUnlitColorPipeline(device, colorFormat, renderState)
             is UnlitPoints -> UnlitPipelineFactory.createUnlitPointsPipeline(device, colorFormat, renderState)

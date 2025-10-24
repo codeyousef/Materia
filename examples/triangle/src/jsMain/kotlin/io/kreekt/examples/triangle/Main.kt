@@ -15,12 +15,12 @@ fun main() {
         val surface = WebGPUSurface(canvas)
 
         val example = TriangleExample()
-        val log = example.boot(
+        val result = example.boot(
             renderSurface = surface,
             widthOverride = canvas.width,
             heightOverride = canvas.height
         )
-        val message = log.pretty()
+        val message = result.log.pretty()
 
         println(message)
 
@@ -36,11 +36,21 @@ fun main() {
 
         document.body?.appendChild(pre)
 
+        fun renderLoop(timestamp: Double) {
+            result.renderFrame()
+            window.requestAnimationFrame(::renderLoop)
+        }
+
+        window.requestAnimationFrame(::renderLoop)
+
         window.onresize = {
             val width = canvas.clientWidth.takeIf { it > 0 } ?: canvas.width
             val height = canvas.clientHeight.takeIf { it > 0 } ?: canvas.height
             canvas.width = width
             canvas.height = height
+            surface.resize(width, height)
+            result.resize(width, height)
+            result.renderFrame()
             null
         }
     }

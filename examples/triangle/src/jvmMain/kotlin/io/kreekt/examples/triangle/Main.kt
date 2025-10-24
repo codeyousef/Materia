@@ -35,15 +35,21 @@ fun main() = runBlocking {
 
     try {
         val surface = SurfaceFactory.create(window)
-        val log = example.boot(renderSurface = surface)
+        val result = example.boot(renderSurface = surface)
 
-        println(log.pretty())
+        println(result.log.pretty())
         println("✅ Triangle rendered. Close the window to exit.")
+
+        glfwSetFramebufferSizeCallback(window) { _, width, height ->
+            result.resize(width, height)
+        }
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents()
+            result.renderFrame()
             Thread.sleep(16)
         }
+        result.dispose()
     } finally {
         glfwDestroyWindow(window)
         glfwTerminate()

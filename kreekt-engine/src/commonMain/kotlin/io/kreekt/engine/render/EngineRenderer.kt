@@ -5,6 +5,8 @@ import io.kreekt.engine.math.mat4
 import io.kreekt.engine.scene.InstancedPoints
 import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.Scene
+import io.kreekt.gpu.GpuAdapter
+import io.kreekt.gpu.GpuAdapterInfo
 import io.kreekt.gpu.GpuBackend
 import io.kreekt.gpu.GpuCommandEncoderDescriptor
 import io.kreekt.gpu.GpuDevice
@@ -25,6 +27,7 @@ import io.kreekt.renderer.RenderSurface
 import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.RendererFactory
 import io.kreekt.renderer.RendererInitializationException
+import io.kreekt.renderer.PowerPreference
 import io.kreekt.core.Result
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,6 +44,9 @@ interface EngineRenderer {
     fun render(scene: Scene, camera: PerspectiveCamera)
     fun resize(width: Int, height: Int)
     fun dispose()
+    val backend: BackendType
+    val deviceName: String
+    val driverVersion: String
 }
 
 data class EngineRendererOptions(
@@ -54,7 +60,13 @@ suspend fun RendererFactory.createEngineRenderer(
     config: RendererConfig = RendererConfig(),
     options: EngineRendererOptions = EngineRendererOptions()
 ): Result<EngineRenderer> {
-    val renderer = EngineRendererImpl(surface, config, options)
+    val preferredBackends = config.preferredBackend?.let { listOf(it.toGpuBackend()) }
+        ?: options.preferredBackends
+    val resolvedOptions = options.copy(
+        preferredBackends = preferredBackends,
+        powerPreference = config.powerPreference.toGpuPowerPreference()
+    )
+    val renderer = EngineRendererImpl(surface, config, resolvedOptions)
     return renderer.initialize().map { renderer }
 }
 
@@ -68,13 +80,25 @@ private class EngineRendererImpl(
     private var initialized = false
 
     private lateinit var gpuInstance: GpuInstance
+    private lateinit var adapter: GpuAdapter
+    private lateinit var adapterInfo: GpuAdapterInfo
     private lateinit var device: GpuDevice
     private lateinit var gpuSurface: GpuSurface
     private lateinit var sceneRenderer: SceneRenderer
     private lateinit var surfaceFormat: GpuTextureFormat
+    private var backendType: BackendType = BackendType.WEBGPU
 
     private var width: Int = max(surface.width, 1)
     private var height: Int = max(surface.height, 1)
+
+    override val backend: BackendType
+        get() = backendType
+
+    override val deviceName: String
+        get() = adapterInfo.name
+
+    override val driverVersion: String
+        get() = adapterInfo.driverVersion ?: "unknown"
 
     override suspend fun initialize(): Result<Unit> = initMutex.withLock {
         if (initialized) {
@@ -92,12 +116,14 @@ private class EngineRendererImpl(
                 )
             )
 
-            val adapter = gpuInstance.requestAdapter(
+            adapter = gpuInstance.requestAdapter(
                 GpuRequestAdapterOptions(
                     powerPreference = options.powerPreference,
                     label = "engine-renderer-adapter"
                 )
             )
+            adapterInfo = adapter.info
+            backendType = adapter.backend.toBackendType()
 
             device = adapter.requestDevice(
                 GpuDeviceDescriptor(
@@ -207,4 +233,14 @@ private fun BackendType.toGpuBackend(): GpuBackend = when (this) {
     BackendType.WEBGPU -> GpuBackend.WEBGPU
     BackendType.VULKAN -> GpuBackend.VULKAN
     BackendType.WEBGL -> GpuBackend.WEBGPU
+}
+
+private fun GpuBackend.toBackendType(): BackendType = when (this) {
+    GpuBackend.WEBGPU -> BackendType.WEBGPU
+    GpuBackend.VULKAN, GpuBackend.MOLTENVK -> BackendType.VULKAN
+}
+
+private fun PowerPreference.toGpuPowerPreference(): GpuPowerPreference = when (this) {
+    PowerPreference.LOW_POWER -> GpuPowerPreference.LOW_POWER
+    PowerPreference.HIGH_PERFORMANCE -> GpuPowerPreference.HIGH_PERFORMANCE
 }

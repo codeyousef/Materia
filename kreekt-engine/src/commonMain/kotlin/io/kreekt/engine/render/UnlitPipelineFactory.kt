@@ -27,7 +27,6 @@ import io.kreekt.gpu.GpuVertexAttribute
 import io.kreekt.gpu.GpuVertexBufferLayout
 import io.kreekt.gpu.GpuVertexFormat
 import io.kreekt.gpu.GpuVertexStepMode
-import io.kreekt.io.readTextResource
 
 /**
  * Builds GPU pipelines and bind-group layouts for unlit materials used by the MVP demos.
@@ -45,7 +44,7 @@ object UnlitPipelineFactory {
     /**
      * Create the pipeline used by [io.kreekt.engine.material.UnlitColorMaterial].
      */
-    suspend fun createUnlitColorPipeline(
+    fun createUnlitColorPipeline(
         device: GpuDevice,
         colorFormat: GpuTextureFormat,
         renderState: RenderState = RenderState()
@@ -54,13 +53,13 @@ object UnlitPipelineFactory {
         val vertexModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "unlit_color.vert",
-                code = readTextResource("shaders/unlit_color.vert.wgsl")
+                code = ShaderSource.UNLIT_COLOR_VERT
             )
         )
         val fragmentModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "unlit_color.frag",
-                code = readTextResource("shaders/unlit_color.frag.wgsl")
+                code = ShaderSource.UNLIT_COLOR_FRAG
             )
         )
 
@@ -84,7 +83,7 @@ object UnlitPipelineFactory {
     /**
      * Create the pipeline used by [io.kreekt.engine.material.UnlitPointsMaterial].
      */
-    suspend fun createUnlitPointsPipeline(
+    fun createUnlitPointsPipeline(
         device: GpuDevice,
         colorFormat: GpuTextureFormat,
         renderState: RenderState = RenderState()
@@ -93,13 +92,13 @@ object UnlitPipelineFactory {
         val vertexModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "unlit_points.vert",
-                code = readTextResource("shaders/unlit_points.vert.wgsl")
+                code = ShaderSource.UNLIT_POINTS_VERT
             )
         )
         val fragmentModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "unlit_points.frag",
-                code = readTextResource("shaders/unlit_points.frag.wgsl")
+                code = ShaderSource.UNLIT_POINTS_FRAG
             )
         )
 
@@ -204,6 +203,109 @@ object UnlitPipelineFactory {
                 )
             )
         )
+}
+
+private object ShaderSource {
+    val UNLIT_COLOR_VERT = """
+        struct VertexInput {
+            @location(0) position : vec3<f32>,
+            @location(1) color : vec3<f32>,
+        };
+
+        struct VertexOutput {
+            @builtin(position) position : vec4<f32>,
+            @location(0) color : vec3<f32>,
+        };
+
+        @group(0) @binding(0)
+        var<uniform> uModelViewProjection : mat4x4<f32>;
+
+        @vertex
+        fn main(input : VertexInput) -> VertexOutput {
+            var output : VertexOutput;
+            output.position = uModelViewProjection * vec4<f32>(input.position, 1.0);
+            output.color = input.color;
+            return output;
+        }
+    """.trimIndent()
+
+    val UNLIT_COLOR_FRAG = """
+        struct FragmentInput {
+            @location(0) color : vec3<f32>,
+        };
+
+        struct FragmentOutput {
+            @location(0) color : vec4<f32>,
+        };
+
+        @fragment
+        fn main(input : FragmentInput) -> FragmentOutput {
+            var output : FragmentOutput;
+            output.color = vec4<f32>(input.color, 1.0);
+            return output;
+        }
+    """.trimIndent()
+
+    val UNLIT_POINTS_VERT = """
+        struct VertexInput {
+            @location(0) instancePosition : vec3<f32>,
+            @location(1) instanceColor : vec3<f32>,
+            @location(2) instanceSize : f32,
+            @location(3) instanceExtra : vec4<f32>,
+        };
+
+        struct VertexOutput {
+            @builtin(position) position : vec4<f32>,
+            @location(0) color : vec3<f32>,
+            @location(1) size : f32,
+            @location(2) extra : vec4<f32>,
+        };
+
+        @group(0) @binding(0)
+        var<uniform> uModelViewProjection : mat4x4<f32>;
+
+        @vertex
+        fn main(input : VertexInput) -> VertexOutput {
+            var output : VertexOutput;
+            output.position = uModelViewProjection * vec4<f32>(input.instancePosition, 1.0);
+
+            let glow = clamp(input.instanceExtra.x, 0.0, 1.0);
+            let sizeFactor = clamp(input.instanceSize, 0.0, 10.0);
+
+            output.color = input.instanceColor * (1.0 + glow * 0.3) * clamp(sizeFactor, 0.2, 1.5);
+            output.size = input.instanceSize;
+            output.extra = input.instanceExtra;
+            return output;
+        }
+    """.trimIndent()
+
+    val UNLIT_POINTS_FRAG = """
+        struct FragmentInput {
+            @location(0) color : vec3<f32>,
+            @location(1) size : f32,
+            @location(2) extra : vec4<f32>,
+        };
+
+        struct FragmentOutput {
+            @location(0) color : vec4<f32>,
+        };
+
+        @fragment
+        fn main(input : FragmentInput) -> FragmentOutput {
+            var output : FragmentOutput;
+            var alpha = clamp(input.extra.w, 0.0, 1.0);
+            if (alpha == 0.0) {
+                alpha = 1.0;
+            }
+
+            let glow = clamp(input.extra.x, 0.0, 1.0);
+            let intensity = clamp(input.size * 0.5, 0.2, 1.5);
+            let finalColor = input.color * (1.0 + glow * 0.5) * intensity;
+
+            output.color = vec4<f32>(finalColor, alpha);
+            return output;
+        }
+    """.trimIndent()
 }
 
 private fun RenderState.toCullMode(): GpuCullMode = when (cullMode) {

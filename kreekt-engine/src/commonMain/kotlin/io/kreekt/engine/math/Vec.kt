@@ -1,5 +1,6 @@
 package io.kreekt.engine.math
 
+import kotlin.jvm.JvmInline
 import kotlin.math.sqrt
 
 @PublishedApi

@@ -10,9 +10,10 @@ class JvmTriangleExampleTest {
 
     @Test
     fun bootProducesRendererLog() = runBlocking {
-        val log = TriangleExample().boot()
+        val result = TriangleExample().boot()
+        val log = result.log
         assertEquals(BackendType.WEBGPU, log.backend)
         assertNotNull(log.deviceName)
-        assertEquals(1, log.meshCount)
+        assertEquals(2, log.meshCount)
     }
 }

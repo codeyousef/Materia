@@ -12,36 +12,22 @@ import io.kreekt.engine.material.UnlitColorMaterial
 import io.kreekt.engine.material.UnlitPointsMaterial
 import io.kreekt.engine.math.Color
 import io.kreekt.engine.math.Vec3
-import io.kreekt.engine.math.mat4
-import io.kreekt.engine.render.PostProcessPipelineFactory
-import io.kreekt.engine.render.SceneRenderer
+import io.kreekt.engine.render.EngineRenderer
+import io.kreekt.engine.render.EngineRendererOptions
+import io.kreekt.engine.render.createEngineRenderer
 import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.Scene
 import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBackend
-import io.kreekt.gpu.GpuCommandEncoderDescriptor
-import io.kreekt.gpu.GpuDeviceDescriptor
-import io.kreekt.gpu.GpuFilterMode
-import io.kreekt.gpu.GpuInstanceDescriptor
-import io.kreekt.gpu.GpuLoadOp
 import io.kreekt.gpu.GpuPowerPreference
-import io.kreekt.gpu.GpuRenderPassColorAttachment
-import io.kreekt.gpu.GpuRenderPassDescriptor
-import io.kreekt.gpu.GpuRequestAdapterOptions
-import io.kreekt.gpu.GpuSamplerDescriptor
-import io.kreekt.gpu.GpuSurfaceConfiguration
-import io.kreekt.gpu.GpuSurfaceFactory
-import io.kreekt.gpu.GpuTextureDescriptor
-import io.kreekt.gpu.GpuTextureDimension
-import io.kreekt.gpu.GpuTextureFormat
-import io.kreekt.gpu.GpuTextureUsage
-import io.kreekt.gpu.GpuTextureView
-import io.kreekt.gpu.createGpuInstance
-import io.kreekt.gpu.gpuTextureUsage
 import io.kreekt.renderer.BackendType
+import io.kreekt.renderer.PowerPreference
 import io.kreekt.renderer.RenderSurface
+import io.kreekt.renderer.RendererConfig
+import io.kreekt.renderer.RendererFactory
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.system.measureTimeMillis
 
 data class TriangleBootLog(
     val backend: BackendType,
@@ -70,25 +56,22 @@ data class TriangleBootLog(
 
 class TriangleExample(
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
-    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
-    private val enableFxaa: Boolean = true
+    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
 ) {
 
     suspend fun boot(
         renderSurface: RenderSurface? = null,
         widthOverride: Int? = null,
         heightOverride: Int? = null
-    ): TriangleBootLog {
+    ): TriangleBootResult {
         val targetWidth = widthOverride ?: renderSurface?.width?.takeIf { it > 0 } ?: DEFAULT_WIDTH
         val targetHeight = heightOverride ?: renderSurface?.height?.takeIf { it > 0 } ?: DEFAULT_HEIGHT
         val aspect = targetWidth.toFloat() / max(1, targetHeight).toFloat()
 
         val (scene, camera, meshes) = buildScene(aspect)
-        scene.updateWorldMatrix(true)
-        camera.updateProjection()
 
         if (renderSurface == null) {
-            return TriangleBootLog(
+            val log = TriangleBootLog(
                 backend = preferredBackends.firstOrNull()?.asBackendType() ?: BackendType.WEBGPU,
                 deviceName = "Stub Device",
                 driverVersion = "n/a",
@@ -96,138 +79,41 @@ class TriangleExample(
                 cameraPosition = camera.transform.position.copy(),
                 frameTimeMs = 0.0
             )
+            return TriangleBootResult(log, null, scene, camera)
         }
 
-        val instance = createGpuInstance(
-            GpuInstanceDescriptor(
-                preferredBackends = preferredBackends,
-                label = "triangle-instance"
-            )
+        val rendererConfig = RendererConfig(
+            preferredBackend = preferredBackends.firstOrNull()?.asBackendType(),
+            powerPreference = powerPreference.toRendererPowerPreference()
+        )
+        val rendererOptions = EngineRendererOptions(
+            preferredBackends = preferredBackends,
+            powerPreference = powerPreference,
+            clearColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
         )
 
-        val adapter = instance.requestAdapter(
-            GpuRequestAdapterOptions(
-                powerPreference = powerPreference,
-                label = "triangle-adapter"
-            )
-        )
+        val engineRenderer = RendererFactory.createEngineRenderer(
+            surface = renderSurface,
+            config = rendererConfig,
+            options = rendererOptions
+        ).getOrThrow()
 
-        val device = adapter.requestDevice(
-            GpuDeviceDescriptor(
-                label = "triangle-device"
-            )
-        )
+        engineRenderer.resize(targetWidth, targetHeight)
 
-        val surface = GpuSurfaceFactory.create(
-            device = device,
-            renderSurface = renderSurface,
-            label = "triangle-surface",
-            configuration = GpuSurfaceConfiguration(
-                format = GpuTextureFormat.BGRA8_UNORM,
-                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
-                width = targetWidth,
-                height = targetHeight
-            )
-        )
+        val frameTimeMs = measureTimeMillis {
+            engineRenderer.render(scene, camera)
+        }.toDouble()
 
-        val surfaceFormat = surface.getPreferredFormat(adapter)
-        val sceneRenderer = SceneRenderer(device, surfaceFormat)
-        sceneRenderer.prepareBlocking(meshes, emptyList())
-
-        val fxaaResources = if (enableFxaa) {
-            PostProcessPipelineFactory.createFxaaPipeline(device, surfaceFormat)
-        } else null
-
-        val frame = surface.acquireFrame()
-        val offscreenTexture = if (enableFxaa) {
-            device.createTexture(
-                GpuTextureDescriptor(
-                    label = "triangle-offscreen",
-                    size = Triple(targetWidth, targetHeight, 1),
-                    mipLevelCount = 1,
-                    sampleCount = 1,
-                    dimension = GpuTextureDimension.D2,
-                    format = surfaceFormat,
-                    usage = gpuTextureUsage(
-                        GpuTextureUsage.RENDER_ATTACHMENT,
-                        GpuTextureUsage.TEXTURE_BINDING,
-                        GpuTextureUsage.COPY_SRC
-                    )
-                )
-            )
-        } else null
-        val offscreenView = offscreenTexture?.createView()
-
-        val encoder = device.createCommandEncoder(
-            GpuCommandEncoderDescriptor(label = "triangle-encoder")
-        )
-
-        val pass = encoder.beginRenderPass(
-            GpuRenderPassDescriptor(
-                colorAttachments = listOf(
-                    GpuRenderPassColorAttachment(
-                        view = offscreenView ?: frame.view,
-                        loadOp = GpuLoadOp.CLEAR,
-                        clearColor = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
-                    )
-                ),
-                label = "triangle-pass"
-            )
-        )
-
-        val viewProjection = computeViewProjection(camera)
-        sceneRenderer.record(pass, meshes, emptyList(), viewProjection)
-        pass.end()
-
-        if (enableFxaa && fxaaResources != null && offscreenView != null) {
-            val sampler = device.createSampler(
-                GpuSamplerDescriptor(
-                    label = "fxaa-sampler",
-                    magFilter = GpuFilterMode.LINEAR,
-                    minFilter = GpuFilterMode.LINEAR
-                )
-            )
-            val bindGroup = PostProcessPipelineFactory.createFxaaBindGroup(
-                device,
-                fxaaResources.bindGroupLayout,
-                offscreenView,
-                sampler
-            )
-
-            val fxaaPass = encoder.beginRenderPass(
-                GpuRenderPassDescriptor(
-                    colorAttachments = listOf(
-                        GpuRenderPassColorAttachment(
-                            view = frame.view,
-                            loadOp = GpuLoadOp.CLEAR,
-                            clearColor = floatArrayOf(0f, 0f, 0f, 1f)
-                        )
-                    ),
-                    label = "fxaa-pass"
-                )
-            )
-            fxaaPass.setPipeline(fxaaResources.pipeline)
-            fxaaPass.setBindGroup(0, bindGroup)
-            fxaaPass.draw(3)
-            fxaaPass.end()
-        }
-
-        val commandBuffer = encoder.finish()
-        device.queue.submit(listOf(commandBuffer))
-        surface.present(frame)
-
-        offscreenTexture?.destroy()
-        sceneRenderer.dispose()
-        instance.dispose()
-
-        return TriangleBootLog(
-            backend = adapter.backend.asBackendType(),
-            deviceName = adapter.info.name,
-            driverVersion = adapter.info.driverVersion ?: "unknown",
+        val log = TriangleBootLog(
+            backend = engineRenderer.backend,
+            deviceName = engineRenderer.deviceName,
+            driverVersion = engineRenderer.driverVersion,
             meshCount = meshes.size,
             cameraPosition = camera.transform.position.copy(),
-            frameTimeMs = 0.0
+            frameTimeMs = frameTimeMs
         )
+
+        return TriangleBootResult(log, engineRenderer, scene, camera)
     }
 
     private fun buildScene(aspect: Float): Triple<Scene, PerspectiveCamera, List<Mesh>> {
@@ -297,11 +183,6 @@ class TriangleExample(
         return Triple(scene, camera, listOf(triangleMesh, pointsMesh))
     }
 
-    private fun computeViewProjection(camera: PerspectiveCamera) = mat4().multiply(
-        camera.projectionMatrix(),
-        camera.viewMatrix()
-    )
-
     companion object {
         private const val DEFAULT_WIDTH = 1280
         private const val DEFAULT_HEIGHT = 720
@@ -325,7 +206,31 @@ class TriangleExample(
     }
 }
 
+class TriangleBootResult(
+    val log: TriangleBootLog,
+    val renderer: EngineRenderer?,
+    val scene: Scene,
+    val camera: PerspectiveCamera
+) {
+    fun renderFrame() {
+        renderer?.render(scene, camera)
+    }
+
+    fun resize(width: Int, height: Int) {
+        renderer?.resize(width, height)
+    }
+
+    fun dispose() {
+        renderer?.dispose()
+    }
+}
+
 private fun GpuBackend.asBackendType(): BackendType = when (this) {
     GpuBackend.WEBGPU -> BackendType.WEBGPU
     GpuBackend.VULKAN, GpuBackend.MOLTENVK -> BackendType.VULKAN
+}
+
+private fun GpuPowerPreference.toRendererPowerPreference(): PowerPreference = when (this) {
+    GpuPowerPreference.LOW_POWER -> PowerPreference.LOW_POWER
+    GpuPowerPreference.HIGH_PERFORMANCE -> PowerPreference.HIGH_PERFORMANCE
 }
