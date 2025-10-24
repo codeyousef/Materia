@@ -11,6 +11,7 @@ import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.engine.math.Mat4
 import io.kreekt.engine.math.mat4
 import io.kreekt.engine.material.RenderState
+import kotlinx.coroutines.runBlocking
 import kotlin.reflect.KClass
 
 class SceneRenderer(
@@ -24,6 +25,10 @@ class SceneRenderer(
 
     suspend fun prepareMeshes(meshes: Collection<Mesh>) {
         meshes.forEach { ensureMeshResources(it) }
+    }
+
+    fun prepareMeshesBlocking(meshes: Collection<Mesh>) {
+        runBlocking { prepareMeshes(meshes) }
     }
 
     fun record(pass: GpuRenderPassEncoder, meshes: Collection<Mesh>, viewProjection: Mat4) {
