@@ -1,6 +1,4 @@
-import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     kotlin("multiplatform")
@@ -65,8 +63,13 @@ kotlin {
             }
         }
 
-        val androidMain by getting
         val androidUnitTest by getting
+
+        val androidMain by getting {
+            dependencies {
+                implementation(project(":kreekt-gpu-android-native"))
+            }
+        }
     }
 }
 
