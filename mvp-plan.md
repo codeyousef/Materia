@@ -146,8 +146,8 @@ resources/shaders/*.wgsl
 * [x] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
 * [ ] Drawables
 
-    * [ ] `Mesh(geometry, material)`
-    * [ ] **InstancedPoints** (per‑instance: position, color, size, extra0)
+    * [x] `Mesh(geometry, material)`
+    * [x] **InstancedPoints** (per‑instance: position, color, size, extra0)
 * [ ] Materials
 
     * [x] `UnlitColorMaterial`
