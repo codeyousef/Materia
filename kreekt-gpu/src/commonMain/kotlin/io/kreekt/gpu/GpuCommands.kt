@@ -43,6 +43,11 @@ data class GpuRenderPassDescriptor(
     val label: String? = null
 )
 
+enum class GpuIndexFormat {
+    UINT16,
+    UINT32
+}
+
 expect class GpuRenderPassEncoder internal constructor(
     encoder: GpuCommandEncoder,
     descriptor: GpuRenderPassDescriptor
@@ -52,7 +57,15 @@ expect class GpuRenderPassEncoder internal constructor(
 
     fun setPipeline(pipeline: GpuRenderPipeline)
     fun setVertexBuffer(slot: Int, buffer: GpuBuffer)
+    fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long = 0L)
     fun setBindGroup(index: Int, bindGroup: GpuBindGroup)
     fun draw(vertexCount: Int, instanceCount: Int = 1, firstVertex: Int = 0, firstInstance: Int = 0)
+    fun drawIndexed(
+        indexCount: Int,
+        instanceCount: Int = 1,
+        firstIndex: Int = 0,
+        baseVertex: Int = 0,
+        firstInstance: Int = 0
+    )
     fun end()
 }
