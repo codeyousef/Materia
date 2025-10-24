@@ -9,6 +9,8 @@ import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLDivElement
 import org.w3c.dom.HTMLPreElement
 import org.w3c.dom.events.KeyboardEvent
+import org.w3c.dom.events.WheelEvent
+import org.w3c.dom.pointerevents.PointerEvent
 import kotlin.math.roundToInt
 
 private val scope = MainScope()
@@ -17,7 +19,7 @@ fun main() {
     scope.launch {
         val canvas = ensureCanvas()
         val surface = WebGPUSurface(canvas)
-        val example = EmbeddingGalaxyExample()
+        val example = EmbeddingGalaxyExample(performanceProfile = PerformanceProfile.Web)
         val boot = example.boot(
             renderSurface = surface,
             widthOverride = canvas.width,
@@ -51,6 +53,75 @@ fun main() {
             runtime.resize(width, height)
             null
         }
+
+        canvas.style.cursor = "grab"
+        canvas.style.setProperty("touch-action", "none")
+        canvas.oncontextmenu = { event ->
+            event.preventDefault()
+            false
+        }
+
+        val pointerState = PointerState()
+
+        canvas.addEventListener("pointerdown", { event ->
+            val pointerEvent = event as? PointerEvent ?: return@addEventListener
+            pointerState.active = true
+            pointerState.pointerId = pointerEvent.pointerId
+            pointerState.lastX = pointerEvent.clientX.toDouble()
+            pointerState.lastY = pointerEvent.clientY.toDouble()
+            canvas.setPointerCapture(pointerState.pointerId)
+            canvas.style.cursor = "grabbing"
+            pointerEvent.preventDefault()
+        })
+
+        canvas.addEventListener("pointermove", { event ->
+            val pointerEvent = event as? PointerEvent ?: return@addEventListener
+            if (!pointerState.active || pointerEvent.pointerId != pointerState.pointerId) return@addEventListener
+            val currentX = pointerEvent.clientX.toDouble()
+            val currentY = pointerEvent.clientY.toDouble()
+            val deltaX = (currentX - pointerState.lastX).toFloat()
+            val deltaY = (currentY - pointerState.lastY).toFloat()
+            pointerState.lastX = currentX
+            pointerState.lastY = currentY
+            val orbitSensitivity = 0.0035f
+            runtime.orbit(deltaX * orbitSensitivity, deltaY * orbitSensitivity)
+            pointerEvent.preventDefault()
+        })
+
+        val endDrag: (PointerEvent) -> Unit = { pointerEvent ->
+            if (pointerState.active && pointerEvent.pointerId == pointerState.pointerId) {
+                pointerState.active = false
+                if (pointerState.pointerId != -1) {
+                    canvas.releasePointerCapture(pointerState.pointerId)
+                }
+                pointerState.pointerId = -1
+                canvas.style.cursor = "grab"
+            }
+            pointerEvent.preventDefault()
+        }
+
+        canvas.addEventListener("pointerup", { event ->
+            val pointerEvent = event as? PointerEvent ?: return@addEventListener
+            endDrag(pointerEvent)
+        })
+
+        canvas.addEventListener("pointercancel", { event ->
+            val pointerEvent = event as? PointerEvent ?: return@addEventListener
+            endDrag(pointerEvent)
+        })
+
+        canvas.addEventListener("wheel", { event ->
+            val wheel = event as? WheelEvent ?: return@addEventListener
+            val zoomDelta = (-wheel.deltaY / 900.0).toFloat()
+            runtime.zoom(zoomDelta)
+            wheel.preventDefault()
+        }, js("{ passive: false }"))
+
+        canvas.addEventListener("dblclick", { event ->
+            runtime.resetView()
+            runtime.resetSequence()
+            event.preventDefault()
+        })
 
         window.addEventListener("keydown", { event ->
             val key = (event as? KeyboardEvent)?.key?.lowercase() ?: return@addEventListener
@@ -129,6 +200,13 @@ private fun updateOverlay(container: HTMLDivElement, runtime: EmbeddingGalaxyRun
         appendLine("Frame    : ${metrics.frameTimeMs.format(2)} ms")
         append("FPS      : ${fps.format(1)}")
     }
+}
+
+private class PointerState {
+    var active: Boolean = false
+    var pointerId: Int = -1
+    var lastX: Double = 0.0
+    var lastY: Double = 0.0
 }
 
 private fun Double.format(decimals: Int): String {

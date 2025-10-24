@@ -64,6 +64,9 @@ class EmbeddingGalaxyScene(
     private var paused = false
 
     private var lastFrameTimeMs: Double = 0.0
+    private var userYawOffset = 0f
+    private var userPitchOffset = 0f
+    private var userZoomMultiplier = 1f
 
     var quality: Quality = Quality.Balanced
         private set
@@ -109,17 +112,21 @@ class EmbeddingGalaxyScene(
         elapsedSeconds += deltaSeconds
 
         val orbitAngle = elapsedSeconds * config.orbitSpeed
-        val radius = config.orbitRadius
-        val height = sin(orbitAngle * 0.5f) * config.orbitRadius * config.orbitHeightScale
+        val basePhi = 0.42f + (config.orbitHeightScale * sin(orbitAngle * 0.6f))
+        val phi = (basePhi + userPitchOffset).coerceIn(0.12f, 1.35f)
+        val radius = config.orbitRadius * userZoomMultiplier
+        val yaw = orbitAngle + userYawOffset
+        val horizontal = radius * cos(phi)
+        val height = radius * sin(phi)
         camera.transform.position.set(
-            cos(orbitAngle) * radius,
+            cos(yaw) * horizontal,
             height,
-            sin(orbitAngle) * radius
+            sin(yaw) * horizontal
         )
         camera.lookAt(vec3())
 
         val rotationAngle = elapsedSeconds * config.rotationSpeed
-        galaxyRoot.transform.setRotationEuler(0f, rotationAngle, 0f)
+        galaxyRoot.transform.setRotationEuler(0f, rotationAngle + userYawOffset * 0.35f, 0f)
 
         if (!shockwaveActive) {
             shockwaveTimer -= deltaSeconds
@@ -148,6 +155,9 @@ class EmbeddingGalaxyScene(
         galaxyRoot.transform.setRotationEuler(0f, 0f, 0f)
         camera.transform.position.set(0f, config.orbitRadius * 0.1f, config.orbitRadius)
         camera.lookAt(vec3())
+        userYawOffset = 0f
+        userPitchOffset = 0f
+        userZoomMultiplier = 1f
     }
 
     fun togglePause() {
@@ -188,6 +198,22 @@ class EmbeddingGalaxyScene(
         shockwaveElapsed = 0f
         shockwaveTimer = config.shockwaveIntervalSeconds
         installInstancedPoints(pointsForQuality(quality), highlight = false)
+    }
+
+    fun orbit(deltaYaw: Float, deltaPitch: Float) {
+        userYawOffset = wrapAngle(userYawOffset + deltaYaw)
+        userPitchOffset = (userPitchOffset + deltaPitch).coerceIn(-0.65f, 0.65f)
+    }
+
+    fun zoom(delta: Float) {
+        val nextMultiplier = userZoomMultiplier * (1f - delta)
+        userZoomMultiplier = nextMultiplier.coerceIn(0.55f, 1.6f)
+    }
+
+    fun resetOrbit() {
+        userYawOffset = 0f
+        userPitchOffset = 0f
+        userZoomMultiplier = 1f
     }
 
     private fun installInstancedPoints(instanceCount: Int, highlight: Boolean) {
@@ -237,6 +263,14 @@ class EmbeddingGalaxyScene(
             extras = extras,
             material = material
         )
+    }
+
+    private fun wrapAngle(angle: Float): Float {
+        val twoPi = (2f * PI).toFloat()
+        var wrapped = angle % twoPi
+        if (wrapped > PI) wrapped -= twoPi
+        if (wrapped < -PI) wrapped += twoPi
+        return wrapped
     }
 
     private fun pointsForQuality(quality: Quality): Int {

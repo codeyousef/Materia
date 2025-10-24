@@ -1,9 +1,10 @@
 import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
-    // alias(libs.plugins.androidLibrary) // Disabled on Windows
+    alias(libs.plugins.androidLibrary)
     alias(libs.plugins.dokka)
     alias(libs.plugins.kover)
     id("maven-publish")
@@ -66,12 +67,13 @@ kotlin {
         }
     }
 
-    // Android Target - Disabled on Windows (requires Android SDK)
-    // androidTarget {
-    //     compilerOptions {
-    //         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-    //     }
-    // }
+    // Android Target
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            freeCompilerArgs.add("-Xexpect-actual-classes")
+        }
+    }
 
     // iOS Targets - Disabled on Windows
     // iosX64()
@@ -234,22 +236,31 @@ kotlin {
 }
 
 // android {
-//     compileSdk = libs.versions.android.compileSdk.get().toInt()
-//     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-//     defaultConfig {
-//         minSdk = libs.versions.android.minSdk.get().toInt()
-//     }
-//
-//     testOptions {
-//         targetSdk = libs.versions.android.targetSdk.get().toInt()
-//     }
-//     namespace = "io.kreekt"
-//
-//     compileOptions {
-//         sourceCompatibility = JavaVersion.VERSION_11
-//         targetCompatibility = JavaVersion.VERSION_11
-//     }
-// }
+android {
+    val compileSdkVersion = libs.versions.androidCompileSdk.get().toInt()
+    val minSdkVersion = libs.versions.androidMinSdk.get().toInt()
+
+    compileSdk = compileSdkVersion
+    namespace = "io.kreekt"
+
+    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+
+    defaultConfig {
+        minSdk = minSdkVersion
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    packaging {
+        resources.excludes += setOf(
+            "META-INF/AL2.0",
+            "META-INF/LGPL2.1"
+        )
+    }
+}
 
 // -----------------------------------------------------------------------------
 // WGSL → SPIR-V compilation (Tint CLI)

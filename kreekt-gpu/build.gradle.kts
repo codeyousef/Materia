@@ -1,9 +1,11 @@
+import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
+    alias(libs.plugins.androidLibrary)
 }
 
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -22,6 +24,12 @@ kotlin {
             testTask {
                 enabled = false
             }
+        }
+    }
+
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
     }
 
@@ -56,5 +64,27 @@ kotlin {
                 implementation(project(":"))
             }
         }
+
+        val androidMain by getting
+        val androidUnitTest by getting
+    }
+}
+
+android {
+    val compileSdkVersion = libs.versions.androidCompileSdk.get().toInt()
+    val minSdkVersion = libs.versions.androidMinSdk.get().toInt()
+
+    compileSdk = compileSdkVersion
+    namespace = "io.kreekt.gpu"
+
+    defaultConfig {
+        minSdk = minSdkVersion
+    }
+
+    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 }

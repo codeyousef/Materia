@@ -150,6 +150,9 @@ class ForceGraphRuntime(
     fun toggleMode() = scene.triggerToggle()
     fun setMode(mode: ForceGraphScene.Mode) = scene.setMode(mode)
     fun metrics(): ForceGraphScene.Metrics = scene.metrics()
+    fun orbit(deltaYaw: Float, deltaPitch: Float) = scene.orbit(deltaYaw, deltaPitch)
+    fun zoom(delta: Float) = scene.zoom(delta)
+    fun resetView() = scene.resetOrbit()
 }
 
 private fun GpuBackend.toBackendType(): BackendType = when (this) {

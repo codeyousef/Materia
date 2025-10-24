@@ -123,12 +123,12 @@ resources/shaders/*.wgsl
 
 ### 1) GPU/Core Abstractions (commonMain)
 
-* [ ] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
-* [ ] `GpuSurface` (configure, present, resize)
-* [ ] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
+* [x] `GpuInstance`, `GpuAdapter`, `GpuDevice`, `GpuQueue`
+* [x] `GpuSurface` (configure, present, resize)
+* [x] Resources: `GpuBuffer`, `GpuTexture`, `GpuTextureView`, `GpuSampler`
     * [x] JVM sampler creation delegates to Vulkan (`vkCreateSampler`)
     * [x] JVM texture allocation binds Vulkan `VkImage`/memory and exposes image views
-* [ ] Shaders & pipelines
+* [x] Shaders & pipelines
 
     * [x] `GpuShaderModule` (WGSL; compile to SPIR‑V for Vulkan/MVK)
     * [x] `GpuBindGroupLayout` / `GpuBindGroup` (≈ Vulkan descriptor sets)
@@ -138,8 +138,8 @@ resources/shaders/*.wgsl
 * [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
 * [x] `GpuCommandBuffer`, `GpuQueue.submit()`
 * [x] Minimal hidden sync (fences/events on Vulkan/MVK)
-* [ ] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
-* [ ] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
+* [x] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
+* [x] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
 * [x] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
 
 ### 2) Rendering Engine (common)
@@ -147,11 +147,11 @@ resources/shaders/*.wgsl
 * [x] Scene graph: `Node` (TRS, hierarchy, dirty flags), `Scene.update(dt)`
 * [x] Camera: `PerspectiveCamera` + **OrbitController**
 * [x] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
-* [ ] Drawables
+* [x] Drawables
 
     * [x] `Mesh(geometry, material)`
     * [x] **InstancedPoints** (per‑instance: position, color, size, extra0)
-* [ ] Materials
+* [x] Materials
 
     * [x] `UnlitColorMaterial`
     * [x] `UnlitPointsMaterial` (VS quad expansion; distance attenuation)
@@ -170,7 +170,7 @@ resources/shaders/*.wgsl
 ### 4) IO & Data
 
 * [x] `loadJson(urlOrPath)` (fetch on web; file on JVM/native; assets on Android/iOS)
-* [ ] Data models
+* [x] Data models
 
     * [x] `EmbeddingData(dims: Int, vectors: FloatArray, labels?: List<String>, clusters?: IntArray)`
     * [x] `GraphData(nodes: List<NodeInfo>, edges: List<EdgeInfo>, weights?: FloatArray)`
@@ -182,13 +182,13 @@ resources/shaders/*.wgsl
 * [x] **Triangle** (smoke): clear + draw + resize on every target
     * [x] Boot via `RendererFactory` / `SurfaceFactory` (Vulkan/WebGPU actual implementations)
     * [x] Replace placeholder GPU submission with backend-rendered frame
-* [ ] **Embedding Galaxy** (wow)
+* [x] **Embedding Galaxy** (wow)
 
     * [x] 20k InstancedPoints; 5–6 clusters; camera spline
     * [x] “Query shockwave” every 4s (similarity threshold → size/emissive tween)
     * [x] FXAA toggle
-    * [ ] Perf floor: desktop ~60 FPS @1080p; browser ≥45 FPS; mobile ≥30 FPS (defaults)
-* [ ] **Force Graph** (credibility)
+    * [x] Perf floor: desktop ~60 FPS @1080p; browser ≥45 FPS; mobile ≥30 FPS (defaults)
+* [x] **Force Graph** (credibility)
 
     * [x] 2–5k nodes / 6–10k edges
     * [x] **Bake layout** on JVM/native → JSON; all targets load
@@ -196,10 +196,10 @@ resources/shaders/*.wgsl
 
 ### 6) Per‑Target Bootstraps
 
-* [ ] wasmJs: canvas + WebGPU init, RAF loop, pointer events
-* [ ] JVM/native: GLFW window, Vulkan instance/device/swapchain, vsync, resize
+* [x] wasmJs: canvas + WebGPU init, RAF loop, pointer events
+* [x] JVM/native: GLFW window, Vulkan instance/device/swapchain, vsync, resize
 * [ ] macOS/iOS: CAMetalLayer via MoltenVK; robust swapchain re‑create
-* [ ] Android: Activity + SurfaceView; lifecycle‑safe teardown/recreate
+* [x] Android: Activity + SurfaceView; lifecycle-safe teardown/recreate
 
 ### 7) Shader Toolchain (single-source WGSL)
 
@@ -216,10 +216,10 @@ resources/shaders/*.wgsl
 
 * [ ] Enable KMP targets: wasmJs, jvm, linuxX64, mingwX64, macosArm64/x64, iosArm64/simulator, android
 * [ ] Gradle tasks per example
-
-    * [ ] Web: `:examples:*:wasmJsBrowserRun`
-    * [ ] Desktop: `:examples:*:run` (JVM) + native launchers
-    * [ ] Android: `installDebug`
+    
+    * [x] Web: `:examples:*:wasmJsBrowserRun`
+    * [x] Desktop: `:examples:*:run` (JVM) + native launchers
+    * [x] Android: `installDebug`
     * [ ] iOS: Xcode scheme
 * [ ] CI matrix
 

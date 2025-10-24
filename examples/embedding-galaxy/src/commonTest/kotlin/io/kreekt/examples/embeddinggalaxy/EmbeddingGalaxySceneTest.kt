@@ -3,6 +3,7 @@ package io.kreekt.examples.embeddinggalaxy
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class EmbeddingGalaxySceneTest {
@@ -55,6 +56,44 @@ class EmbeddingGalaxySceneTest {
         val runtime = example.boot().runtime
         assertTrue(runtime.fxaaEnabled)
         runtime.toggleFxaa()
-        assertTrue(!runtime.fxaaEnabled)
+        assertFalse(runtime.fxaaEnabled)
+    }
+
+    @Test
+    fun performanceGovernorDowngradesWhenAverageIsSlow() {
+        val profile = PerformanceProfile.Desktop.copy(
+            sampleWindow = 5,
+            adjustCooldownFrames = 0,
+            initialCooldownFrames = 0,
+            degradeThresholdMultiplier = 1.0,
+            upgradeThresholdMultiplier = 0.5
+        )
+        val governor = PerformanceGovernor(profile)
+        var quality = EmbeddingGalaxyScene.Quality.Fidelity
+        repeat(profile.sampleWindow) {
+            governor.record(28.0, quality)?.let { quality = it }
+        }
+        assertEquals(EmbeddingGalaxyScene.Quality.Balanced, quality)
+    }
+
+    @Test
+    fun performanceGovernorRespectsManualAdjustmentCooldown() {
+        val profile = PerformanceProfile.Desktop.copy(
+            sampleWindow = 4,
+            adjustCooldownFrames = 3,
+            initialCooldownFrames = 0,
+            degradeThresholdMultiplier = 1.0,
+            upgradeThresholdMultiplier = 0.5
+        )
+        val governor = PerformanceGovernor(profile)
+        repeat(profile.sampleWindow) {
+            governor.record(30.0, EmbeddingGalaxyScene.Quality.Fidelity)
+        }
+        var quality = EmbeddingGalaxyScene.Quality.Balanced
+        governor.notifyManualChange()
+        repeat(profile.adjustCooldownFrames) {
+            governor.record(30.0, quality)?.let { quality = it }
+        }
+        assertEquals(EmbeddingGalaxyScene.Quality.Balanced, quality)
     }
 }

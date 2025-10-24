@@ -57,6 +57,9 @@ class ForceGraphScene(
     private var transitionElapsed = 0f
     private var lastFrameTimeMs: Double = 0.0
     private var orbitAngle = 0f
+    private var userYawOffset = 0f
+    private var userPitchOffset = 0f
+    private var userZoomMultiplier = 1f
 
     val scene: Scene = Scene("force-graph").apply {
         backgroundColor = floatArrayOf(0.02f, 0.02f, 0.035f, 1f)
@@ -82,11 +85,17 @@ class ForceGraphScene(
 
     fun update(deltaSeconds: Float) {
         orbitAngle += deltaSeconds * 0.2f
-        val radius = 28f
+        val yaw = orbitAngle + userYawOffset
+        val basePitch = 0.35f
+        val pitch = (basePitch + userPitchOffset).coerceIn(-0.75f, 1.1f)
+        val radius = 28f * userZoomMultiplier
+        val heightWave = sin(orbitAngle * 0.3f) * 2f
+        val horizontal = radius * cos(pitch)
+        val vertical = 12f + heightWave + radius * sin(pitch) * 0.6f
         camera.transform.position.set(
-            cos(orbitAngle) * radius,
-            12f + sin(orbitAngle * 0.3f) * 2f,
-            sin(orbitAngle) * radius
+            cos(yaw) * horizontal,
+            vertical,
+            sin(yaw) * horizontal
         )
         camera.lookAt(vec3())
 
@@ -132,6 +141,22 @@ class ForceGraphScene(
     fun resize(width: Int, height: Int) {
         camera.aspect = max(0.1f, width.toFloat() / max(1, height).toFloat())
         camera.updateProjection()
+    }
+
+    fun orbit(deltaYaw: Float, deltaPitch: Float) {
+        userYawOffset = wrapAngle(userYawOffset + deltaYaw)
+        userPitchOffset = (userPitchOffset + deltaPitch).coerceIn(-0.65f, 0.65f)
+    }
+
+    fun zoom(delta: Float) {
+        val nextMultiplier = userZoomMultiplier * (1f - delta)
+        userZoomMultiplier = nextMultiplier.coerceIn(0.4f, 1.6f)
+    }
+
+    fun resetOrbit() {
+        userYawOffset = 0f
+        userPitchOffset = 0f
+        userZoomMultiplier = 1f
     }
 
     private fun rebuildScene(mix: Float) {
@@ -191,6 +216,14 @@ class ForceGraphScene(
             )
         )
         return Mesh("force-graph-edges", geometry, material)
+    }
+
+    private fun wrapAngle(angle: Float): Float {
+        val twoPi = (2f * PI).toFloat()
+        var wrapped = angle % twoPi
+        if (wrapped > PI) wrapped -= twoPi
+        if (wrapped < -PI) wrapped += twoPi
+        return wrapped
     }
 
     private class ForceGraphDataset(layout: ForceGraphLayout) {

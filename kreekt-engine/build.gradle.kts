@@ -1,5 +1,8 @@
+import org.gradle.api.JavaVersion
+
 plugins {
     kotlin("multiplatform")
+    alias(libs.plugins.androidLibrary)
 }
 
 kotlin {
@@ -17,6 +20,12 @@ kotlin {
             testTask {
                 enabled = false
             }
+        }
+    }
+
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
     }
 
@@ -46,5 +55,32 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
+
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.coroutines.core)
+            }
+        }
+
+        val androidUnitTest by getting
+    }
+}
+
+android {
+    val compileSdkVersion = libs.versions.androidCompileSdk.get().toInt()
+    val minSdkVersion = libs.versions.androidMinSdk.get().toInt()
+
+    compileSdk = compileSdkVersion
+    namespace = "io.kreekt.engine"
+
+    defaultConfig {
+        minSdk = minSdkVersion
+    }
+
+    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 }

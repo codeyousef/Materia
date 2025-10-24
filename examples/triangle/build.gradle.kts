@@ -124,3 +124,18 @@ tasks.register("jsBrowserRun") {
         println("Opening dev server - ensure a WebGPU capable browser is available")
     }
 }
+
+tasks.register("wasmJsBrowserRun") {
+    group = "examples"
+    description = "Alias for Web/WASM browser run (dev server) for Triangle example"
+    dependsOn("jsBrowserDevelopmentRun")
+    doFirst {
+        println("🌐 (alias) Starting Triangle example in browser via jsBrowserDevelopmentRun")
+    }
+}
+
+tasks.register("installDebug") {
+    group = "examples"
+    description = "Install the Android debug build for the Triangle example"
+    dependsOn(":examples:triangle-android:installDebug")
+}

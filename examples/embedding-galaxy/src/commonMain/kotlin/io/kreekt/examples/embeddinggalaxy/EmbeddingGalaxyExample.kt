@@ -10,14 +10,94 @@ import io.kreekt.renderer.PowerPreference
 import io.kreekt.renderer.RenderSurface
 import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.RendererFactory
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.time.TimeSource
+
+data class PerformanceProfile(
+    val name: String,
+    val targetFps: Double,
+    val degradeThresholdMultiplier: Double = 1.25,
+    val upgradeThresholdMultiplier: Double = 0.85,
+    val sampleWindow: Int = 120,
+    val adjustCooldownFrames: Int = 180,
+    val initialCooldownFrames: Int = sampleWindow
+) {
+    val targetFrameMs: Double get() = 1000.0 / targetFps
+    val downgradeFrameTimeMs: Double get() = targetFrameMs * degradeThresholdMultiplier
+    val upgradeFrameTimeMs: Double get() = targetFrameMs * upgradeThresholdMultiplier
+
+    companion object {
+        val Desktop = PerformanceProfile(name = "desktop", targetFps = 60.0)
+        val Web = PerformanceProfile(name = "web", targetFps = 45.0, sampleWindow = 90, adjustCooldownFrames = 140)
+        val Mobile = PerformanceProfile(name = "mobile", targetFps = 30.0, sampleWindow = 90, adjustCooldownFrames = 200)
+    }
+}
+
+internal class PerformanceGovernor(
+    private val profile: PerformanceProfile
+) {
+    private val samples = DoubleArray(profile.sampleWindow.coerceAtLeast(1))
+    private var count = 0
+    private var index = 0
+    private var sum = 0.0
+    private var cooldown = profile.initialCooldownFrames
+
+    fun record(frameTimeMs: Double, currentQuality: EmbeddingGalaxyScene.Quality): EmbeddingGalaxyScene.Quality? {
+        if (frameTimeMs <= 0.0 || profile.sampleWindow <= 0) {
+            return null
+        }
+        if (count < profile.sampleWindow) {
+            samples[index] = frameTimeMs
+            sum += frameTimeMs
+            count += 1
+            index = (index + 1) % profile.sampleWindow
+            if (count < profile.sampleWindow) return null
+        } else {
+            val outgoing = samples[index]
+            sum -= outgoing
+            samples[index] = frameTimeMs
+            sum += frameTimeMs
+            index = (index + 1) % profile.sampleWindow
+        }
+
+        if (cooldown > 0) {
+            cooldown -= 1
+            return null
+        }
+
+        val average = sum / profile.sampleWindow
+        return when {
+            average > profile.downgradeFrameTimeMs && currentQuality != EmbeddingGalaxyScene.Quality.Performance -> {
+                cooldown = profile.adjustCooldownFrames
+                currentQuality.previous()
+            }
+            average < profile.upgradeFrameTimeMs && currentQuality != EmbeddingGalaxyScene.Quality.Fidelity -> {
+                cooldown = profile.adjustCooldownFrames
+                currentQuality.next()
+            }
+            else -> null
+        }
+    }
+
+    fun notifyManualChange() {
+        cooldown = max(profile.adjustCooldownFrames, profile.initialCooldownFrames)
+    }
+
+    fun reset() {
+        count = 0
+        index = 0
+        sum = 0.0
+        cooldown = profile.initialCooldownFrames
+    }
+}
 
 class EmbeddingGalaxyExample(
     private val sceneConfig: EmbeddingGalaxyScene.Config = EmbeddingGalaxyScene.Config(),
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU, GpuBackend.VULKAN),
     private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
-    private val enableFxaa: Boolean = true
+    private val enableFxaa: Boolean = true,
+    private val performanceProfile: PerformanceProfile = PerformanceProfile.Desktop
 ) {
 
     suspend fun boot(
@@ -40,7 +120,10 @@ class EmbeddingGalaxyExample(
                 fxaaEnabled = enableFxaa,
                 frameTimeMs = 0.0
             )
-            return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(null, scene, enableFxaa))
+            return EmbeddingGalaxyBootResult(
+                log,
+                EmbeddingGalaxyRuntime(null, scene, enableFxaa, performanceProfile)
+            )
         }
 
         val rendererConfig = RendererConfig(
@@ -80,7 +163,10 @@ class EmbeddingGalaxyExample(
             fxaaEnabled = renderer.fxaaEnabled,
             frameTimeMs = frameTimeMs
         )
-        return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(renderer, scene, renderer.fxaaEnabled))
+        return EmbeddingGalaxyBootResult(
+            log,
+            EmbeddingGalaxyRuntime(renderer, scene, renderer.fxaaEnabled, performanceProfile)
+        )
     }
 }
 
@@ -137,9 +223,11 @@ data class EmbeddingGalaxyBootResult(
 class EmbeddingGalaxyRuntime(
     private val renderer: EngineRenderer?,
     val scene: EmbeddingGalaxyScene,
-    fxaaDefault: Boolean
+    fxaaDefault: Boolean,
+    private val performanceProfile: PerformanceProfile
 ) {
     private var headlessFxaaEnabled = fxaaDefault
+    private val performanceGovernor = PerformanceGovernor(performanceProfile)
 
     fun frame(deltaSeconds: Float) {
         scene.update(deltaSeconds)
@@ -148,6 +236,7 @@ class EmbeddingGalaxyRuntime(
             it.render(scene.scene, scene.camera)
             val frameTime = mark.elapsedNow().inWholeNanoseconds / 1_000_000.0
             scene.recordFrameTime(frameTime)
+            handlePerformance(frameTime)
         }
     }
 
@@ -165,13 +254,23 @@ class EmbeddingGalaxyRuntime(
     }
 
     fun triggerQuery() = scene.triggerQuery()
-    fun resetSequence() = scene.resetSequence()
+    fun resetSequence() {
+        scene.resetSequence()
+        performanceGovernor.reset()
+    }
     fun togglePause() = scene.togglePause()
-    fun setQuality(quality: EmbeddingGalaxyScene.Quality) = scene.setQuality(quality)
+    fun setQuality(quality: EmbeddingGalaxyScene.Quality) {
+        scene.setQuality(quality)
+        performanceGovernor.notifyManualChange()
+    }
     fun metrics(): EmbeddingGalaxyScene.Metrics = scene.metrics()
     fun toggleFxaa() {
         fxaaEnabled = !fxaaEnabled
     }
+
+    fun orbit(deltaYaw: Float, deltaPitch: Float) = scene.orbit(deltaYaw, deltaPitch)
+    fun zoom(delta: Float) = scene.zoom(delta)
+    fun resetView() = scene.resetOrbit()
 
     var fxaaEnabled: Boolean
         get() = renderer?.fxaaEnabled ?: headlessFxaaEnabled
@@ -185,6 +284,23 @@ class EmbeddingGalaxyRuntime(
 
     val activePointCount: Int get() = scene.activePointCount
     val quality: EmbeddingGalaxyScene.Quality get() = scene.quality
+
+    private fun handlePerformance(frameTime: Double) {
+        val adjustment = performanceGovernor.record(frameTime, scene.quality) ?: return
+        scene.setQuality(adjustment)
+    }
+}
+
+private fun EmbeddingGalaxyScene.Quality.previous(): EmbeddingGalaxyScene.Quality = when (this) {
+    EmbeddingGalaxyScene.Quality.Performance -> EmbeddingGalaxyScene.Quality.Performance
+    EmbeddingGalaxyScene.Quality.Balanced -> EmbeddingGalaxyScene.Quality.Performance
+    EmbeddingGalaxyScene.Quality.Fidelity -> EmbeddingGalaxyScene.Quality.Balanced
+}
+
+private fun EmbeddingGalaxyScene.Quality.next(): EmbeddingGalaxyScene.Quality = when (this) {
+    EmbeddingGalaxyScene.Quality.Performance -> EmbeddingGalaxyScene.Quality.Balanced
+    EmbeddingGalaxyScene.Quality.Balanced -> EmbeddingGalaxyScene.Quality.Fidelity
+    EmbeddingGalaxyScene.Quality.Fidelity -> EmbeddingGalaxyScene.Quality.Fidelity
 }
 
 private fun GpuBackend.toBackendType(): BackendType = when (this) {

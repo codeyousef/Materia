@@ -128,3 +128,12 @@ tasks.register("jsBrowserRun") {
         println("Ensure a WebGPU-capable browser is available.")
     }
 }
+
+tasks.register("wasmJsBrowserRun") {
+    group = "examples"
+    description = "Alias task for Force Graph browser run (intended wasmJs entry point)"
+    dependsOn("jsBrowserDevelopmentRun")
+    doFirst {
+        println("🌐 (alias) Starting Force Graph via jsBrowserDevelopmentRun")
+    }
+}

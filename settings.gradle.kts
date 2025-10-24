@@ -53,6 +53,7 @@ include(":kreekt-engine")
 
 // Example projects
 include(":examples:triangle")
+include(":examples:triangle-android")
 include(":examples:voxelcraft")
 include(":examples:embedding-galaxy")
 include(":examples:force-graph")
