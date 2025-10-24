@@ -132,7 +132,7 @@ class TriangleExample(
 
         val surfaceFormat = surface.getPreferredFormat(adapter)
         val sceneRenderer = SceneRenderer(device, surfaceFormat)
-        sceneRenderer.prepareMeshes(meshes)
+        sceneRenderer.prepareMeshesBlocking(meshes)
 
         val fxaaResources = if (enableFxaa) {
             PostProcessPipelineFactory.createFxaaPipeline(device, surfaceFormat)
