@@ -1,26 +1,27 @@
 package io.kreekt.examples.triangle
 
-import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.core.math.Color
-import io.kreekt.core.math.Matrix4
+import io.kreekt.engine.camera.PerspectiveCamera
+import io.kreekt.engine.geometry.AttributeSemantic
+import io.kreekt.engine.geometry.AttributeType
+import io.kreekt.engine.geometry.Geometry
+import io.kreekt.engine.geometry.GeometryAttribute
+import io.kreekt.engine.geometry.GeometryLayout
 import io.kreekt.engine.material.BlendMode
 import io.kreekt.engine.material.RenderState
-import io.kreekt.core.math.Vector3
-import io.kreekt.core.scene.Background
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
+import io.kreekt.engine.material.UnlitColorMaterial
+import io.kreekt.engine.material.UnlitPointsMaterial
+import io.kreekt.engine.math.Color
+import io.kreekt.engine.math.Vec3
+import io.kreekt.engine.math.mat4
 import io.kreekt.engine.render.PostProcessPipelineFactory
-import io.kreekt.engine.render.UnlitPipelineFactory
-import io.kreekt.geometry.BufferAttribute
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.renderer.BackendType
-import io.kreekt.renderer.RenderSurface
+import io.kreekt.engine.render.SceneRenderer
+import io.kreekt.engine.scene.Mesh
+import io.kreekt.engine.scene.Scene
+import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBackend
-import io.kreekt.gpu.GpuBufferDescriptor
-import io.kreekt.gpu.GpuBufferUsage
 import io.kreekt.gpu.GpuCommandEncoderDescriptor
 import io.kreekt.gpu.GpuDeviceDescriptor
+import io.kreekt.gpu.GpuFilterMode
 import io.kreekt.gpu.GpuInstanceDescriptor
 import io.kreekt.gpu.GpuLoadOp
 import io.kreekt.gpu.GpuPowerPreference
@@ -30,14 +31,15 @@ import io.kreekt.gpu.GpuRequestAdapterOptions
 import io.kreekt.gpu.GpuSamplerDescriptor
 import io.kreekt.gpu.GpuSurfaceConfiguration
 import io.kreekt.gpu.GpuSurfaceFactory
-import io.kreekt.gpu.GpuTextureFormat
-import io.kreekt.gpu.GpuTextureUsage
 import io.kreekt.gpu.GpuTextureDescriptor
 import io.kreekt.gpu.GpuTextureDimension
-import io.kreekt.gpu.GpuFilterMode
+import io.kreekt.gpu.GpuTextureFormat
+import io.kreekt.gpu.GpuTextureUsage
+import io.kreekt.gpu.GpuTextureView
 import io.kreekt.gpu.createGpuInstance
-import io.kreekt.gpu.gpuBufferUsage
 import io.kreekt.gpu.gpuTextureUsage
+import io.kreekt.renderer.BackendType
+import io.kreekt.renderer.RenderSurface
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -46,7 +48,7 @@ data class TriangleBootLog(
     val deviceName: String,
     val driverVersion: String,
     val meshCount: Int,
-    val cameraPosition: Vector3,
+    val cameraPosition: Vec3,
     val frameTimeMs: Double
 ) {
     fun pretty(): String = buildString {
@@ -81,22 +83,21 @@ class TriangleExample(
         val targetHeight = heightOverride ?: renderSurface?.height?.takeIf { it > 0 } ?: DEFAULT_HEIGHT
         val aspect = targetWidth.toFloat() / max(1, targetHeight).toFloat()
 
-        val (scene, camera, mesh) = buildScene(aspect)
+        val (scene, camera, meshes) = buildScene(aspect)
         scene.updateWorldMatrix(true)
-        camera.updateMatrixWorld(true)
-        camera.updateProjectionMatrix()
-        val meshCount = scene.children.count { it is Mesh }
+        camera.updateProjection()
 
         if (renderSurface == null) {
             return TriangleBootLog(
-                backend = preferredBackends.firstOrNull()?.toBackendType() ?: BackendType.WEBGPU,
+                backend = preferredBackends.firstOrNull()?.asBackendType() ?: BackendType.WEBGPU,
                 deviceName = "Stub Device",
                 driverVersion = "n/a",
-                meshCount = meshCount,
-                cameraPosition = camera.position.clone(),
+                meshCount = meshes.size,
+                cameraPosition = camera.transform.position.copy(),
                 frameTimeMs = 0.0
             )
         }
+
         val instance = createGpuInstance(
             GpuInstanceDescriptor(
                 preferredBackends = preferredBackends,
@@ -130,66 +131,12 @@ class TriangleExample(
         )
 
         val surfaceFormat = surface.getPreferredFormat(adapter)
+        val sceneRenderer = SceneRenderer(device, surfaceFormat)
+        sceneRenderer.prepareMeshes(meshes)
 
-        val colorRenderState = RenderState(depthTest = false, depthWrite = false)
-        val pointsRenderState = RenderState(
-            depthTest = false,
-            depthWrite = false,
-            blendMode = BlendMode.Additive
-        )
-
-        val colorPipeline = UnlitPipelineFactory.createUnlitColorPipeline(
-            device,
-            surfaceFormat,
-            colorRenderState
-        )
-        val pointsPipeline = UnlitPipelineFactory.createUnlitPointsPipeline(
-            device,
-            surfaceFormat,
-            pointsRenderState
-        )
         val fxaaResources = if (enableFxaa) {
             PostProcessPipelineFactory.createFxaaPipeline(device, surfaceFormat)
         } else null
-        val uniformBuffer = device.createBuffer(
-            GpuBufferDescriptor(
-                label = "triangle-mvp",
-                size = UNIFORM_MATRIX_FLOATS * Float.SIZE_BYTES.toLong(),
-                usage = gpuBufferUsage(GpuBufferUsage.UNIFORM)
-            )
-        )
-        uniformBuffer.writeFloats(computeModelViewProjection(camera))
-
-        val colorBindGroup = UnlitPipelineFactory.createUniformBindGroup(
-            device = device,
-            layout = colorPipeline.bindGroupLayout,
-            uniformBuffer = uniformBuffer,
-            label = "triangle-bind-group"
-        )
-        val pointsBindGroup = UnlitPipelineFactory.createUniformBindGroup(
-            device = device,
-            layout = pointsPipeline.bindGroupLayout,
-            uniformBuffer = uniformBuffer,
-            label = "triangle-points-bind-group"
-        )
-
-        val vertexBuffer = device.createBuffer(
-            GpuBufferDescriptor(
-                label = "triangle-vertex-buffer",
-                size = GPU_TRIANGLE_VERTEX_DATA.size * Float.SIZE_BYTES.toLong(),
-                usage = gpuBufferUsage(GpuBufferUsage.VERTEX)
-            )
-        )
-        vertexBuffer.writeFloats(GPU_TRIANGLE_VERTEX_DATA)
-
-        val pointsVertexBuffer = device.createBuffer(
-            GpuBufferDescriptor(
-                label = "triangle-points-buffer",
-                size = GPU_POINTS_VERTEX_DATA.size * Float.SIZE_BYTES.toLong(),
-                usage = gpuBufferUsage(GpuBufferUsage.VERTEX)
-            )
-        )
-        pointsVertexBuffer.writeFloats(GPU_POINTS_VERTEX_DATA)
 
         val frame = surface.acquireFrame()
         val offscreenTexture = if (enableFxaa) {
@@ -227,15 +174,9 @@ class TriangleExample(
                 label = "triangle-pass"
             )
         )
-        pass.setPipeline(colorPipeline.pipeline)
-        pass.setVertexBuffer(0, vertexBuffer)
-        pass.setBindGroup(0, colorBindGroup)
-        pass.draw(GPU_TRIANGLE_VERTEX_COUNT)
 
-        pass.setPipeline(pointsPipeline.pipeline)
-        pass.setVertexBuffer(0, pointsVertexBuffer)
-        pass.setBindGroup(0, pointsBindGroup)
-        pass.draw(GPU_POINTS_VERTEX_COUNT)
+        val viewProjection = computeViewProjection(camera)
+        sceneRenderer.record(pass, meshes, viewProjection)
         pass.end()
 
         if (enableFxaa && fxaaResources != null && offscreenView != null) {
@@ -275,82 +216,103 @@ class TriangleExample(
         device.queue.submit(listOf(commandBuffer))
         surface.present(frame)
 
-        uniformBuffer.destroy()
-        vertexBuffer.destroy()
-        pointsVertexBuffer.destroy()
         offscreenTexture?.destroy()
+        sceneRenderer.dispose()
         instance.dispose()
 
-        scene.updateMatrixWorld(true)
-
         return TriangleBootLog(
-            backend = adapter.backend.toBackendType(),
+            backend = adapter.backend.asBackendType(),
             deviceName = adapter.info.name,
             driverVersion = adapter.info.driverVersion ?: "unknown",
-            meshCount = meshCount,
-            cameraPosition = camera.position.clone(),
+            meshCount = meshes.size,
+            cameraPosition = camera.transform.position.copy(),
             frameTimeMs = 0.0
         )
     }
 
-    private fun buildScene(aspect: Float): Triple<Scene, PerspectiveCamera, Mesh> {
-        val geometry = BufferGeometry().apply {
-            setAttribute("position", BufferAttribute(TRIANGLE_VERTICES.copyOf(), TRIANGLE_COMPONENTS))
+    private fun buildScene(aspect: Float): Triple<Scene, PerspectiveCamera, List<Mesh>> {
+        val triangleGeometry = Geometry(
+            vertexBuffer = VertexBuffer(
+                data = GPU_TRIANGLE_VERTEX_DATA,
+                strideBytes = Float.SIZE_BYTES * GPU_TRIANGLE_COMPONENTS
+            ),
+            layout = GeometryLayout(
+                stride = Float.SIZE_BYTES * GPU_TRIANGLE_COMPONENTS,
+                attributes = mapOf(
+                    AttributeSemantic.POSITION to GeometryAttribute(0, 3, AttributeType.FLOAT32),
+                    AttributeSemantic.COLOR to GeometryAttribute(Float.SIZE_BYTES * 3, 3, AttributeType.FLOAT32)
+                )
+            )
+        )
+
+        val triangleMaterial = UnlitColorMaterial(
+            label = "triangle",
+            color = Color.fromFloats(1f, 0.4f, 0.2f),
+            renderState = RenderState(depthTest = false, depthWrite = false)
+        )
+
+        val triangleMesh = Mesh(
+            name = "triangle",
+            geometry = triangleGeometry,
+            material = triangleMaterial
+        )
+
+        val pointsGeometry = Geometry(
+            vertexBuffer = VertexBuffer(
+                data = GPU_POINTS_VERTEX_DATA,
+                strideBytes = Float.SIZE_BYTES * GPU_POINTS_COMPONENTS
+            ),
+            layout = GeometryLayout(
+                stride = Float.SIZE_BYTES * GPU_POINTS_COMPONENTS,
+                attributes = mapOf(
+                    AttributeSemantic.POSITION to GeometryAttribute(0, 3, AttributeType.FLOAT32)
+                )
+            )
+        )
+
+        val pointsMaterial = UnlitPointsMaterial(
+            label = "triangle-points",
+            renderState = RenderState(
+                depthTest = false,
+                depthWrite = false,
+                blendMode = BlendMode.Additive
+            )
+        )
+
+        val pointsMesh = Mesh(
+            name = "triangle-stars",
+            geometry = pointsGeometry,
+            material = pointsMaterial
+        )
+
+        val scene = Scene("triangle-scene").apply {
+            add(triangleMesh)
+            add(pointsMesh)
         }
 
-        val material = MeshBasicMaterial().apply {
-            color = Color(1f, 0.4f, 0.2f)
-            toneMapped = false
-        }
+        val camera = PerspectiveCamera(fovDegrees = 60f, aspect = aspect, near = 0.1f, far = 100f)
+        camera.transform.setPosition(0f, 0f, 2.5f)
+        camera.lookAt(Vec3.Zero)
 
-        val mesh = Mesh(geometry, material).apply {
-            name = "TriangleMesh"
-        }
-
-        val scene = Scene().apply {
-            name = "TriangleScene"
-            background = Background.Color(Color(0.05f, 0.05f, 0.1f, 1f))
-            add(mesh)
-        }
-
-        val camera = PerspectiveCamera(fov = 60f, aspect = aspect).apply {
-            position.set(0f, 0f, 2f)
-            lookAt(Vector3(0f, 0f, 0f))
-        }
-        scene.add(camera)
-
-        return Triple(scene, camera, mesh)
+        return Triple(scene, camera, listOf(triangleMesh, pointsMesh))
     }
 
-    fun renderFrame(@Suppress("UNUSED_PARAMETER") deltaSeconds: Float = 0f) = Unit
-
-    fun resize(@Suppress("UNUSED_PARAMETER") width: Int, @Suppress("UNUSED_PARAMETER") height: Int) = Unit
-
-    fun shutdown() = Unit
-
-    private fun GpuBackend.toBackendType(): BackendType = when (this) {
-        GpuBackend.WEBGPU -> BackendType.WEBGPU
-        GpuBackend.VULKAN -> BackendType.VULKAN
-        GpuBackend.MOLTENVK -> BackendType.VULKAN
-    }
+    private fun computeViewProjection(camera: PerspectiveCamera) = mat4().multiply(
+        camera.projectionMatrix(),
+        camera.viewMatrix()
+    )
 
     companion object {
-        private const val DEFAULT_WIDTH = 640
-        private const val DEFAULT_HEIGHT = 480
-        private const val TRIANGLE_COMPONENTS = 3
+        private const val DEFAULT_WIDTH = 1280
+        private const val DEFAULT_HEIGHT = 720
+
         private const val GPU_TRIANGLE_COMPONENTS = 6
         private const val GPU_POINTS_COMPONENTS = 11
+
         private val GPU_TRIANGLE_VERTEX_DATA = floatArrayOf(
             0f, 0.5f, 0f, 1f, 0.4f, 0.2f,
             -0.5f, -0.5f, 0f, 1f, 0.4f, 0.2f,
             0.5f, -0.5f, 0f, 1f, 0.4f, 0.2f
-        )
-        private val GPU_TRIANGLE_VERTEX_COUNT = GPU_TRIANGLE_VERTEX_DATA.size / GPU_TRIANGLE_COMPONENTS
-
-        private val TRIANGLE_VERTICES = floatArrayOf(
-            0f, 0.5f, 0f,
-            -0.5f, -0.5f, 0f,
-            0.5f, -0.5f, 0f
         )
 
         private val GPU_POINTS_VERTEX_DATA = floatArrayOf(
@@ -360,14 +322,10 @@ class TriangleExample(
             -0.6f, -0.65f, 0f, 0.95f, 0.4f, 0.2f, 1.1f, 0.3f, 0f, 0f, 0f,
             0.7f, -0.7f, 0f, 0.8f, 0.3f, 0.9f, 1.4f, 0.4f, 0f, 0f, 0f
         )
-        private val GPU_POINTS_VERTEX_COUNT = GPU_POINTS_VERTEX_DATA.size / GPU_POINTS_COMPONENTS
-
-        private const val UNIFORM_MATRIX_FLOATS = 16
     }
+}
 
-    private fun computeModelViewProjection(camera: PerspectiveCamera): FloatArray {
-        val projection = camera.projectionMatrix.clone()
-        val mvp = projection.multiply(camera.matrixWorldInverse)
-        return mvp.elements.copyOf()
-    }
+private fun GpuBackend.asBackendType(): BackendType = when (this) {
+    GpuBackend.WEBGPU -> BackendType.WEBGPU
+    GpuBackend.VULKAN, GpuBackend.MOLTENVK -> BackendType.VULKAN
 }
