@@ -2,6 +2,7 @@ package io.kreekt.engine.render
 
 import io.kreekt.engine.camera.PerspectiveCamera
 import io.kreekt.engine.math.mat4
+import io.kreekt.engine.scene.InstancedPoints
 import io.kreekt.engine.scene.Mesh
 import io.kreekt.engine.scene.Scene
 import io.kreekt.gpu.GpuBackend
@@ -127,8 +128,8 @@ private class EngineRendererImpl(
         camera.updateProjection()
         camera.updateWorldMatrix(force = true)
 
-        val meshes = collectMeshes(scene)
-        sceneRenderer.prepareMeshesBlocking(meshes)
+        val (meshes, points) = collectRenderables(scene)
+        sceneRenderer.prepareBlocking(meshes, points)
 
         val frame = try {
             gpuSurface.acquireFrame()
@@ -164,7 +165,7 @@ private class EngineRendererImpl(
             camera.viewMatrix()
         )
 
-        sceneRenderer.record(pass, meshes, viewProjection)
+        sceneRenderer.record(pass, meshes, points, viewProjection)
         pass.end()
 
         val commandBuffer = encoder.finish()
@@ -187,14 +188,17 @@ private class EngineRendererImpl(
         initialized = false
     }
 
-    private fun collectMeshes(scene: Scene): List<Mesh> {
+    private fun collectRenderables(scene: Scene): Pair<List<Mesh>, List<InstancedPoints>> {
         val meshes = mutableListOf<Mesh>()
+        val points = mutableListOf<InstancedPoints>()
         scene.traverse { node ->
             if (node is Mesh) {
                 meshes += node
+            } else if (node is InstancedPoints) {
+                points += node
             }
         }
-        return meshes
+        return meshes to points
     }
 
 }
