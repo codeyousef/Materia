@@ -38,7 +38,7 @@ class AndroidVulkanNegotiator : AbstractBackendNegotiator() {
             featureFlags = features,
             preferredBackend = BackendId.VULKAN,
             limitations = detectLimitations(features),
-            timestamp = Clock.System.now().toString()
+            timestamp = java.lang.System.currentTimeMillis().toString()
         )
     }
 
@@ -53,8 +53,9 @@ class AndroidVulkanNegotiator : AbstractBackendNegotiator() {
         // Create Android native Vulkan surface
         // Would use ANativeWindow and VK_KHR_android_surface extension
 
+        val surfaceId = "android-vulkan-surface-${java.lang.System.currentTimeMillis()}"
         return RenderSurfaceDescriptor(
-            surfaceId = "android-vulkan-surface-${System.currentTimeMillis()}",
+            surfaceId = surfaceId,
             backendId = BackendId.VULKAN,
             width = surface.width,
             height = surface.height,

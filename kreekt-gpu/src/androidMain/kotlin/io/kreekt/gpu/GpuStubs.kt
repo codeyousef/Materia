@@ -77,6 +77,10 @@ actual class GpuDevice actual constructor(
         unsupported("createCommandEncoder")
     }
 
+    actual fun createPipelineLayout(descriptor: GpuPipelineLayoutDescriptor): GpuPipelineLayout {
+        unsupported("createPipelineLayout")
+    }
+
     actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule {
         unsupported("createShaderModule")
     }
@@ -187,6 +191,11 @@ actual class GpuSampler actual constructor(
     actual val descriptor: GpuSamplerDescriptor
 )
 
+actual class GpuPipelineLayout actual constructor(
+    actual val device: GpuDevice,
+    actual val descriptor: GpuPipelineLayoutDescriptor
+)
+
 actual class GpuCommandEncoder actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuCommandEncoderDescriptor?
@@ -265,3 +274,39 @@ actual class GpuComputePipeline actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuComputePipelineDescriptor
 )
+
+actual object GpuDeviceFactory {
+    actual suspend fun requestContext(config: GpuRequestConfig): GpuContext {
+        unsupported("GpuDeviceFactory.requestContext")
+    }
+}
+
+actual fun GpuDevice.unwrapHandle(): Any? = null
+
+actual fun GpuDevice.unwrapPhysicalHandle(): Any? = null
+
+actual fun GpuQueue.unwrapHandle(): Any? = null
+
+actual fun GpuBuffer.unwrapHandle(): Any? = null
+
+actual fun GpuCommandEncoder.unwrapHandle(): Any? = null
+
+actual fun GpuCommandBuffer.unwrapHandle(): Any? = null
+
+actual fun GpuTexture.unwrapHandle(): Any? = null
+
+actual fun GpuSampler.unwrapHandle(): Any? = null
+
+actual fun GpuDevice.unwrapInstance(): Any? = null
+
+actual fun GpuDevice.unwrapDescriptorPool(): Any? = null
+
+actual fun GpuDevice.queueFamilyIndex(): Int = 0
+
+actual fun GpuDevice.commandPoolHandle(): Long = 0L
+
+actual fun GpuQueue.queueFamilyIndex(): Int = 0
+
+actual fun GpuPipelineLayout.unwrapHandle(): Any? = null
+
+actual fun GpuTextureView.unwrapHandle(): Any? = null

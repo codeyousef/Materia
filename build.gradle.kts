@@ -221,17 +221,19 @@ kotlin {
         // }
 
         // Mobile shared code
-        // val mobileMain by creating {
-        //     dependsOn(commonMain)
-        // }
-
-        // val androidMain by getting {
-        //     dependsOn(mobileMain)
-        //     dependencies {
-        //         // XR: Managed via expect/actual pattern once Android target is re-enabled.
-        //         // implementation("com.google.ar:core:1.42.0") // Enable alongside Android target when shipping XR tools.
-        //     }
-        // }
+        val androidMain by getting {
+            dependencies {
+                implementation("com.google.ar:core:1.44.0")
+                implementation(libs.androidx.core.ktx)
+                implementation(libs.androidx.appcompat)
+                implementation(libs.androidx.activity.ktx)
+                implementation(libs.androidx.lifecycle.runtime.ktx)
+            }
+            kotlin.srcDir("src/androidMain/kotlin")
+            kotlin.exclude("io/kreekt/xr/helpers/**")
+            kotlin.exclude("io/kreekt/xr/ARCoreWrappers.kt")
+            kotlin.exclude("io/kreekt/xr/XRSystem.android.kt")
+        }
     }
 }
 

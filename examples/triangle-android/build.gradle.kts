@@ -1,7 +1,7 @@
 import org.gradle.api.JavaVersion
 
 plugins {
-    alias(libs.plugins.androidApplication)
+    id("com.android.application")
     kotlin("android")
     kotlin("plugin.serialization")
 }
