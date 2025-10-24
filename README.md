@@ -37,15 +37,15 @@ See `mvp-plan.md` and `docs/MVP_STATUS.md` for the current backlog snapshot.
 
 These commands boot the showcase examples and should render in under five minutes per target.
 
-### Web (wasmJs + WebGPU)
+### Web (WebGPU)
 
 ```bash
-./gradlew :examples:triangle:wasmJsBrowserRun
-./gradlew :examples:embedding-galaxy:wasmJsBrowserRun
-./gradlew :examples:force-graph:wasmJsBrowserRun
+./gradlew :examples:triangle:jsBrowserRun
+./gradlew :examples:embedding-galaxy:jsBrowserRun
+./gradlew :examples:force-graph:jsBrowserRun
 ```
 
-> Requires a WebGPU-capable browser (Chrome 120+, Edge 120+, Safari TP). Hot reload is enabled.
+> Requires a WebGPU-capable browser (Chrome 120+, Edge 120+, Safari TP). Hot reload is enabled via the webpack dev server.
 
 ### Desktop (JVM Vulkan)
 

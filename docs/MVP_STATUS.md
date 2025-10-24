@@ -24,9 +24,9 @@ This file mirrors the high-level items from `mvp-plan.md` so stakeholders can se
 
 ## Examples
 
-- [ ] Triangle smoke test exercising real GPU backends (WebGPU/Vulkan)
-- [ ] Embedding Galaxy demo (instanced points, query shockwave)
-- [ ] Force Graph demo (layout bake + TF-IDF vs semantic toggle)
+- [x] Triangle smoke test exercising real GPU backends (WebGPU/Vulkan)
+- [x] Embedding Galaxy demo (instanced points, query shockwave)
+- [x] Force Graph demo (layout bake + TF-IDF vs semantic toggle)
 
 ## Tooling & Tests
 
