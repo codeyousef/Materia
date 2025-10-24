@@ -37,6 +37,19 @@ androidApp/
   src/main/assets/shaders/*.spv
 ```
 
+# Task Tracker (WIP)
+
+- [ ] Align native render-pass encoding with WebGPU ordering (remove pipeline dependency from
+  `vkCommandEncoderBeginRenderPass`).
+- [x] Load Android shader assets (`.spv`) via `AndroidVulkanAssets` helper.
+- [x] Replace `GpuStubs.kt` with Vulkan-backed actuals for instance/adapter/device creation.
+- [x] Implement JNI-backed resource creation (buffers, textures, samplers, bind group layouts &
+  groups).
+- [ ] Bridge command encoder, render pass, and queue submission/presentation through JNI.
+- [ ] Hook EngineRenderer/Triangle Android activity into the Vulkan backend (initialise assets,
+  manage surface lifecycle).
+- [ ] Ensure Gradle pipeline packages SPIR-V assets for Android builds.
+
 # Android surface path (what we wire)
 
 1. `SurfaceView` → `holder.surface`
