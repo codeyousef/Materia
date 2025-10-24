@@ -1,17 +1,12 @@
 package io.kreekt.gpu
 
-import io.kreekt.renderer.AndroidRenderSurface
 import io.kreekt.renderer.RenderSurface
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private fun unsupported(feature: String): Nothing =
     throw UnsupportedOperationException("Android GPU backend not yet implemented ($feature)")
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
-    withContext(Dispatchers.Default) {
-        GpuInstance(descriptor)
-    }
+    GpuInstance(descriptor)
 
 actual class GpuInstance actual constructor(
     actual val descriptor: GpuInstanceDescriptor
@@ -77,10 +72,6 @@ actual class GpuDevice actual constructor(
         unsupported("createCommandEncoder")
     }
 
-    actual fun createPipelineLayout(descriptor: GpuPipelineLayoutDescriptor): GpuPipelineLayout {
-        unsupported("createPipelineLayout")
-    }
-
     actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule {
         unsupported("createShaderModule")
     }
@@ -110,10 +101,9 @@ actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
     private var renderSurface: RenderSurface? = null
-    private var configuration: GpuSurfaceConfiguration? = null
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
-        this.configuration = configuration
+        unsupported("configure")
     }
 
     actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
@@ -127,12 +117,8 @@ actual class GpuSurface actual constructor(
     }
 
     actual fun resize(width: Int, height: Int) {
-        configuration = configuration?.copy(width = width, height = height)
+        // no-op stub
     }
-
-    internal fun attachedSurface(): RenderSurface? = renderSurface
-
-    fun configuration(): GpuSurfaceConfiguration? = configuration
 
     fun attachSurface(surface: RenderSurface) {
         renderSurface = surface
@@ -140,11 +126,7 @@ actual class GpuSurface actual constructor(
 }
 
 actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
-    (surface as? io.kreekt.renderer.AndroidRenderSurface)?.let {
-        attachSurface(surface)
-    } ?: run {
-        attachSurface(surface)
-    }
+    (this as GpuSurface).attachSurface(surface)
 }
 
 actual fun GpuBindGroupLayout.unwrapHandle(): Any? = null
@@ -189,11 +171,6 @@ actual class GpuTextureView actual constructor(
 actual class GpuSampler actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuSamplerDescriptor
-)
-
-actual class GpuPipelineLayout actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuPipelineLayoutDescriptor
 )
 
 actual class GpuCommandEncoder actual constructor(
