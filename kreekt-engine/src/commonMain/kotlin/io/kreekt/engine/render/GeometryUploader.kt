@@ -6,6 +6,7 @@ import io.kreekt.gpu.GpuBuffer
 import io.kreekt.gpu.GpuBufferDescriptor
 import io.kreekt.gpu.GpuBufferUsage
 import io.kreekt.gpu.GpuDevice
+import io.kreekt.gpu.GpuIndexFormat
 import io.kreekt.gpu.gpuBufferUsage
 
 internal class GeometryUploader(
@@ -29,6 +30,7 @@ internal class GeometryUploader(
         )
         vertexBuffer.writeFloats(vertexData)
 
+        var indexFormat: GpuIndexFormat? = null
         val indexBuffer = geometry.indexBuffer?.let { indices ->
             val buffer = device.createBuffer(
                 GpuBufferDescriptor(
@@ -38,6 +40,7 @@ internal class GeometryUploader(
                 )
             )
             buffer.write(indices.toLittleEndianBytes())
+            indexFormat = GpuIndexFormat.UINT16
             buffer
         }
 
@@ -45,7 +48,8 @@ internal class GeometryUploader(
             vertexBuffer = vertexBuffer,
             indexBuffer = indexBuffer,
             vertexCount = vertexCount,
-            indexCount = geometry.indexBuffer?.size
+            indexCount = geometry.indexBuffer?.size,
+            indexFormat = indexFormat
         )
     }
 
@@ -66,7 +70,8 @@ internal data class UploadedGeometry(
     val vertexBuffer: GpuBuffer,
     val indexBuffer: GpuBuffer?,
     val vertexCount: Int,
-    val indexCount: Int?
+    val indexCount: Int?,
+    val indexFormat: GpuIndexFormat?
 ) {
     fun destroy() {
         vertexBuffer.destroy()
