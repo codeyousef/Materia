@@ -4,6 +4,7 @@ import io.kreekt.gpu.GpuBackend
 import io.kreekt.io.saveJson
 import io.kreekt.renderer.SurfaceFactory
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.lwjgl.glfw.GLFW.GLFW_KEY_S
 import org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE
 import org.lwjgl.glfw.GLFW.GLFW_KEY_T
@@ -17,7 +18,14 @@ fun main() = runBlocking {
     val bakeTarget = System.getenv("FORCE_GRAPH_BAKE")
     if (!bakeTarget.isNullOrBlank()) {
         val layout = ForceGraphLayoutGenerator.generate(ForceGraphScene.Config())
-        saveJson(bakeTarget, layout)
+        saveJson(
+            bakeTarget,
+            layout,
+            Json {
+                prettyPrint = true
+                encodeDefaults = true
+            }
+        )
         println("✅ Baked force-graph layout to $bakeTarget")
         return@runBlocking
     }

@@ -1,5 +1,11 @@
 {
-    "config": {},
+    "config": {
+        "nodeCount": 2500,
+        "clusterCount": 6,
+        "edgeCount": 7500,
+        "transitionSeconds": 0.5,
+        "seed": 13
+    },
     "clusterAssignments": [
         4,
         4,
