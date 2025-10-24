@@ -46,5 +46,6 @@ HUD overlays show current mode, node count, and frame time. Toggle commands queu
 2. Layout solved on the JVM/native target and exported as JSON (`data/layouts/force-graph.json`).
 3. At runtime the scene loads the JSON, builds instanced buffers, and caches both TF‑IDF and semantic uniforms.
 4. Toggling weights only swaps bind groups—no geometry rebuild is required.
+5. Re-bake the layout via `FORCE_GRAPH_BAKE=path/to/layout.json ./gradlew :examples:force-graph:run` (writes in JSON format matching the runtime loader).
 
 Enable capture via `SAVE_CAPTURE=true` to dump PNG snapshots after each mode switch (`examples/_captures/force-graph/`).

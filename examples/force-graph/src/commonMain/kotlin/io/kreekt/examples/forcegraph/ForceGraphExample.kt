@@ -10,6 +10,7 @@ import io.kreekt.renderer.PowerPreference
 import io.kreekt.renderer.RenderSurface
 import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.RendererFactory
+import io.kreekt.io.loadJson
 import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 
@@ -24,7 +25,8 @@ class ForceGraphExample(
         widthOverride: Int? = null,
         heightOverride: Int? = null
     ): ForceGraphBootResult {
-        val scene = ForceGraphScene(sceneConfig)
+        val layout = loadLayout(sceneConfig)
+        val scene = ForceGraphScene(layout)
         val targetWidth = widthOverride ?: renderSurface?.width?.takeIf { it > 0 } ?: 1920
         val targetHeight = heightOverride ?: renderSurface?.height?.takeIf { it > 0 } ?: 1080
 
@@ -33,8 +35,8 @@ class ForceGraphExample(
                 backend = preferredBackends.firstOrNull()?.toBackendType() ?: BackendType.WEBGPU,
                 deviceName = "Stub Device",
                 driverVersion = "n/a",
-                nodeCount = sceneConfig.nodeCount,
-                edgeCount = sceneConfig.edgeCount,
+                nodeCount = layout.config.nodeCount,
+                edgeCount = layout.config.edgeCount,
                 mode = ForceGraphScene.Mode.TfIdf,
                 frameTimeMs = 0.0
             )
@@ -71,12 +73,22 @@ class ForceGraphExample(
             backend = renderer.backend,
             deviceName = renderer.deviceName,
             driverVersion = renderer.driverVersion,
-            nodeCount = sceneConfig.nodeCount,
-            edgeCount = sceneConfig.edgeCount,
+            nodeCount = layout.config.nodeCount,
+            edgeCount = layout.config.edgeCount,
             mode = ForceGraphScene.Mode.TfIdf,
             frameTimeMs = frameTimeMs
         )
         return ForceGraphBootResult(log, ForceGraphRuntime(renderer, scene))
+    }
+
+    private suspend fun loadLayout(config: ForceGraphScene.Config): ForceGraphLayout {
+        val resourcePath = "data/force-graph.json"
+        val baked = runCatching { loadJson<ForceGraphLayout>(resourcePath) }.getOrNull()
+        if (baked != null && baked.config.nodeCount == config.nodeCount && baked.config.edgeCount == config.edgeCount) {
+            return baked
+        }
+
+        return ForceGraphLayoutGenerator.generate(config)
     }
 }
 

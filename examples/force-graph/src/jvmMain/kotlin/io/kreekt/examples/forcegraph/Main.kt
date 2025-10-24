@@ -1,6 +1,7 @@
 package io.kreekt.examples.forcegraph
 
 import io.kreekt.gpu.GpuBackend
+import io.kreekt.io.saveJson
 import io.kreekt.renderer.SurfaceFactory
 import kotlinx.coroutines.runBlocking
 import org.lwjgl.glfw.GLFW.GLFW_KEY_S
@@ -13,6 +14,14 @@ import org.lwjgl.system.MemoryUtil
 import kotlin.math.max
 
 fun main() = runBlocking {
+    val bakeTarget = System.getenv("FORCE_GRAPH_BAKE")
+    if (!bakeTarget.isNullOrBlank()) {
+        val layout = ForceGraphLayoutGenerator.generate(ForceGraphScene.Config())
+        saveJson(bakeTarget, layout)
+        println("✅ Baked force-graph layout to $bakeTarget")
+        return@runBlocking
+    }
+
     println("🔗 KreeKt Force Graph (JVM)")
     println("================================")
 

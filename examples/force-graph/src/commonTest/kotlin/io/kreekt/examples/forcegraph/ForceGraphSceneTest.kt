@@ -9,9 +9,10 @@ class ForceGraphSceneTest {
 
     @Test
     fun toggleCyclesMode() {
-        val scene = ForceGraphScene(
+        val layout = ForceGraphLayoutGenerator.generate(
             ForceGraphScene.Config(nodeCount = 300, edgeCount = 600, clusterCount = 4, seed = 9L)
         )
+        val scene = ForceGraphScene(layout)
 
         val initialMetrics = scene.metrics()
         assertEquals(ForceGraphScene.Mode.TfIdf, initialMetrics.mode)

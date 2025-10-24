@@ -17,18 +17,18 @@ import io.kreekt.engine.geometry.AttributeType
 import io.kreekt.engine.geometry.Geometry
 import io.kreekt.engine.geometry.GeometryAttribute
 import io.kreekt.engine.geometry.GeometryLayout
+import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.sqrt
-import kotlin.random.Random
 
 class ForceGraphScene(
-    private val config: Config = Config()
+    layout: ForceGraphLayout
 ) {
+    @Serializable
     data class Config(
         val nodeCount: Int = 2_500,
         val clusterCount: Int = 6,
@@ -46,7 +46,8 @@ class ForceGraphScene(
         val mode: Mode
     )
 
-    private val dataset = ForceGraphDataset(config)
+    private val config = layout.config
+    private val dataset = ForceGraphDataset(layout)
     private val root = Node("force-graph-root")
     private var nodePoints: InstancedPoints
     private var edgeMesh: Mesh
@@ -128,9 +129,14 @@ class ForceGraphScene(
         lastFrameTimeMs = ms
     }
 
+    fun resize(width: Int, height: Int) {
+        camera.aspect = max(0.1f, width.toFloat() / max(1, height).toFloat())
+        camera.updateProjection()
+    }
+
     private fun rebuildScene(mix: Float) {
-        root.remove(nodePoints)
         root.remove(edgeMesh)
+        root.remove(nodePoints)
         nodePoints = buildNodePoints(mix)
         edgeMesh = buildEdgeMesh(mix)
         root.add(edgeMesh)
@@ -187,24 +193,24 @@ class ForceGraphScene(
         return Mesh("force-graph-edges", geometry, material)
     }
 
-    private class ForceGraphDataset(config: Config) {
-        private val random = Random(config.seed)
+    private class ForceGraphDataset(layout: ForceGraphLayout) {
+        private val config = layout.config
         private val nodeCount = config.nodeCount
         private val edgeCount = config.edgeCount
         private val clusterCount = config.clusterCount
 
-        private val clusterAssignments = IntArray(nodeCount)
-        private val tfidfPositions = FloatArray(nodeCount * 3)
-        private val semanticPositions = FloatArray(nodeCount * 3)
-        private val tfidfColors = FloatArray(nodeCount * 3)
-        private val semanticColors = FloatArray(nodeCount * 3)
-        private val tfidfSizes = FloatArray(nodeCount)
-        private val semanticSizes = FloatArray(nodeCount)
-        private val nodeEnergy = FloatArray(nodeCount)
+        private val clusterAssignments = layout.clusterAssignments.toIntArray()
+        private val tfidfPositions = layout.tfidfPositions.toFloatArray()
+        private val semanticPositions = layout.semanticPositions.toFloatArray()
+        private val tfidfColors = layout.tfidfColors.toFloatArray()
+        private val semanticColors = layout.semanticColors.toFloatArray()
+        private val tfidfSizes = layout.tfidfSizes.toFloatArray()
+        private val semanticSizes = layout.semanticSizes.toFloatArray()
+        private val nodeEnergy = layout.nodeEnergy.toFloatArray()
 
-        private val edges = IntArray(edgeCount * 2)
-        private val tfidfEdgeStrength = FloatArray(edgeCount)
-        private val semanticEdgeStrength = FloatArray(edgeCount)
+        private val edges = layout.edges.toIntArray()
+        private val tfidfEdgeStrength = layout.tfidfEdgeStrength.toFloatArray()
+        private val semanticEdgeStrength = layout.semanticEdgeStrength.toFloatArray()
 
         private val blendPositions = FloatArray(nodeCount * 3)
         private val blendColors = FloatArray(nodeCount * 3)
@@ -213,27 +219,22 @@ class ForceGraphScene(
 
         private val tempEdgeData = FloatArray(edgeCount * 12)
 
-        init {
-            generateNodes()
-            generateEdges()
-        }
-
         fun blendNodePositions(mix: Float): FloatArray {
-            for (i in 0 until blendPositions.size) {
+            for (i in blendPositions.indices) {
                 blendPositions[i] = lerp(tfidfPositions[i], semanticPositions[i], mix)
             }
             return blendPositions
         }
 
         fun blendNodeColors(mix: Float): FloatArray {
-            for (i in 0 until blendColors.size) {
+            for (i in blendColors.indices) {
                 blendColors[i] = lerp(tfidfColors[i], semanticColors[i], mix)
             }
             return blendColors
         }
 
         fun blendNodeSizes(mix: Float): FloatArray {
-            for (i in 0 until blendSizes.size) {
+            for (i in blendSizes.indices) {
                 blendSizes[i] = lerp(tfidfSizes[i], semanticSizes[i], mix)
             }
             return blendSizes
@@ -263,20 +264,20 @@ class ForceGraphScene(
                 val colorG = baseColor[1] * intensity
                 val colorB = baseColor[2] * intensity
 
-                val srcPosIndex = src * 3
-                val dstPosIndex = dst * 3
+                val srcIndex = src * 3
+                val dstIndex = dst * 3
                 val edgeBase = edgeIndex * 12
 
-                tempEdgeData[edgeBase] = nodePositions[srcPosIndex]
-                tempEdgeData[edgeBase + 1] = nodePositions[srcPosIndex + 1]
-                tempEdgeData[edgeBase + 2] = nodePositions[srcPosIndex + 2]
+                tempEdgeData[edgeBase] = nodePositions[srcIndex]
+                tempEdgeData[edgeBase + 1] = nodePositions[srcIndex + 1]
+                tempEdgeData[edgeBase + 2] = nodePositions[srcIndex + 2]
                 tempEdgeData[edgeBase + 3] = colorR
                 tempEdgeData[edgeBase + 4] = colorG
                 tempEdgeData[edgeBase + 5] = colorB
 
-                tempEdgeData[edgeBase + 6] = nodePositions[dstPosIndex]
-                tempEdgeData[edgeBase + 7] = nodePositions[dstPosIndex + 1]
-                tempEdgeData[edgeBase + 8] = nodePositions[dstPosIndex + 2]
+                tempEdgeData[edgeBase + 6] = nodePositions[dstIndex]
+                tempEdgeData[edgeBase + 7] = nodePositions[dstIndex + 1]
+                tempEdgeData[edgeBase + 8] = nodePositions[dstIndex + 2]
                 tempEdgeData[edgeBase + 9] = colorR
                 tempEdgeData[edgeBase + 10] = colorG
                 tempEdgeData[edgeBase + 11] = colorB
@@ -284,80 +285,6 @@ class ForceGraphScene(
             return tempEdgeData
         }
 
-        private fun generateNodes() {
-            val palette = arrayOf(
-                Color.fromFloats(0.88f, 0.46f, 0.92f),
-                Color.fromFloats(0.42f, 0.82f, 0.92f),
-                Color.fromFloats(0.98f, 0.65f, 0.32f),
-                Color.fromFloats(0.52f, 0.95f, 0.70f),
-                Color.fromFloats(0.98f, 0.82f, 0.36f),
-                Color.fromFloats(0.68f, 0.72f, 1f)
-            )
-
-            repeat(nodeCount) { index ->
-                val cluster = random.nextInt(clusterCount)
-                clusterAssignments[index] = cluster
-                val baseAngle = ((cluster.toFloat() + random.nextFloat() * 0.35f) / clusterCount.toFloat()) * (PI.toFloat() * 2f)
-                val radius = 9f + random.nextFloat() * 5f
-                val height = (random.nextFloat() - 0.5f) * 6f
-
-                val tfidfBase = index * 3
-                tfidfPositions[tfidfBase] = cos(baseAngle) * radius + gaussian(0.8f)
-                tfidfPositions[tfidfBase + 1] = height + gaussian(0.6f)
-                tfidfPositions[tfidfBase + 2] = sin(baseAngle) * radius + gaussian(0.8f)
-
-                val semanticRadius = radius * lerp(0.55f, 0.85f, random.nextFloat())
-                semanticPositions[tfidfBase] = cos(baseAngle + gaussian(0.25f)) * semanticRadius
-                semanticPositions[tfidfBase + 1] = height * 0.35f + gaussian(0.4f)
-                semanticPositions[tfidfBase + 2] = sin(baseAngle + gaussian(0.25f)) * semanticRadius
-
-                val clusterColor = palette[cluster % palette.size]
-                val colorBase = tfidfBase
-                val chroma = 0.7f + random.nextFloat() * 0.3f
-                tfidfColors[colorBase] = clusterColor.r * chroma
-                tfidfColors[colorBase + 1] = clusterColor.g * chroma
-                tfidfColors[colorBase + 2] = clusterColor.b * chroma
-
-                val semanticChroma = 0.5f + random.nextFloat() * 0.5f
-                semanticColors[colorBase] = clusterColor.r * semanticChroma
-                semanticColors[colorBase + 1] = clusterColor.g * semanticChroma
-                semanticColors[colorBase + 2] = clusterColor.b * semanticChroma
-
-                tfidfSizes[index] = 0.6f + random.nextFloat() * 0.8f
-                semanticSizes[index] = tfidfSizes[index] * (1.1f + random.nextFloat() * 0.4f)
-
-                nodeEnergy[index] = random.nextFloat()
-            }
-        }
-
-        private fun generateEdges() {
-            val used = HashSet<Long>(edgeCount * 2)
-            repeat(edgeCount) { edgeIndex ->
-                var src: Int
-                var dst: Int
-                do {
-                    src = random.nextInt(nodeCount)
-                    dst = random.nextInt(nodeCount)
-                } while (src == dst || !used.add(src.toLong() shl 32 or dst.toLong()))
-
-                edges[edgeIndex * 2] = src
-                edges[edgeIndex * 2 + 1] = dst
-
-                val clusterSim = if (clusterAssignments[src] == clusterAssignments[dst]) 1f else 0.35f
-                tfidfEdgeStrength[edgeIndex] = 0.3f + random.nextFloat() * 0.6f * clusterSim
-                semanticEdgeStrength[edgeIndex] = 0.5f + random.nextFloat() * 0.5f * (1f - clusterSim * 0.4f)
-            }
-        }
-
-        private fun gaussian(scale: Float): Float {
-            val u1 = random.nextFloat().coerceAtLeast(Float.MIN_VALUE)
-            val u2 = random.nextFloat().coerceAtLeast(Float.MIN_VALUE)
-            val r = sqrt(-2.0f * kotlin.math.ln(u1))
-            val theta = 2.0f * PI.toFloat() * u2
-            return r * cos(theta) * scale
-        }
-
         private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
     }
-
 }

@@ -191,7 +191,7 @@ resources/shaders/*.wgsl
 * [ ] **Force Graph** (credibility)
 
     * [x] 2–5k nodes / 6–10k edges
-    * [ ] **Bake layout** on JVM/native → JSON; all targets load
+    * [x] **Bake layout** on JVM/native → JSON; all targets load
     * [x] Toggle **TF‑IDF ↔ Semantic** (edge thickness/opacity tween + slight node nudge)
 
 ### 6) Per‑Target Bootstraps
