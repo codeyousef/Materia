@@ -1,6 +1,13 @@
 package io.kreekt.engine.render
 
+import io.kreekt.engine.geometry.AttributeSemantic
+import io.kreekt.engine.geometry.AttributeType
+import io.kreekt.engine.geometry.Geometry
+import io.kreekt.engine.geometry.GeometryAttribute
+import io.kreekt.engine.geometry.GeometryLayout
+import io.kreekt.engine.scene.InstancedPoints
 import io.kreekt.engine.scene.Mesh
+import io.kreekt.engine.scene.VertexBuffer
 import io.kreekt.gpu.GpuBufferDescriptor
 import io.kreekt.gpu.GpuBufferUsage
 import io.kreekt.gpu.GpuDevice
@@ -22,16 +29,23 @@ class SceneRenderer(
     private val geometryCache = mutableMapOf<Any, UploadedGeometry>()
     private val pipelineCache = mutableMapOf<PipelineKey, UnlitPipelineFactory.PipelineResources>()
     private val meshCache = mutableMapOf<Mesh, MeshResources>()
+    private val pointsCache = mutableMapOf<InstancedPoints, PointsResources>()
 
-    suspend fun prepareMeshes(meshes: Collection<Mesh>) {
+    suspend fun prepare(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
         meshes.forEach { ensureMeshResources(it) }
+        points.forEach { ensurePointsResources(it) }
     }
 
-    fun prepareMeshesBlocking(meshes: Collection<Mesh>) {
-        runBlocking { prepareMeshes(meshes) }
+    fun prepareBlocking(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
+        runBlocking { prepare(meshes, points) }
     }
 
-    fun record(pass: GpuRenderPassEncoder, meshes: Collection<Mesh>, viewProjection: Mat4) {
+    fun record(
+        pass: GpuRenderPassEncoder,
+        meshes: Collection<Mesh>,
+        points: Collection<InstancedPoints>,
+        viewProjection: Mat4
+    ) {
         meshes.forEach { mesh ->
             val resources = meshCache[mesh] ?: return@forEach
             val worldMatrix = mesh.getWorldMatrix()
@@ -53,11 +67,25 @@ class SceneRenderer(
                 pass.draw(resources.geometry.vertexCount)
             }
         }
+
+        points.forEach { pointNode ->
+            val resources = pointsCache[pointNode] ?: return@forEach
+            val worldMatrix = pointNode.getWorldMatrix()
+            val mvp = TMP_MAT.multiply(viewProjection, worldMatrix)
+            resources.uniformBuffer.writeFloats(mvp.toFloatArray(copy = true))
+
+            pass.setPipeline(resources.pipeline.pipeline)
+            pass.setBindGroup(0, resources.bindGroup)
+            pass.setVertexBuffer(0, resources.geometry.vertexBuffer)
+            pass.draw(1, resources.instanceCount)
+        }
     }
 
     fun dispose() {
         meshCache.values.forEach { it.uniformBuffer.destroy() }
+        pointsCache.values.forEach { it.uniformBuffer.destroy() }
         geometryCache.values.forEach { it.destroy() }
+        pointsCache.clear()
         meshCache.clear()
         geometryCache.clear()
         pipelineCache.clear()
@@ -91,12 +119,58 @@ class SceneRenderer(
         return resources
     }
 
+    private suspend fun ensurePointsResources(node: InstancedPoints): PointsResources {
+        pointsCache[node]?.let { return it }
+
+        require(node.componentsPerInstance == 11) {
+            "InstancedPoints expects 11 floats per instance (pos3 + color3 + size + extra4), got ${node.componentsPerInstance}"
+        }
+
+        val blueprint = node.material.toBindingBlueprint()
+        val pipeline = pipelineCache.getOrPut(PipelineKey(blueprint::class, blueprint.renderState, colorFormat)) {
+            blueprint.createPipeline(device, colorFormat)
+        }
+
+        val geometry = geometryCache.getOrPut(node) {
+            val geometry = buildInstancedPointsGeometry(node)
+            geometryUploader.upload(geometry, node.name)
+        }
+
+        val uniformBuffer = device.createBuffer(
+            GpuBufferDescriptor(
+                label = "${node.name}-uniforms",
+                size = Float.SIZE_BYTES * 16L,
+                usage = gpuBufferUsage(GpuBufferUsage.UNIFORM, GpuBufferUsage.COPY_DST)
+            )
+        )
+        val bindGroup = UnlitPipelineFactory.createUniformBindGroup(
+            device = device,
+            layout = pipeline.bindGroupLayout,
+            uniformBuffer = uniformBuffer,
+            label = "${node.name}-bind-group"
+        )
+
+        val instanceCount = node.instanceData.size / node.componentsPerInstance
+        val resources = PointsResources(pipeline, geometry, uniformBuffer, bindGroup, blueprint, instanceCount)
+        pointsCache[node] = resources
+        return resources
+    }
+
     private data class MeshResources(
         val pipeline: UnlitPipelineFactory.PipelineResources,
         val geometry: UploadedGeometry,
         val uniformBuffer: io.kreekt.gpu.GpuBuffer,
         val bindGroup: io.kreekt.gpu.GpuBindGroup,
         val blueprint: MaterialBindingBlueprint
+    )
+
+    private data class PointsResources(
+        val pipeline: UnlitPipelineFactory.PipelineResources,
+        val geometry: UploadedGeometry,
+        val uniformBuffer: io.kreekt.gpu.GpuBuffer,
+        val bindGroup: io.kreekt.gpu.GpuBindGroup,
+        val blueprint: MaterialBindingBlueprint,
+        val instanceCount: Int
     )
 
     private data class PipelineKey(
@@ -107,5 +181,19 @@ class SceneRenderer(
 
     private companion object {
         private val TMP_MAT = mat4()
+    }
+
+    private fun buildInstancedPointsGeometry(node: InstancedPoints): Geometry {
+        val layout = GeometryLayout(
+            stride = node.componentsPerInstance * Float.SIZE_BYTES,
+            attributes = mapOf(
+                AttributeSemantic.POSITION to GeometryAttribute(0, 3, AttributeType.FLOAT32),
+                AttributeSemantic.COLOR to GeometryAttribute(Float.SIZE_BYTES * 3, 3, AttributeType.FLOAT32)
+            )
+        )
+        return Geometry(
+            vertexBuffer = VertexBuffer(node.instanceData, layout.stride),
+            layout = layout
+        )
     }
 }
