@@ -8,9 +8,11 @@ import io.kreekt.engine.scene.Scene
 import io.kreekt.gpu.GpuAdapter
 import io.kreekt.gpu.GpuAdapterInfo
 import io.kreekt.gpu.GpuBackend
+import io.kreekt.gpu.GpuBindGroup
 import io.kreekt.gpu.GpuCommandEncoderDescriptor
 import io.kreekt.gpu.GpuDevice
 import io.kreekt.gpu.GpuDeviceDescriptor
+import io.kreekt.gpu.GpuFilterMode
 import io.kreekt.gpu.GpuInstance
 import io.kreekt.gpu.GpuInstanceDescriptor
 import io.kreekt.gpu.GpuLoadOp
@@ -18,10 +20,18 @@ import io.kreekt.gpu.GpuPowerPreference
 import io.kreekt.gpu.GpuRenderPassColorAttachment
 import io.kreekt.gpu.GpuRenderPassDescriptor
 import io.kreekt.gpu.GpuRequestAdapterOptions
+import io.kreekt.gpu.GpuSampler
+import io.kreekt.gpu.GpuSamplerDescriptor
 import io.kreekt.gpu.GpuSurface
 import io.kreekt.gpu.GpuSurfaceFactory
+import io.kreekt.gpu.GpuTexture
+import io.kreekt.gpu.GpuTextureDescriptor
+import io.kreekt.gpu.GpuTextureDimension
 import io.kreekt.gpu.GpuTextureFormat
+import io.kreekt.gpu.GpuTextureUsage
+import io.kreekt.gpu.GpuTextureView
 import io.kreekt.gpu.createGpuInstance
+import io.kreekt.gpu.gpuTextureUsage
 import io.kreekt.renderer.BackendType
 import io.kreekt.renderer.RenderSurface
 import io.kreekt.renderer.RendererConfig
@@ -47,12 +57,14 @@ interface EngineRenderer {
     val backend: BackendType
     val deviceName: String
     val driverVersion: String
+    var fxaaEnabled: Boolean
 }
 
 data class EngineRendererOptions(
     val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
     val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
-    val clearColor: FloatArray = floatArrayOf(0.05f, 0.05f, 0.1f, 1f)
+    val clearColor: FloatArray = floatArrayOf(0.05f, 0.05f, 0.1f, 1f),
+    val enableFxaa: Boolean = false
 )
 
 suspend fun RendererFactory.createEngineRenderer(
@@ -87,6 +99,14 @@ private class EngineRendererImpl(
     private lateinit var sceneRenderer: SceneRenderer
     private lateinit var surfaceFormat: GpuTextureFormat
     private var backendType: BackendType = BackendType.WEBGPU
+    private var fxaaResources: PostProcessPipelineFactory.PipelineResources? = null
+    private var fxaaSampler: GpuSampler? = null
+    private var fxaaBindGroup: GpuBindGroup? = null
+    private var fxaaBindGroupTexture: GpuTexture? = null
+    private var offscreenTexture: GpuTexture? = null
+    private var offscreenView: GpuTextureView? = null
+    private var fxaaWidth: Int = 0
+    private var fxaaHeight: Int = 0
 
     private var width: Int = max(surface.width, 1)
     private var height: Int = max(surface.height, 1)
@@ -99,6 +119,18 @@ private class EngineRendererImpl(
 
     override val driverVersion: String
         get() = adapterInfo.driverVersion ?: "unknown"
+
+    override var fxaaEnabled: Boolean = options.enableFxaa
+        set(value) {
+            if (field == value) return
+            field = value
+            if (!initialized) return
+            if (value) {
+                recreateOffscreenTargets(width, height)
+            } else {
+                releaseFxaaTargets()
+            }
+        }
 
     override suspend fun initialize(): Result<Unit> = initMutex.withLock {
         if (initialized) {
@@ -138,7 +170,11 @@ private class EngineRendererImpl(
             )
             surfaceFormat = gpuSurface.getPreferredFormat(adapter)
             sceneRenderer = SceneRenderer(device, surfaceFormat)
+            setupFxaaResources()
             initialized = true
+            if (fxaaEnabled) {
+                recreateOffscreenTargets(width, height)
+            }
             Result.Success(Unit)
         } catch (error: RendererInitializationException) {
             Result.Error(error.message ?: "Failed to initialize engine renderer", error)
@@ -157,6 +193,18 @@ private class EngineRendererImpl(
         val (meshes, points) = collectRenderables(scene)
         sceneRenderer.prepareBlocking(meshes, points)
 
+        var useFxaa = fxaaEnabled && fxaaResources != null
+        if (useFxaa) {
+            if (width != fxaaWidth || height != fxaaHeight || offscreenTexture == null || offscreenView == null) {
+                if (width > 0 && height > 0) {
+                    recreateOffscreenTargets(width, height)
+                }
+            }
+            if (offscreenView == null) {
+                useFxaa = false
+            }
+        }
+
         val frame = try {
             gpuSurface.acquireFrame()
         } catch (error: Exception) {
@@ -173,11 +221,13 @@ private class EngineRendererImpl(
             options.clearColor
         }
 
+        val targetView = if (useFxaa) offscreenView ?: frame.view else frame.view
+
         val pass = encoder.beginRenderPass(
             GpuRenderPassDescriptor(
                 colorAttachments = listOf(
                     GpuRenderPassColorAttachment(
-                        view = frame.view,
+                        view = targetView,
                         loadOp = GpuLoadOp.CLEAR,
                         clearColor = clearColor
                     )
@@ -194,6 +244,30 @@ private class EngineRendererImpl(
         sceneRenderer.record(pass, meshes, points, viewProjection)
         pass.end()
 
+        if (useFxaa) {
+            ensureFxaaBindGroup()
+            val resources = fxaaResources
+            val bindGroup = fxaaBindGroup
+            if (resources != null && bindGroup != null) {
+                val fxaaPass = encoder.beginRenderPass(
+                    GpuRenderPassDescriptor(
+                        colorAttachments = listOf(
+                            GpuRenderPassColorAttachment(
+                                view = frame.view,
+                                loadOp = GpuLoadOp.CLEAR,
+                                clearColor = clearColor
+                            )
+                        ),
+                        label = "engine-renderer-fxaa-pass"
+                    )
+                )
+                fxaaPass.setPipeline(resources.pipeline)
+                fxaaPass.setBindGroup(0, bindGroup)
+                fxaaPass.draw(3)
+                fxaaPass.end()
+            }
+        }
+
         val commandBuffer = encoder.finish()
         device.queue.submit(listOf(commandBuffer))
         gpuSurface.present(frame)
@@ -204,6 +278,9 @@ private class EngineRendererImpl(
         this.width = max(width, 1)
         this.height = max(height, 1)
         gpuSurface.resize(this.width, this.height)
+        if (fxaaEnabled) {
+            recreateOffscreenTargets(this.width, this.height)
+        }
     }
 
     override fun dispose() {
@@ -211,7 +288,73 @@ private class EngineRendererImpl(
         sceneRenderer.dispose()
         device.destroy()
         gpuInstance.dispose()
+        releaseFxaaTargets()
+        fxaaSampler = null
+        fxaaBindGroup = null
+        fxaaBindGroupTexture = null
         initialized = false
+    }
+
+    private suspend fun setupFxaaResources() {
+        fxaaResources = PostProcessPipelineFactory.createFxaaPipeline(device, surfaceFormat)
+        fxaaSampler = device.createSampler(
+            GpuSamplerDescriptor(
+                label = "engine-fxaa-sampler",
+                magFilter = GpuFilterMode.LINEAR,
+                minFilter = GpuFilterMode.LINEAR
+            )
+        )
+    }
+
+    private fun recreateOffscreenTargets(width: Int, height: Int) {
+        if (!fxaaEnabled) return
+        releaseFxaaTargets()
+        if (width <= 0 || height <= 0) return
+        val texture = device.createTexture(
+            GpuTextureDescriptor(
+                label = "engine-fxaa-offscreen",
+                size = Triple(width, height, 1),
+                mipLevelCount = 1,
+                sampleCount = 1,
+                dimension = GpuTextureDimension.D2,
+                format = surfaceFormat,
+                usage = gpuTextureUsage(
+                    GpuTextureUsage.RENDER_ATTACHMENT,
+                    GpuTextureUsage.TEXTURE_BINDING,
+                    GpuTextureUsage.COPY_SRC
+                )
+            )
+        )
+        offscreenTexture = texture
+        offscreenView = texture.createView()
+        fxaaBindGroupTexture = null
+        fxaaWidth = width
+        fxaaHeight = height
+    }
+
+    private fun ensureFxaaBindGroup() {
+        val resources = fxaaResources ?: return
+        val sampler = fxaaSampler ?: return
+        val texture = offscreenTexture ?: return
+        val view = offscreenView ?: return
+        if (fxaaBindGroupTexture === texture && fxaaBindGroup != null) return
+        fxaaBindGroup = PostProcessPipelineFactory.createFxaaBindGroup(
+            device,
+            resources.bindGroupLayout,
+            view,
+            sampler
+        )
+        fxaaBindGroupTexture = texture
+    }
+
+    private fun releaseFxaaTargets() {
+        offscreenTexture?.destroy()
+        offscreenTexture = null
+        offscreenView = null
+        fxaaBindGroup = null
+        fxaaBindGroupTexture = null
+        fxaaWidth = 0
+        fxaaHeight = 0
     }
 
     private fun collectRenderables(scene: Scene): Pair<List<Mesh>, List<InstancedPoints>> {

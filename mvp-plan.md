@@ -186,7 +186,7 @@ resources/shaders/*.wgsl
 
     * [x] 20k InstancedPoints; 5–6 clusters; camera spline
     * [x] “Query shockwave” every 4s (similarity threshold → size/emissive tween)
-    * [ ] FXAA toggle
+    * [x] FXAA toggle
     * [ ] Perf floor: desktop ~60 FPS @1080p; browser ≥45 FPS; mobile ≥30 FPS (defaults)
 * [ ] **Force Graph** (credibility)
 

@@ -60,6 +60,7 @@ fun main() {
                 "r" -> runtime.resetSequence()
                 "[" -> runtime.setQuality(runtime.quality.previous())
                 "]" -> runtime.setQuality(runtime.quality.next())
+                "f" -> runtime.toggleFxaa()
             }
         })
     }
@@ -124,6 +125,7 @@ private fun updateOverlay(container: HTMLDivElement, runtime: EmbeddingGalaxyRun
     info.innerHTML = buildString {
         appendLine("Points   : ${runtime.activePointCount}")
         appendLine("Quality  : ${runtime.quality}")
+        appendLine("FXAA     : ${if (runtime.fxaaEnabled) "on" else "off"}")
         appendLine("Frame    : ${metrics.frameTimeMs.format(2)} ms")
         append("FPS      : ${fps.format(1)}")
     }

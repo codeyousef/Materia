@@ -36,7 +36,8 @@ class EmbeddingGalaxySceneTest {
                 basePointCount = 512,
                 clusterCount = 3,
                 seed = 9L
-            )
+            ),
+            enableFxaa = true
         )
         val result = example.boot()
         val log = result.log
@@ -45,5 +46,15 @@ class EmbeddingGalaxySceneTest {
         assertEquals(result.runtime.activePointCount, log.pointCount)
         assertEquals(EmbeddingGalaxyScene.Quality.Balanced, log.quality)
         assertEquals(512, log.pointCount)
+        assertTrue(log.fxaaEnabled)
+    }
+
+    @Test
+    fun fxaaTogglePersistsInHeadlessRuntime() = runTest {
+        val example = EmbeddingGalaxyExample(enableFxaa = true)
+        val runtime = example.boot().runtime
+        assertTrue(runtime.fxaaEnabled)
+        runtime.toggleFxaa()
+        assertTrue(!runtime.fxaaEnabled)
     }
 }

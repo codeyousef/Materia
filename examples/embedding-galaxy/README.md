@@ -8,7 +8,7 @@ This showcase renders 20k synthetic embeddings as instanced points. Every few se
 
 | Platform | Command | Notes |
 |----------|---------|-------|
-| Web (wasmJs + WebGPU) | `./gradlew :examples:embedding-galaxy:wasmJsBrowserRun` | Starts a dev server with hot reload. Requires WebGPU. |
+| Web (WebGPU) | `./gradlew :examples:embedding-galaxy:jsBrowserRun` | Starts the webpack dev server with hot reload. Requires WebGPU. |
 | Desktop (JVM Vulkan) | `./gradlew :examples:embedding-galaxy:run` | Ideal for profiling pipeline warm-up and instancing throughput. |
 | Android (Vulkan) | `./gradlew :examples:embedding-galaxy:installDebug` | Same scene as desktop; ensure `USE_LOW_POWER=false` in the config for smooth playback. |
 
@@ -33,6 +33,7 @@ If frame time regresses, inspect:
 - `Q` – Trigger a new query shockwave manually.
 - `R` – Reset the animation timeline.
 - `P` – Pause/resume scene updates.
+- `F` – Toggle FXAA post-processing.
 - Mouse / touch drag – Orbit the camera.
 - Scroll / pinch – Zoom in/out.
 

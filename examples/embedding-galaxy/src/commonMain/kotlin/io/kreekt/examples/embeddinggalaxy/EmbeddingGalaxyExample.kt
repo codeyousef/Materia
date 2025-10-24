@@ -16,7 +16,8 @@ import kotlin.time.TimeSource
 class EmbeddingGalaxyExample(
     private val sceneConfig: EmbeddingGalaxyScene.Config = EmbeddingGalaxyScene.Config(),
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU, GpuBackend.VULKAN),
-    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE
+    private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
+    private val enableFxaa: Boolean = true
 ) {
 
     suspend fun boot(
@@ -36,9 +37,10 @@ class EmbeddingGalaxyExample(
                 pointCount = scene.activePointCount,
                 clusterCount = sceneConfig.clusterCount,
                 quality = scene.quality,
+                fxaaEnabled = enableFxaa,
                 frameTimeMs = 0.0
             )
-            return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(null, scene))
+            return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(null, scene, enableFxaa))
         }
 
         val rendererConfig = RendererConfig(
@@ -51,7 +53,8 @@ class EmbeddingGalaxyExample(
         val options = EngineRendererOptions(
             preferredBackends = preferredBackends,
             powerPreference = powerPreference,
-            clearColor = scene.clearColor.copyOf()
+            clearColor = scene.clearColor.copyOf(),
+            enableFxaa = enableFxaa
         )
 
         val rendererResult = RendererFactory.createEngineRenderer(
@@ -74,9 +77,10 @@ class EmbeddingGalaxyExample(
             pointCount = scene.activePointCount,
             clusterCount = sceneConfig.clusterCount,
             quality = scene.quality,
+            fxaaEnabled = renderer.fxaaEnabled,
             frameTimeMs = frameTimeMs
         )
-        return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(renderer, scene))
+        return EmbeddingGalaxyBootResult(log, EmbeddingGalaxyRuntime(renderer, scene, renderer.fxaaEnabled))
     }
 }
 
@@ -87,9 +91,11 @@ data class EmbeddingGalaxyBootLog(
     val pointCount: Int,
     val clusterCount: Int,
     val quality: EmbeddingGalaxyScene.Quality,
+    val fxaaEnabled: Boolean,
     val frameTimeMs: Double
 ) {
     fun pretty(): String = buildString {
+        val fxaaState = if (fxaaEnabled) "on" else "off"
         appendLine("🌌 Embedding Galaxy boot complete")
         appendLine("  Backend : $backend")
         appendLine("  Device  : $deviceName")
@@ -97,6 +103,7 @@ data class EmbeddingGalaxyBootLog(
         appendLine("  Points  : ${pointCount.formatCompact()}")
         appendLine("  Clusters: $clusterCount")
         appendLine("  Quality : $quality")
+        appendLine("  FXAA    : $fxaaState")
         appendLine("  Frame   : ${frameTimeMs.formatMs()} ms")
     }
 
@@ -129,8 +136,11 @@ data class EmbeddingGalaxyBootResult(
 
 class EmbeddingGalaxyRuntime(
     private val renderer: EngineRenderer?,
-    val scene: EmbeddingGalaxyScene
+    val scene: EmbeddingGalaxyScene,
+    fxaaDefault: Boolean
 ) {
+    private var headlessFxaaEnabled = fxaaDefault
+
     fun frame(deltaSeconds: Float) {
         scene.update(deltaSeconds)
         renderer?.let {
@@ -159,6 +169,19 @@ class EmbeddingGalaxyRuntime(
     fun togglePause() = scene.togglePause()
     fun setQuality(quality: EmbeddingGalaxyScene.Quality) = scene.setQuality(quality)
     fun metrics(): EmbeddingGalaxyScene.Metrics = scene.metrics()
+    fun toggleFxaa() {
+        fxaaEnabled = !fxaaEnabled
+    }
+
+    var fxaaEnabled: Boolean
+        get() = renderer?.fxaaEnabled ?: headlessFxaaEnabled
+        set(value) {
+            if (renderer != null) {
+                renderer.fxaaEnabled = value
+            } else {
+                headlessFxaaEnabled = value
+            }
+        }
 
     val activePointCount: Int get() = scene.activePointCount
     val quality: EmbeddingGalaxyScene.Quality get() = scene.quality
