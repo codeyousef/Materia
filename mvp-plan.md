@@ -143,7 +143,7 @@ resources/shaders/*.wgsl
 
 * [x] Scene graph: `Node` (TRS, hierarchy, dirty flags), `Scene.update(dt)`
 * [x] Camera: `PerspectiveCamera` + **OrbitController**
-* [ ] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
+* [x] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
 * [ ] Drawables
 
     * [ ] `Mesh(geometry, material)`
