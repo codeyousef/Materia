@@ -38,10 +38,14 @@ class SimulatedRenderPassManager : RenderPassManager {
         state.vertexBuffers[slot] = buffer
     }
 
-    override fun bindIndexBuffer(buffer: BufferHandle) {
+    override fun bindIndexBuffer(buffer: BufferHandle, indexSizeInBytes: Int) {
         val state = ensureActivePass()
         validateBuffer(buffer, BufferUsage.INDEX)
+        require(indexSizeInBytes == 2 || indexSizeInBytes == 4) {
+            "Index size must be 2 or 4 bytes, got $indexSizeInBytes"
+        }
         state.indexBuffer = buffer
+        state.indexElementSize = indexSizeInBytes
     }
 
     override fun bindUniformBuffer(buffer: BufferHandle, group: Int, binding: Int) {
@@ -104,6 +108,7 @@ class SimulatedRenderPassManager : RenderPassManager {
         var pipeline: PipelineHandle? = null,
         val vertexBuffers: MutableMap<Int, BufferHandle> = mutableMapOf(),
         var indexBuffer: BufferHandle? = null,
+        var indexElementSize: Int = 0,
         val uniformBindings: MutableMap<Pair<Int, Int>, BufferHandle> = mutableMapOf()
     )
 }

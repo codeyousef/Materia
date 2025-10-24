@@ -832,6 +832,10 @@ actual class GpuRenderPassEncoder actual constructor(
         handle().setVertexBuffer(slot, buffer.handle())
     }
 
+    actual fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long) {
+        handle().setIndexBuffer(buffer.handle(), format.toWebGpu(), offset.toDouble())
+    }
+
     actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
         handle().setBindGroup(index, bindGroup.handle())
     }
@@ -840,9 +844,24 @@ actual class GpuRenderPassEncoder actual constructor(
         handle().draw(vertexCount, instanceCount, firstVertex, firstInstance)
     }
 
+    actual fun drawIndexed(
+        indexCount: Int,
+        instanceCount: Int,
+        firstIndex: Int,
+        baseVertex: Int,
+        firstInstance: Int
+    ) {
+        handle().drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
+    }
+
     actual fun end() {
         handle().end()
     }
+}
+
+private fun GpuIndexFormat.toWebGpu(): String = when (this) {
+    GpuIndexFormat.UINT16 -> "uint16"
+    GpuIndexFormat.UINT32 -> "uint32"
 }
 
 private fun GpuTextureFormat.toWebGpuFormat(): String = when (this) {

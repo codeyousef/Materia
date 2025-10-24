@@ -40,7 +40,7 @@ interface RenderPassManager {
      * @param buffer Index buffer handle
      * @throws InvalidBufferException if buffer invalid
      */
-    fun bindIndexBuffer(buffer: BufferHandle)
+    fun bindIndexBuffer(buffer: BufferHandle, indexSizeInBytes: Int = 2)
 
     /**
      * Bind uniform buffer to group and binding.

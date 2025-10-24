@@ -169,7 +169,7 @@ class WebGPURenderPassManager(
      * @param buffer Index buffer handle (GPUBuffer)
      * @throws InvalidBufferException if buffer invalid
      */
-    override fun bindIndexBuffer(buffer: BufferHandle) {
+    override fun bindIndexBuffer(buffer: BufferHandle, indexSizeInBytes: Int) {
         if (!renderPassActive) {
             throw IllegalStateException("No active render pass. Call beginRenderPass() first.")
         }
@@ -178,11 +178,16 @@ class WebGPURenderPassManager(
             throw InvalidBufferException("Index buffer handle is invalid")
         }
 
+        require(indexSizeInBytes == 2 || indexSizeInBytes == 4) {
+            "Index size must be 2 or 4 bytes, got $indexSizeInBytes"
+        }
+
         try {
             val gpuBuffer = buffer.handle
                 ?: throw InvalidBufferException("Buffer handle is null")
 
-            passEncoder.setIndexBuffer(gpuBuffer, "uint32")
+            val format = if (indexSizeInBytes == 2) "uint16" else "uint32"
+            passEncoder.setIndexBuffer(gpuBuffer, format)
         } catch (e: InvalidBufferException) {
             throw e
         } catch (e: Exception) {

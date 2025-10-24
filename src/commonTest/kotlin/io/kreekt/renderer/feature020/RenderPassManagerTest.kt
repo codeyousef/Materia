@@ -74,7 +74,7 @@ class RenderPassManagerTest {
     @Test
     fun testBindIndexBuffer_validBuffer_succeeds() {
         renderPassManager.beginRenderPass(Color(0.53f, 0.81f, 0.92f, 1.0f), framebuffer)
-        renderPassManager.bindIndexBuffer(indexBuffer)
+        renderPassManager.bindIndexBuffer(indexBuffer, indexSizeInBytes = 4)
         renderPassManager.endRenderPass()
     }
 
@@ -83,7 +83,7 @@ class RenderPassManagerTest {
         renderPassManager.beginRenderPass(Color(0.53f, 0.81f, 0.92f, 1.0f), framebuffer)
         renderPassManager.bindPipeline(pipeline)
         renderPassManager.bindVertexBuffer(vertexBuffer)
-        renderPassManager.bindIndexBuffer(indexBuffer)
+        renderPassManager.bindIndexBuffer(indexBuffer, indexSizeInBytes = 4)
         renderPassManager.bindUniformBuffer(uniformBuffer)
 
         renderPassManager.drawIndexed(indexCount = 3, firstIndex = 0, instanceCount = 1)
@@ -95,7 +95,7 @@ class RenderPassManagerTest {
     fun testDrawIndexed_noPipeline_throwsException() {
         renderPassManager.beginRenderPass(Color(0.53f, 0.81f, 0.92f, 1.0f), framebuffer)
         renderPassManager.bindVertexBuffer(vertexBuffer)
-        renderPassManager.bindIndexBuffer(indexBuffer)
+        renderPassManager.bindIndexBuffer(indexBuffer, indexSizeInBytes = 4)
 
         assertFailsWith<IllegalStateException> {
             renderPassManager.drawIndexed(indexCount = 3)

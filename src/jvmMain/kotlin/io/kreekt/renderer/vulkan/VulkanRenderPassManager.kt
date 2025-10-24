@@ -148,7 +148,7 @@ class VulkanRenderPassManager(
      * @param buffer Index buffer handle
      * @throws InvalidBufferException if buffer invalid
      */
-    override fun bindIndexBuffer(buffer: BufferHandle) {
+    override fun bindIndexBuffer(buffer: BufferHandle, indexSizeInBytes: Int) {
         if (!renderPassActive) {
             throw IllegalStateException("No active render pass. Call beginRenderPass() first.")
         }
@@ -157,11 +157,16 @@ class VulkanRenderPassManager(
             throw InvalidBufferException("Index buffer handle is invalid")
         }
 
+        require(indexSizeInBytes == 2 || indexSizeInBytes == 4) {
+            "Index size must be 2 or 4 bytes, got $indexSizeInBytes"
+        }
+
         try {
             val bufferData = buffer.handle as? VulkanBufferHandleData
                 ?: throw InvalidBufferException("Buffer handle is not a VulkanBufferHandleData")
 
-            vkCmdBindIndexBuffer(commandBuffer, bufferData.buffer, 0, VK_INDEX_TYPE_UINT32)
+            val indexType = if (indexSizeInBytes == 2) VK_INDEX_TYPE_UINT16 else VK_INDEX_TYPE_UINT32
+            vkCmdBindIndexBuffer(commandBuffer, bufferData.buffer, 0, indexType)
         } catch (e: InvalidBufferException) {
             throw e
         } catch (e: Exception) {

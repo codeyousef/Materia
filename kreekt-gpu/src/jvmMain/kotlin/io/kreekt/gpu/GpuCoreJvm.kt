@@ -1254,6 +1254,16 @@ actual class GpuRenderPassEncoder actual constructor(
         }
     }
 
+    actual fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long) {
+        check(!ended) { "Render pass already ended" }
+        val native = buffer.nativeBuffer()
+        val indexType = when (format) {
+            GpuIndexFormat.UINT16 -> VK_INDEX_TYPE_UINT16
+            GpuIndexFormat.UINT32 -> VK_INDEX_TYPE_UINT32
+        }
+        vkCmdBindIndexBuffer(commandBuffer, native.buffer, offset, indexType)
+    }
+
     actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
         check(!ended) { "Render pass already ended" }
         val pipeline = activePipeline ?: error("No pipeline bound before setBindGroup() call")
@@ -1277,6 +1287,18 @@ actual class GpuRenderPassEncoder actual constructor(
         check(!ended) { "Render pass already ended" }
         check(activePipeline != null) { "No pipeline bound before draw() call" }
         vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance)
+    }
+
+    actual fun drawIndexed(
+        indexCount: Int,
+        instanceCount: Int,
+        firstIndex: Int,
+        baseVertex: Int,
+        firstInstance: Int
+    ) {
+        check(!ended) { "Render pass already ended" }
+        check(activePipeline != null) { "No pipeline bound before drawIndexed() call" }
+        vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
     }
 
     actual fun end() {

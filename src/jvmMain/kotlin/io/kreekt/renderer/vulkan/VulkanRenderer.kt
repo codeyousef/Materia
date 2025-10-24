@@ -604,7 +604,7 @@ class VulkanRenderer(
                     buffers.vertexBuffers.forEachIndexed { slot, buffer ->
                         renderPassMgr.bindVertexBuffer(buffer, slot)
                     }
-                    buffers.indexBuffer?.let { renderPassMgr.bindIndexBuffer(it) }
+                    buffers.indexBuffer?.let { renderPassMgr.bindIndexBuffer(it, indexSizeInBytes = 4) }
                     renderPassMgr.drawIndexed(buffers.indexCount, 0, buffers.instanceCount)
                     drawCalls++
                     triangles += buffers.triangleCount
