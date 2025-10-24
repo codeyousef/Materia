@@ -142,7 +142,7 @@ resources/shaders/*.wgsl
 ### 2) Rendering Engine (common)
 
 * [x] Scene graph: `Node` (TRS, hierarchy, dirty flags), `Scene.update(dt)`
-* [ ] Camera: `PerspectiveCamera` + **OrbitController**
+* [x] Camera: `PerspectiveCamera` + **OrbitController**
 * [ ] Geometry: interleaved VBO + IBO (pos, normal?, uv?)
 * [ ] Drawables
 
@@ -155,7 +155,7 @@ resources/shaders/*.wgsl
 * [x] Pipeline state helpers: depth test/write, culling, alpha/additive blending
 * [x] Optional post: **FXAA** (toggle)
 * [x] Material bindings → shader pipeline layout (bridging to backend descriptor sets)
-* [ ] Integrate engine drawables with real renderer submission (Geometry → vertex/index buffers)
+* [x] Integrate engine drawables with real renderer submission (Geometry → vertex/index buffers)
 
 ### 3) Math & Utils
 
