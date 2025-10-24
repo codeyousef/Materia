@@ -8,7 +8,7 @@ The force graph demo renders 2–5k nodes with 6–10k edges and lets you toggle
 
 | Platform | Command | Notes |
 |----------|---------|-------|
-| Web (wasmJs + WebGPU) | `./gradlew :examples:force-graph:wasmJsBrowserRun` | Hot reload via dev server. Use Chrome 120+ for WebGPU. |
+| Web (WebGPU) | `./gradlew :examples:force-graph:jsBrowserRun` | Opens the webpack dev server; chrome 120+ recommended for WebGPU. |
 | Desktop (JVM Vulkan) | `./gradlew :examples:force-graph:run` | Ideal for profiling layout tweening and uniform uploads. |
 | Android (Vulkan) | `./gradlew :examples:force-graph:installDebug` | Uses the same baked data set; ensure the JSON asset is bundled. |
 

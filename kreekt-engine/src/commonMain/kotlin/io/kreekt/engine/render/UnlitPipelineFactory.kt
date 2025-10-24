@@ -47,7 +47,8 @@ object UnlitPipelineFactory {
     fun createUnlitColorPipeline(
         device: GpuDevice,
         colorFormat: GpuTextureFormat,
-        renderState: RenderState = RenderState()
+        renderState: RenderState = RenderState(),
+        primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST
     ): PipelineResources {
         val layout = createUniformLayout(device, label = "unlit-color-layout")
         val vertexModule = device.createShaderModule(
@@ -70,6 +71,7 @@ object UnlitPipelineFactory {
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
                 vertexBuffers = listOf(vertexLayoutWithColor()),
+                primitiveTopology = primitiveTopology,
                 bindGroupLayouts = listOf(layout),
                 cullMode = renderState.toCullMode(),
                 depthState = renderState.toDepthState(),

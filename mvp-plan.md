@@ -190,9 +190,9 @@ resources/shaders/*.wgsl
     * [ ] Perf floor: desktop ~60 FPS @1080p; browser ≥45 FPS; mobile ≥30 FPS (defaults)
 * [ ] **Force Graph** (credibility)
 
-    * [ ] 2–5k nodes / 6–10k edges
+    * [x] 2–5k nodes / 6–10k edges
     * [ ] **Bake layout** on JVM/native → JSON; all targets load
-    * [ ] Toggle **TF‑IDF ↔ Semantic** (edge thickness/opacity tween + slight node nudge)
+    * [x] Toggle **TF‑IDF ↔ Semantic** (edge thickness/opacity tween + slight node nudge)
 
 ### 6) Per‑Target Bootstraps
 

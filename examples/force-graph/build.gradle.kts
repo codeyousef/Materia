@@ -1,12 +1,10 @@
 import org.gradle.api.tasks.JavaExec
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
 }
 
-@OptIn(ExperimentalWasmDsl::class)
 kotlin {
     jvm {
         compilerOptions {
@@ -17,11 +15,16 @@ kotlin {
         }
     }
 
-    wasmJs {
+    js(IR) {
         browser {
             commonWebpackConfig {
                 outputFileName = "force-graph.js"
             }
+            testTask {
+                enabled = false
+            }
+        }
+        nodejs {
             testTask {
                 enabled = false
             }
@@ -31,31 +34,56 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                implementation(project(":kreekt-gpu"))
+                implementation(project(":kreekt-engine"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(project(":"))
             }
         }
 
         val commonTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
 
         val jvmMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.lwjgl.core)
+                implementation(libs.lwjgl.glfw)
+                implementation(libs.lwjgl.vulkan)
+
+                val osName = System.getProperty("os.name").lowercase()
+                val lwjglNatives = when {
+                    osName.contains("win") -> "natives-windows"
+                    osName.contains("linux") -> "natives-linux"
+                    osName.contains("mac") || osName.contains("darwin") -> "natives-macos"
+                    else -> "natives-linux"
+                }
+
+                runtimeOnly("org.lwjgl:lwjgl::$lwjglNatives")
+                runtimeOnly("org.lwjgl:lwjgl-glfw::$lwjglNatives")
             }
         }
 
-        val wasmJsMain by getting {
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+            }
+        }
+
+        val jsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
 
-        val wasmJsTest by getting {
+        val jsTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
             }
@@ -65,7 +93,7 @@ kotlin {
 
 tasks.register("run", JavaExec::class) {
     group = "examples"
-    description = "Run the JVM version of the Force Graph example (placeholder)"
+    description = "Run the JVM version of the Force Graph example"
 
     dependsOn("jvmMainClasses")
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
@@ -73,30 +101,30 @@ tasks.register("run", JavaExec::class) {
     mainClass.set("io.kreekt.examples.forcegraph.MainKt")
 
     doFirst {
-        println("🚀 Launching Force Graph placeholder on JVM")
-        println("This stub will be replaced with the full demo during MVP development.")
-    }
-}
-
-tasks.register("wasmJsBrowserRun") {
-    group = "examples"
-    description = "Run the Force Graph WebAssembly placeholder in the browser"
-
-    dependsOn("wasmJsBrowserDevelopmentRun")
-
-    doFirst {
-        println("🌐 Launching Force Graph placeholder (WebAssembly)")
-        println("Dev server opening — force-directed visualization lands later in the MVP timeline.")
+        println("🚀 Launching Force Graph on JVM")
+        println("Bootstrapping EngineRenderer + force-directed scene…")
     }
 }
 
 tasks.register("dev") {
     group = "examples"
-    description = "Development mode for Force Graph placeholder"
+    description = "Development mode for Force Graph (browser)"
 
-    dependsOn("wasmJsBrowserDevelopmentRun")
+    dependsOn("jsBrowserDevelopmentRun")
 
     doFirst {
-        println("🔄 Starting Force Graph dev server (placeholder)")
+        println("🔄 Starting Force Graph dev server (WebGPU)")
+    }
+}
+
+tasks.register("jsBrowserRun") {
+    group = "examples"
+    description = "Run the Force Graph example in the browser"
+
+    dependsOn("jsBrowserDevelopmentRun")
+
+    doFirst {
+        println("🌐 Launching Force Graph (Browser / WebGPU)")
+        println("Ensure a WebGPU-capable browser is available.")
     }
 }

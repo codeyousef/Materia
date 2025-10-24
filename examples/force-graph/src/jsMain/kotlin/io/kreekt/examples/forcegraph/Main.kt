@@ -1,15 +1,15 @@
 package io.kreekt.examples.forcegraph
 
-import io.kreekt.examples.common.ExampleRunner
-import io.kreekt.examples.common.Hud
-import io.kreekt.renderer.RendererConfig
-import io.kreekt.renderer.RendererFactory
 import io.kreekt.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLCanvasElement
+import org.w3c.dom.HTMLDivElement
+import org.w3c.dom.HTMLPreElement
+import org.w3c.dom.events.KeyboardEvent
+import kotlin.math.roundToInt
 
 private val scope = MainScope()
 
@@ -17,46 +17,49 @@ fun main() {
     scope.launch {
         val canvas = ensureCanvas()
         val surface = WebGPUSurface(canvas)
-        val renderer = RendererFactory.create(surface, RendererConfig()).getOrThrow()
-        renderer.initialize(RendererConfig()).getOrThrow()
+        val example = ForceGraphExample()
+        val boot = example.boot(
+            renderSurface = surface,
+            widthOverride = canvas.width,
+            heightOverride = canvas.height
+        )
 
-        val scene = ForceGraphRerankScene()
-        val hud = Hud()
-        scene.attachHud(hud)
+        val runtime = boot.runtime
+        println(boot.log.pretty())
 
-        val runner = ExampleRunner(scene.scene, scene.camera, renderer) { delta ->
-            scene.update(delta)
+        val overlay = ensureOverlay(boot.log.pretty())
+        var lastTimestamp = window.performance.now()
+
+        fun frame(timestamp: Double) {
+            val deltaSeconds = ((timestamp - lastTimestamp) / 1000.0).toFloat().coerceIn(0f, 0.1f)
+            lastTimestamp = timestamp
+            runtime.frame(deltaSeconds)
+            updateOverlay(overlay, runtime)
+            window.requestAnimationFrame(::frame)
         }
-        runner.start()
 
-        fun resize() {
-            val width = canvas.clientWidth
-            val height = canvas.clientHeight
+        window.requestAnimationFrame { timestamp ->
+            lastTimestamp = timestamp
+            window.requestAnimationFrame(::frame)
+        }
+
+        window.onresize = {
+            val width = canvas.clientWidth.takeIf { it > 0 } ?: window.innerWidth
+            val height = canvas.clientHeight.takeIf { it > 0 } ?: window.innerHeight
             canvas.width = width
             canvas.height = height
-            renderer.resize(width, height)
-            if (height > 0) {
-                scene.resize(width.toFloat() / height.toFloat())
-            }
+            runtime.resize(width, height)
+            null
         }
-
-        window.onresize = { resize(); null }
-        resize()
 
         window.addEventListener("keydown", { event ->
-            val key = (event as? org.w3c.dom.events.KeyboardEvent)?.key?.lowercase()
+            val key = (event as? KeyboardEvent)?.key?.lowercase() ?: return@addEventListener
             when (key) {
-                "t" -> scene.setMode(ForceGraphRerankScene.Mode.TfIdf)
-                "s" -> scene.setMode(ForceGraphRerankScene.Mode.Semantic)
-                "space" -> scene.toggleMode()
+                " " -> runtime.toggleMode()
+                "t" -> runtime.setMode(ForceGraphScene.Mode.TfIdf)
+                "s" -> runtime.setMode(ForceGraphScene.Mode.Semantic)
             }
         })
-
-        fun loop() {
-            runner.tick()
-            window.requestAnimationFrame { loop() }
-        }
-        loop()
     }
 }
 
@@ -71,4 +74,74 @@ private fun ensureCanvas(): HTMLCanvasElement {
     canvas.style.backgroundColor = "#0b1020"
     document.body?.appendChild(canvas)
     return canvas
+}
+
+private fun ensureOverlay(initialMessage: String): HTMLDivElement {
+    val existing = document.getElementById("force-graph-overlay")
+    if (existing is HTMLDivElement) return existing
+
+    val wrapper = document.createElement("div") as HTMLDivElement
+    wrapper.id = "force-graph-overlay"
+    wrapper.style.position = "absolute"
+    wrapper.style.left = "24px"
+    wrapper.style.top = "24px"
+    wrapper.style.padding = "12px 16px"
+    wrapper.style.backgroundColor = "rgba(9, 12, 24, 0.85)"
+    wrapper.style.borderRadius = "10px"
+    wrapper.style.color = "#f0f3ff"
+    wrapper.style.fontFamily = "JetBrains Mono, monospace"
+    wrapper.style.fontSize = "13px"
+    wrapper.style.lineHeight = "1.6"
+    wrapper.style.setProperty("pointer-events", "none")
+    wrapper.style.maxWidth = "360px"
+
+    val header = document.createElement("pre") as HTMLPreElement
+    header.textContent = initialMessage
+    header.style.margin = "0 0 12px 0"
+
+    val info = document.createElement("div") as HTMLDivElement
+    info.id = "overlay-info"
+    info.innerText = "Booting Force Graph…"
+
+    wrapper.appendChild(header)
+    wrapper.appendChild(info)
+    document.body?.appendChild(wrapper)
+    return wrapper
+}
+
+private fun updateOverlay(container: HTMLDivElement, runtime: ForceGraphRuntime) {
+    val info = container.querySelector("#overlay-info") as? HTMLDivElement ?: return
+    val metrics = runtime.metrics()
+    val fps = if (metrics.frameTimeMs > 0.0) 1000.0 / metrics.frameTimeMs else 0.0
+
+    info.innerHTML = buildString {
+        appendLine("Nodes   : ${metrics.nodeCount.formatThousands()}")
+        appendLine("Edges   : ${metrics.edgeCount.formatThousands()}")
+        appendLine("Mode    : ${metrics.mode}")
+        appendLine("Frame   : ${metrics.frameTimeMs.formatDecimals(2)} ms")
+        append("FPS     : ${fps.formatDecimals(1)}")
+    }
+}
+
+private fun Double.formatDecimals(decimals: Int): String {
+    var factor = 1.0
+    repeat(decimals) { factor *= 10.0 }
+    return ((this * factor).roundToInt() / factor).toString()
+}
+
+private fun Int.formatThousands(): String {
+    val value = if (this < 0) -this else this
+    val digits = value.toString()
+    val builder = StringBuilder()
+    var group = 0
+    for (i in digits.length - 1 downTo 0) {
+        builder.append(digits[i])
+        group++
+        if (group == 3 && i != 0) {
+            builder.append(',')
+            group = 0
+        }
+    }
+    if (this < 0) builder.append('-')
+    return builder.reverse().toString()
 }

@@ -31,6 +31,27 @@ class SceneRenderer(
     private val pointsCache = mutableMapOf<InstancedPoints, PointsResources>()
 
     fun prepare(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
+        val meshSet = meshes.toSet()
+        val pointSet = points.toSet()
+
+        meshCache.keys.toList().forEach { mesh ->
+            if (mesh !in meshSet) {
+                meshCache.remove(mesh)?.let { resources ->
+                    resources.dispose()
+                    geometryCache.remove(resources.sourceGeometry)?.destroy()
+                }
+            }
+        }
+
+        pointsCache.keys.toList().forEach { node ->
+            if (node !in pointSet) {
+                pointsCache.remove(node)?.let { resources ->
+                    resources.dispose()
+                    geometryCache.remove(resources.sourceNode)?.destroy()
+                }
+            }
+        }
+
         meshes.forEach { ensureMeshResources(it) }
         points.forEach { ensurePointsResources(it) }
     }
@@ -91,8 +112,19 @@ class SceneRenderer(
     }
 
     private fun ensureMeshResources(mesh: Mesh): MeshResources {
-        meshCache[mesh]?.let { return it }
         val blueprint = mesh.material.toBindingBlueprint()
+        meshCache[mesh]?.let { existing ->
+            if (existing.sourceGeometry === mesh.geometry &&
+                existing.blueprint::class == blueprint::class &&
+                existing.blueprint.renderState == blueprint.renderState
+            ) {
+                return existing
+            } else {
+                existing.dispose()
+                geometryCache.remove(existing.sourceGeometry)?.destroy()
+                meshCache.remove(mesh)
+            }
+        }
         val pipeline = pipelineCache.getOrPut(PipelineKey(blueprint::class, blueprint.renderState, colorFormat)) {
             blueprint.createPipeline(device, colorFormat)
         }
@@ -113,19 +145,30 @@ class SceneRenderer(
             label = "${mesh.name}-bind-group"
         )
 
-        val resources = MeshResources(pipeline, geometry, uniformBuffer, bindGroup, blueprint)
+        val resources = MeshResources(mesh.geometry, pipeline, geometry, uniformBuffer, bindGroup, blueprint)
         meshCache[mesh] = resources
         return resources
     }
 
     private fun ensurePointsResources(node: InstancedPoints): PointsResources {
-        pointsCache[node]?.let { return it }
+        val blueprint = node.material.toBindingBlueprint()
+        pointsCache[node]?.let { existing ->
+            if (existing.sourceNode === node &&
+                existing.blueprint::class == blueprint::class &&
+                existing.blueprint.renderState == blueprint.renderState
+            ) {
+                return existing
+            } else {
+                existing.dispose()
+                geometryCache.remove(existing.sourceNode)?.destroy()
+                pointsCache.remove(node)
+            }
+        }
 
         require(node.componentsPerInstance == 11) {
             "InstancedPoints expects 11 floats per instance (pos3 + color3 + size + extra4), got ${node.componentsPerInstance}"
         }
 
-        val blueprint = node.material.toBindingBlueprint()
         val pipeline = pipelineCache.getOrPut(PipelineKey(blueprint::class, blueprint.renderState, colorFormat)) {
             blueprint.createPipeline(device, colorFormat)
         }
@@ -150,27 +193,38 @@ class SceneRenderer(
         )
 
         val instanceCount = node.instanceData.size / node.componentsPerInstance
-        val resources = PointsResources(pipeline, geometry, uniformBuffer, bindGroup, blueprint, instanceCount)
+        val resources = PointsResources(node, pipeline, geometry, uniformBuffer, bindGroup, blueprint, instanceCount)
         pointsCache[node] = resources
         return resources
     }
 
     private data class MeshResources(
+        val sourceGeometry: Geometry,
         val pipeline: UnlitPipelineFactory.PipelineResources,
         val geometry: UploadedGeometry,
         val uniformBuffer: io.kreekt.gpu.GpuBuffer,
         val bindGroup: io.kreekt.gpu.GpuBindGroup,
         val blueprint: MaterialBindingBlueprint
-    )
+    ) {
+        fun dispose() {
+            uniformBuffer.destroy()
+        }
+    }
 
     private data class PointsResources(
+        val sourceNode: InstancedPoints,
         val pipeline: UnlitPipelineFactory.PipelineResources,
         val geometry: UploadedGeometry,
         val uniformBuffer: io.kreekt.gpu.GpuBuffer,
         val bindGroup: io.kreekt.gpu.GpuBindGroup,
         val blueprint: MaterialBindingBlueprint,
         val instanceCount: Int
-    )
+    ) {
+        fun dispose() {
+            uniformBuffer.destroy()
+            geometry.destroy()
+        }
+    }
 
     private data class PipelineKey(
         val type: KClass<out MaterialBindingBlueprint>,
