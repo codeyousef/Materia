@@ -1,5 +1,7 @@
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.tasks.Sync
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -325,6 +327,21 @@ val compileShaders = tasks.register("compileShaders") {
 
 tasks.matching { it.name == "jvmProcessResources" }.configureEach {
     dependsOn(compileShaders)
+}
+
+val androidShaderAssetsDir = layout.projectDirectory.dir("examples/triangle-android/src/main/assets/shaders")
+
+val syncAndroidShaders = tasks.register<Sync>("syncAndroidShaders") {
+    group = "build"
+    description = "Copy compiled SPIR-V shaders into the Android assets directory"
+
+    dependsOn(compileShaders)
+
+    from(layout.projectDirectory.dir("src/jvmMain/resources/shaders")) {
+        include("**/*.spv")
+    }
+    into(androidShaderAssetsDir)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 // ============================================================================

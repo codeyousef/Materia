@@ -24,6 +24,10 @@ android {
         }
     }
 
+    packaging {
+        jniLibs.keepDebugSymbols += "**/*.so"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -37,10 +41,15 @@ android {
 dependencies {
     implementation(project(":examples:triangle"))
     implementation(project(":kreekt-examples-common"))
+    implementation(project(":kreekt-gpu-android-native"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
+}
+
+tasks.named("preBuild") {
+    dependsOn(rootProject.tasks.named("syncAndroidShaders"))
 }

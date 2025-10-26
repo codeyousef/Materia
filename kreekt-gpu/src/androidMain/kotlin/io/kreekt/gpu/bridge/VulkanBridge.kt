@@ -145,7 +145,6 @@ internal object VulkanBridge {
         instanceId: Long,
         deviceId: Long,
         encoderId: Long,
-        pipelineId: Long,
         textureViewId: Long,
         isSwapchain: Boolean,
         swapchainImageIndex: Int,
@@ -239,6 +238,23 @@ internal object VulkanBridge {
         instanceId: Long,
         deviceId: Long,
         encoderId: Long
+    )
+
+    external fun vkDestroySwapchain(
+        instanceId: Long,
+        deviceId: Long,
+        surfaceId: Long,
+        swapchainId: Long
+    )
+
+    external fun vkDestroySurface(
+        instanceId: Long,
+        surfaceId: Long
+    )
+
+    external fun vkDestroyDevice(
+        instanceId: Long,
+        deviceId: Long
     )
 
     external fun vkDestroyInstance(instanceId: Long)

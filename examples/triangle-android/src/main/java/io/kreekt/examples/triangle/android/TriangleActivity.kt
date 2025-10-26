@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import io.kreekt.examples.triangle.TriangleBootResult
 import io.kreekt.examples.triangle.TriangleExample
+import io.kreekt.gpu.AndroidVulkanAssets
 import io.kreekt.gpu.GpuBackend
 import io.kreekt.gpu.GpuPowerPreference
 import io.kreekt.renderer.SurfaceFactory
@@ -50,6 +51,8 @@ class TriangleActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        AndroidVulkanAssets.initialise(applicationContext)
 
         surfaceView = SurfaceView(this).apply {
             holder.addCallback(holderCallback)
@@ -119,7 +122,7 @@ class TriangleActivity : ComponentActivity() {
         val choreographer = Choreographer.getInstance()
         val callback = Choreographer.FrameCallback {
             triangleRuntime?.renderFrame()
-            choreographer.postFrameCallback(frameCallback)
+            choreographer.postFrameCallback(callback)
         }
         frameCallback = callback
         choreographer.postFrameCallback(callback)

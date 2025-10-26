@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_library(kreekt_vk SHARED
-        src/main/cpp/jni_bridge.cpp
         src/main/cpp/vulkan_bridge.cpp
 )
 

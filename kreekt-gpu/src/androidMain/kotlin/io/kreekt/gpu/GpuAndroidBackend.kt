@@ -2,6 +2,8 @@ package io.kreekt.gpu
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.view.Surface
+import android.view.SurfaceHolder
 import io.kreekt.gpu.bridge.VulkanBridge
 import io.kreekt.renderer.RenderSurface
 
@@ -29,6 +31,18 @@ private const val VK_IMAGE_VIEW_TYPE_2D = 1
 private fun unsupported(feature: String): Nothing =
     throw UnsupportedOperationException("Android Vulkan backend not yet implemented ($feature)")
 
+private data class AndroidSwapchainState(
+    val instanceHandle: Long,
+    val deviceHandle: Long,
+    val surfaceId: Long,
+    var swapchainId: Long,
+    var width: Int,
+    var height: Int
+)
+
+private fun FloatArray.componentOrDefault(index: Int, fallback: Float): Float =
+    if (index in indices) this[index] else fallback
+
 /**
  * Utility object so Kotlin actuals can load SPIR-V assets on Android.
  */
@@ -42,7 +56,7 @@ object AndroidVulkanAssets {
 
     fun loadShader(label: String): ByteArray {
         val manager = assetManager ?: error("AndroidVulkanAssets not initialised")
-        val path = "shaders/${label}.main.spv"
+        val path = "shaders/${label}.spv"
         return manager.open(path).use { it.readBytes() }
     }
 }
@@ -89,6 +103,20 @@ private fun GpuTextureFormat.toNativeFormat(): Int = when (this) {
 private fun GpuFilterMode.toNative(): Int = when (this) {
     GpuFilterMode.NEAREST -> VK_FILTER_NEAREST
     GpuFilterMode.LINEAR -> VK_FILTER_LINEAR
+}
+
+private fun GpuPrimitiveTopology.toNativeTopology(): Int = when (this) {
+    GpuPrimitiveTopology.POINT_LIST -> 0
+    GpuPrimitiveTopology.LINE_LIST -> 1
+    GpuPrimitiveTopology.LINE_STRIP -> 2
+    GpuPrimitiveTopology.TRIANGLE_LIST -> 3
+    GpuPrimitiveTopology.TRIANGLE_STRIP -> 4
+}
+
+private fun GpuCullMode.toNativeCullMode(): Int = when (this) {
+    GpuCullMode.NONE -> 0
+    GpuCullMode.FRONT -> 1
+    GpuCullMode.BACK -> 2
 }
 
 private fun Set<GpuShaderStage>.toVisibilityMask(): Int = fold(0) { acc, stage ->
@@ -270,8 +298,12 @@ actual class GpuDevice actual constructor(
         return GpuBindGroup(descriptor.layout, descriptor).also { it.handle = bindGroupHandle }
     }
 
-    actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder =
-        unsupported("createCommandEncoder")
+    actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder {
+        val encoderHandle = VulkanBridge.vkCreateCommandEncoder(instanceHandle, handle)
+        return GpuCommandEncoder(this, descriptor).also { encoder ->
+            encoder.handle = encoderHandle
+        }
+    }
 
     actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule {
         val label = descriptor.label ?: error("Shader module label required on Android Vulkan")
@@ -280,14 +312,77 @@ actual class GpuDevice actual constructor(
         return GpuShaderModule(this, descriptor).also { it.handle = handle }
     }
 
-    actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline =
-        unsupported("createRenderPipeline")
+    actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline {
+        val vertexShader = descriptor.vertexShader as? GpuShaderModule
+            ?: error("Vertex shader module required for render pipeline")
+        val fragmentShader = descriptor.fragmentShader as? GpuShaderModule
+            ?: error("Fragment shader module required for Android Vulkan pipeline")
+
+        val layoutHandles = descriptor.bindGroupLayouts
+            .map { (it as GpuBindGroupLayout).handle }
+            .toLongArray()
+
+        val pipelineLayoutHandle = VulkanBridge.vkCreatePipelineLayout(
+            instanceHandle,
+            handle,
+            layoutHandles
+        )
+
+        val vertexBuffers = descriptor.vertexBuffers
+        val bindingIndices = IntArray(vertexBuffers.size) { it }
+        val strides = vertexBuffers.map { it.arrayStride }.toIntArray()
+        val stepModes = vertexBuffers
+            .map { if (it.stepMode == GpuVertexStepMode.INSTANCE) 1 else 0 }
+            .toIntArray()
+
+        val attributePairs = vertexBuffers.flatMapIndexed { bindingIndex, layout ->
+            layout.attributes.map { bindingIndex to it }
+        }
+
+        val attributeLocations = attributePairs.map { it.second.shaderLocation }.toIntArray()
+        val attributeBindings = attributePairs.map { it.first }.toIntArray()
+        val attributeFormats = attributePairs.map { it.second.format.toNative() }.toIntArray()
+        val attributeOffsets = attributePairs.map { it.second.offset }.toIntArray()
+
+        val colorFormat = (descriptor.colorFormats.firstOrNull()
+            ?: GpuTextureFormat.BGRA8_UNORM).toNativeFormat()
+
+        val enableBlend = descriptor.blendMode != GpuBlendMode.DISABLED
+
+        val pipelineHandle = VulkanBridge.vkCreateRenderPipeline(
+            instanceHandle,
+            handle,
+            pipelineLayoutHandle,
+            vertexShader.handle,
+            fragmentShader.handle,
+            bindingIndices,
+            strides,
+            stepModes,
+            attributeLocations,
+            attributeBindings,
+            attributeFormats,
+            attributeOffsets,
+            descriptor.primitiveTopology.toNativeTopology(),
+            descriptor.cullMode.toNativeCullMode(),
+            enableBlend,
+            colorFormat,
+            0L
+        )
+
+        return GpuRenderPipeline(this, descriptor).also { pipeline ->
+            pipeline.handle = pipelineHandle
+            pipeline.pipelineLayoutHandle = pipelineLayoutHandle
+        }
+    }
 
     actual fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline =
         unsupported("createComputePipeline")
 
     actual fun destroy() {
-        // Native destruction will be handled once resource wiring is complete.
+        if (handle != 0L) {
+            VulkanBridge.vkDestroyDevice(instanceHandle, handle)
+            handle = 0L
+        }
     }
 }
 
@@ -296,24 +391,225 @@ actual class GpuQueue actual constructor(
 ) {
     internal lateinit var ownerDevice: GpuDevice
 
-    actual fun submit(commandBuffers: List<GpuCommandBuffer>) = unsupported("queue.submit")
+    actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
+        if (!::ownerDevice.isInitialized || commandBuffers.isEmpty()) return
+        val device = ownerDevice
+        val instanceHandle = device.instanceHandle
+        val deviceHandle = device.handle
+
+        commandBuffers.forEach { buffer ->
+            val hasSwapchain = buffer.swapchainState != null
+            val imageIndex = buffer.swapchainImageIndex
+            try {
+                if (hasSwapchain) {
+                    require(imageIndex >= 0) { "Command buffer missing swapchain image index" }
+                }
+                VulkanBridge.vkQueueSubmit(
+                    instanceHandle,
+                    deviceHandle,
+                    buffer.handle,
+                    hasSwapchain,
+                    imageIndex
+                )
+
+                if (hasSwapchain) {
+                    val swapchainState = buffer.swapchainState
+                        ?: error("Swapchain state missing for command buffer")
+                    VulkanBridge.vkSwapchainPresentFrame(
+                        instanceHandle,
+                        deviceHandle,
+                        swapchainState.surfaceId,
+                        swapchainState.swapchainId,
+                        buffer.handle,
+                        imageIndex
+                    )
+                }
+            } finally {
+                VulkanBridge.vkDestroyCommandBuffer(instanceHandle, deviceHandle, buffer.handle)
+                buffer.handle = 0L
+                buffer.swapchainState = null
+                buffer.swapchainImageIndex = -1
+            }
+        }
+    }
 }
 
 actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
-    actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) =
-        unsupported("surface.configure")
+    internal var attachedSurface: RenderSurface? = null
+    private var configuration: GpuSurfaceConfiguration? = null
+    private var configuredDevice: GpuDevice? = null
+    private var preferredFormat: GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
+    private var swapchainState: AndroidSwapchainState? = null
+    private var fallbackTexture: GpuTexture? = null
+    private var fallbackView: GpuTextureView? = null
 
-    actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat =
-        GpuTextureFormat.BGRA8_UNORM
+    actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
+        configuredDevice = device
+        this.configuration = configuration
+        preferredFormat = configuration.format
 
-    actual fun acquireFrame(): GpuSurfaceFrame = unsupported("surface.acquireFrame")
-    actual fun present(frame: GpuSurfaceFrame) = unsupported("surface.present")
-    actual fun resize(width: Int, height: Int) {}
+        val renderSurface = attachedSurface ?: return
+        val resolvedWidth = configuration.width.takeIf { it > 0 }
+            ?: renderSurface.width.coerceAtLeast(1)
+        val resolvedHeight = configuration.height.takeIf { it > 0 }
+            ?: renderSurface.height.coerceAtLeast(1)
+
+        val nativeSurface: Surface = when (val handle = renderSurface.getHandle()) {
+            is SurfaceHolder -> handle.surface
+            is Surface -> handle
+            else -> error("Unsupported render surface handle: ${handle?.javaClass}")
+        }
+        require(nativeSurface.isValid) { "Android Surface is not valid for Vulkan presentation" }
+
+        val instanceHandle = device.instanceHandle
+        val deviceHandle = device.handle
+
+        val surfaceId = swapchainState?.surfaceId ?: VulkanBridge.vkCreateSurface(
+            instanceHandle,
+            nativeSurface
+        )
+
+        swapchainState?.let {
+            VulkanBridge.vkDestroySwapchain(
+                instanceHandle,
+                deviceHandle,
+                surfaceId,
+                it.swapchainId
+            )
+        }
+
+        val swapchainId = VulkanBridge.vkCreateSwapchain(
+            instanceHandle,
+            deviceHandle,
+            surfaceId,
+            resolvedWidth,
+            resolvedHeight
+        )
+
+        swapchainState = AndroidSwapchainState(
+            instanceHandle = instanceHandle,
+            deviceHandle = deviceHandle,
+            surfaceId = surfaceId,
+            swapchainId = swapchainId,
+            width = resolvedWidth,
+            height = resolvedHeight
+        )
+        fallbackTexture = null
+        fallbackView = null
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
+        return preferredFormat
+    }
+
+    actual fun acquireFrame(): GpuSurfaceFrame {
+        val device = configuredDevice ?: error("GpuSurface not configured with a device")
+        val config = configuration ?: error("Surface configuration missing")
+        val swapchain = swapchainState
+
+        if (swapchain == null) {
+            val existingTexture = fallbackTexture
+            val existingView = fallbackView
+            if (existingTexture != null && existingView != null) {
+                return GpuSurfaceFrame(existingTexture, existingView)
+            }
+            val fallbackWidth = config.width.takeIf { it > 0 } ?: 1
+            val fallbackHeight = config.height.takeIf { it > 0 } ?: 1
+            val descriptor = GpuTextureDescriptor(
+                label = "${label ?: "surface"}-fallback",
+                size = Triple(fallbackWidth, fallbackHeight, 1),
+                mipLevelCount = 1,
+                sampleCount = 1,
+                dimension = GpuTextureDimension.D2,
+                format = preferredFormat,
+                usage = config.usage
+            )
+            val texture = device.createTexture(descriptor)
+            val view = texture.createView()
+            fallbackTexture = texture
+            fallbackView = view
+            return GpuSurfaceFrame(texture, view)
+        }
+
+        val handles = try {
+            VulkanBridge.vkSwapchainAcquireFrame(
+                swapchain.instanceHandle,
+                swapchain.deviceHandle,
+                swapchain.surfaceId,
+                swapchain.swapchainId
+            )
+        } catch (error: RuntimeException) {
+            swapchainState = null
+            throw IllegalStateException("Swapchain out of date; reconfigure required", error)
+        }
+
+        val imageIndex = handles[0].toInt()
+        val textureHandle = handles[1]
+        val viewHandle = handles[2]
+
+        val descriptor = GpuTextureDescriptor(
+            label = "${label ?: "surface"}-swapchain-$imageIndex",
+            size = Triple(swapchain.width, swapchain.height, 1),
+            mipLevelCount = 1,
+            sampleCount = 1,
+            dimension = GpuTextureDimension.D2,
+            format = preferredFormat,
+            usage = config.usage
+        )
+
+        val texture = GpuTexture(device, descriptor).also {
+            it.handle = textureHandle
+        }
+        val viewDescriptor = GpuTextureViewDescriptor(label = "${descriptor.label}-view")
+        val view = GpuTextureView(texture, viewDescriptor).also {
+            it.handle = viewHandle
+            it.imageIndex = imageIndex
+            it.swapchainState = swapchain
+        }
+
+        fallbackTexture = null
+        fallbackView = null
+
+        return GpuSurfaceFrame(texture, view)
+    }
+
+    actual fun present(frame: GpuSurfaceFrame) {
+        if (frame.view.swapchainState == null) {
+            fallbackTexture = null
+            fallbackView = null
+            return
+        }
+    }
+
+    actual fun resize(width: Int, height: Int) {
+        val device = configuredDevice
+        val config = configuration
+        if (device != null && config != null) {
+            val updated = config.copy(width = width, height = height)
+            configure(device, updated)
+        } else {
+            configuration = GpuSurfaceConfiguration(
+                format = preferredFormat,
+                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT, GpuTextureUsage.COPY_SRC),
+                width = width,
+                height = height,
+                presentMode = "fifo"
+            )
+        }
+    }
 }
 
-actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {}
+actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
+    attachedSurface = surface
+    val device = configuredDevice
+    val config = configuration
+    if (device != null && config != null) {
+        configure(device, config)
+    }
+}
 
 actual fun GpuBindGroupLayout.unwrapHandle(): Any? = handle
 actual fun GpuBindGroup.unwrapHandle(): Any? = handle
@@ -379,6 +675,7 @@ actual class GpuTextureView actual constructor(
 ) {
     internal var handle: Long = 0L
     internal var imageIndex: Int = -1
+    internal var swapchainState: AndroidSwapchainState? = null
 }
 
 actual class GpuSampler actual constructor(
@@ -394,32 +691,179 @@ actual class GpuCommandEncoder actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuCommandEncoderDescriptor?
 ) {
-    actual fun finish(label: String?): GpuCommandBuffer = unsupported("commandEncoder.finish")
-    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder =
-        unsupported("commandEncoder.beginRenderPass")
+    internal var handle: Long = 0L
+    private var finished = false
+    internal var swapchainState: AndroidSwapchainState? = null
+    internal var swapchainImageIndex: Int = -1
+
+    actual fun finish(label: String?): GpuCommandBuffer {
+        check(!finished) { "Command encoder already finished" }
+        val commandBufferHandle = try {
+            VulkanBridge.vkCommandEncoderFinish(
+                device.instanceHandle,
+                device.handle,
+                handle
+            )
+        } catch (error: Throwable) {
+            VulkanBridge.vkDestroyCommandEncoder(device.instanceHandle, device.handle, handle)
+            handle = 0L
+            swapchainState = null
+            swapchainImageIndex = -1
+            throw error
+        }
+
+        VulkanBridge.vkDestroyCommandEncoder(device.instanceHandle, device.handle, handle)
+        finished = true
+        handle = 0L
+
+        return GpuCommandBuffer(device, label ?: descriptor?.label).also { buffer ->
+            buffer.handle = commandBufferHandle
+            buffer.swapchainState = swapchainState
+            buffer.swapchainImageIndex = swapchainImageIndex
+        }.also {
+            swapchainState = null
+            swapchainImageIndex = -1
+        }
+    }
+
+    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder {
+        check(!finished) { "Cannot begin render pass after encoder has been finished" }
+        return GpuRenderPassEncoder(this, descriptor)
+    }
+
+    internal fun registerSwapchain(state: AndroidSwapchainState?, imageIndex: Int) {
+        if (state == null) return
+        val existing = swapchainState
+        if (existing != null && existing !== state) {
+            error("Command encoder already targets a different swapchain")
+        }
+        swapchainState = state
+        swapchainImageIndex = imageIndex
+    }
 }
 
 actual class GpuCommandBuffer actual constructor(
     actual val device: GpuDevice,
     actual val label: String?
-)
+) {
+    internal var handle: Long = 0L
+    internal var swapchainState: AndroidSwapchainState? = null
+    internal var swapchainImageIndex: Int = -1
+}
 
 actual class GpuRenderPassEncoder actual constructor(
     actual val encoder: GpuCommandEncoder,
     actual val descriptor: GpuRenderPassDescriptor
 ) {
-    actual fun setPipeline(pipeline: GpuRenderPipeline) = unsupported("renderPass.setPipeline")
-    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) =
-        unsupported("renderPass.setVertexBuffer")
+    internal var handle: Long = 0L
+    private var active = false
+    private val primaryAttachment = descriptor.colorAttachments.firstOrNull()
+        ?: error("Render pass requires at least one color attachment")
+    private val targetView = primaryAttachment.view as? GpuTextureView
+        ?: error("Color attachment must provide an Android texture view")
 
-    actual fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long) =
-        unsupported("renderPass.setIndexBuffer")
+    init {
+        beginPass()
+    }
 
-    actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) =
-        unsupported("renderPass.setBindGroup")
+    private fun beginPass() {
+        require(targetView.handle != 0L) { "Render target view handle is invalid" }
+        val swapchainState = targetView.swapchainState
+        if (swapchainState != null) {
+            require(targetView.imageIndex >= 0) { "Swapchain texture view missing image index" }
+        }
+        encoder.registerSwapchain(swapchainState, targetView.imageIndex)
 
-    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) =
-        unsupported("renderPass.draw")
+        val clear = primaryAttachment.clearColor
+        handle = VulkanBridge.vkCommandEncoderBeginRenderPass(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            targetView.handle,
+            swapchainState != null,
+            if (swapchainState != null) targetView.imageIndex else 0,
+            clear.componentOrDefault(0, 0f),
+            clear.componentOrDefault(1, 0f),
+            clear.componentOrDefault(2, 0f),
+            clear.componentOrDefault(3, 1f)
+        )
+        active = true
+    }
+
+    private fun requireActive() {
+        check(active) { "Render pass is not active" }
+    }
+
+    actual fun setPipeline(pipeline: GpuRenderPipeline) {
+        requireActive()
+        require(pipeline.handle != 0L) { "Render pipeline handle is invalid" }
+        VulkanBridge.vkCommandEncoderSetPipeline(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            pipeline.handle
+        )
+    }
+
+    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {
+        requireActive()
+        require(buffer.handle != 0L) { "Vertex buffer handle is invalid" }
+        VulkanBridge.vkCommandEncoderSetVertexBuffer(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            slot,
+            buffer.handle,
+            0L
+        )
+    }
+
+    actual fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long) {
+        requireActive()
+        require(buffer.handle != 0L) { "Index buffer handle is invalid" }
+        val indexType = when (format) {
+            GpuIndexFormat.UINT16 -> 0
+            GpuIndexFormat.UINT32 -> 1
+        }
+        VulkanBridge.vkCommandEncoderSetIndexBuffer(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            buffer.handle,
+            indexType,
+            offset
+        )
+    }
+
+    actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
+        requireActive()
+        require(bindGroup.handle != 0L) { "Bind group handle is invalid" }
+        VulkanBridge.vkCommandEncoderSetBindGroup(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            index,
+            bindGroup.handle
+        )
+    }
+
+    actual fun draw(
+        vertexCount: Int,
+        instanceCount: Int,
+        firstVertex: Int,
+        firstInstance: Int
+    ) {
+        requireActive()
+        VulkanBridge.vkCommandEncoderDraw(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            vertexCount,
+            instanceCount,
+            firstVertex,
+            firstInstance
+        )
+    }
 
     actual fun drawIndexed(
         indexCount: Int,
@@ -427,9 +871,30 @@ actual class GpuRenderPassEncoder actual constructor(
         firstIndex: Int,
         baseVertex: Int,
         firstInstance: Int
-    ) = unsupported("renderPass.drawIndexed")
+    ) {
+        requireActive()
+        VulkanBridge.vkCommandEncoderDrawIndexed(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            encoder.handle,
+            indexCount,
+            instanceCount,
+            firstIndex,
+            baseVertex,
+            firstInstance
+        )
+    }
 
-    actual fun end() {}
+    actual fun end() {
+        if (!active) return
+        VulkanBridge.vkCommandEncoderEndRenderPass(
+            encoder.device.instanceHandle,
+            encoder.device.handle,
+            handle
+        )
+        handle = 0L
+        active = false
+    }
 }
 
 actual class GpuShaderModule actual constructor(

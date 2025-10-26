@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <cstdint>
 #include <cstring>
 #include <inttypes.h>
@@ -127,10 +128,25 @@ namespace {
         std::vector<VulkanBindGroupLayout *> setLayouts;
     };
 
+    struct RenderPassKey {
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        VkImageLayout finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        bool operator==(const RenderPassKey &other) const {
+            return format == other.format && finalLayout == other.finalLayout;
+        }
+    };
+
+    struct RenderPassKeyHash {
+        std::size_t operator()(const RenderPassKey &key) const noexcept {
+            std::size_t h1 = std::hash<int>()(static_cast<int>(key.format));
+            std::size_t h2 = std::hash<int>()(static_cast<int>(key.finalLayout));
+            return h1 ^ (h2 << 1);
+        }
+    };
+
     struct VulkanRenderPipeline {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VulkanPipelineLayout *pipelineLayout = nullptr;
-        VkRenderPass renderPass = VK_NULL_HANDLE;
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     };
 
@@ -206,6 +222,7 @@ namespace {
         std::unordered_map<Id, std::unique_ptr<VulkanCommandEncoder>> commandEncoders;
         std::unordered_map<Id, std::unique_ptr<VulkanCommandBufferWrapper>> commandBuffers;
         std::unordered_map<Id, std::unique_ptr<VulkanRenderPassEncoder>> renderPassEncoders;
+        std::unordered_map<RenderPassKey, VkRenderPass, RenderPassKeyHash> renderPassCache;
     };
 
     struct VulkanInstance {
@@ -497,6 +514,17 @@ namespace {
         return renderPass;
     }
 
+    VkRenderPass getOrCreateRenderPass(VulkanDevice &device, VkFormat format, VkImageLayout finalLayout) {
+        RenderPassKey key{format, finalLayout};
+        auto it = device.renderPassCache.find(key);
+        if (it != device.renderPassCache.end()) {
+            return it->second;
+        }
+        VkRenderPass renderPass = createRenderPass(device.device, format, finalLayout);
+        device.renderPassCache.emplace(key, renderPass);
+        return renderPass;
+    }
+
     VkPipelineShaderStageCreateInfo
     makeShaderStage(VkShaderStageFlagBits stage, VkShaderModule module) {
         VkPipelineShaderStageCreateInfo stageInfo{};
@@ -679,15 +707,12 @@ namespace {
         for (auto framebuffer: swapchainPtr->framebuffers) {
             vkDestroyFramebuffer(device.device, framebuffer, nullptr);
         }
-        if (swapchainPtr->renderPass != VK_NULL_HANDLE) {
-            vkDestroyRenderPass(device.device, swapchainPtr->renderPass, nullptr);
-        }
         for (Id texViewId: swapchainPtr->textureViewIds) {
             device.textureViews.erase(texViewId);
         }
         for (Id texId: swapchainPtr->textureIds) {
             device.textures.erase(texId);
-    }
+        }
         if (swapchainPtr->swapchain != VK_NULL_HANDLE) {
             device.dispatch.destroySwapchainKHR(device.device, swapchainPtr->swapchain, nullptr);
         }
@@ -898,9 +923,6 @@ namespace {
             if (entry.second->pipeline != VK_NULL_HANDLE) {
                 vkDestroyPipeline(devicePtr->device, entry.second->pipeline, nullptr);
             }
-            if (entry.second->renderPass != VK_NULL_HANDLE) {
-                vkDestroyRenderPass(devicePtr->device, entry.second->renderPass, nullptr);
-            }
         }
 
         for (auto &entry: devicePtr->pipelineLayouts) {
@@ -956,6 +978,11 @@ namespace {
 
         if (devicePtr->commandPool != VK_NULL_HANDLE) {
             vkDestroyCommandPool(devicePtr->device, devicePtr->commandPool, nullptr);
+        }
+        for (auto &renderPassEntry: devicePtr->renderPassCache) {
+            if (renderPassEntry.second != VK_NULL_HANDLE) {
+                vkDestroyRenderPass(devicePtr->device, renderPassEntry.second, nullptr);
+            }
         }
 
         vkDestroyDevice(devicePtr->device, nullptr);
@@ -1040,8 +1067,8 @@ namespace {
         swapchain->swapchain = swapchainHandle;
         swapchain->format = surfaceFormat;
         swapchain->extent = extent;
-        swapchain->renderPass = createRenderPass(device.device, surfaceFormat,
-                                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        swapchain->renderPass = getOrCreateRenderPass(device, surfaceFormat,
+                                                     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         uint32_t actualImageCount = 0;
         device.dispatch.getSwapchainImagesKHR(device.device, swapchainHandle, &actualImageCount,
@@ -1600,7 +1627,6 @@ namespace {
         auto pipelineObj = std::make_unique<VulkanRenderPipeline>();
         pipelineObj->pipeline = pipeline;
         pipelineObj->pipelineLayout = &pipelineLayout;
-        pipelineObj->renderPass = renderPass;
         pipelineObj->topology = topology;
         return storeObject(device.renderPipelines, std::move(pipelineObj));
     }
@@ -1640,7 +1666,6 @@ namespace {
     Id beginRenderPassInternal(
             VulkanDevice &device,
             VulkanCommandEncoder &encoder,
-            VulkanRenderPipeline &pipeline,
             VulkanTextureView &targetView,
             VulkanSwapchain *swapchain,
             uint32_t swapchainImageIndex,
@@ -1649,17 +1674,20 @@ namespace {
             float clearB,
             float clearA) {
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
-        VkRenderPass renderPass = pipeline.renderPass;
+        VkRenderPass renderPass = VK_NULL_HANDLE;
         VkExtent2D extent{};
 
         if (swapchain) {
+            renderPass = swapchain->renderPass;
             framebuffer = swapchain->framebuffers[swapchainImageIndex];
             extent = swapchain->extent;
         } else {
+            renderPass = getOrCreateRenderPass(device, targetView.texture->format,
+                                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             VkImageView attachments[] = {targetView.view};
             VkFramebufferCreateInfo framebufferInfo{};
             framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebufferInfo.renderPass = pipeline.renderPass;
+            framebufferInfo.renderPass = renderPass;
             framebufferInfo.attachmentCount = 1;
             framebufferInfo.pAttachments = attachments;
             framebufferInfo.width = targetView.texture->width;
@@ -1706,9 +1734,9 @@ namespace {
         passEncoder->encoder = &encoder;
         passEncoder->recording = true;
 
-        encoder.currentPipeline = &pipeline;
         encoder.targetSwapchain = swapchain;
         encoder.swapchainImageIndex = swapchainImageIndex;
+        encoder.currentPipeline = nullptr;
 
         return storeObject(device.renderPassEncoders, std::move(passEncoder));
     }
@@ -2277,8 +2305,9 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCreateRenderPipeline(
 
     VkRenderPass renderPass =
             renderPassHandle != 0 ? reinterpret_cast<VkRenderPass>(renderPassHandle)
-                                  : createRenderPass(device->device, toColorFormat(colorFormat),
-                                                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                                  : getOrCreateRenderPass(device,
+                                                          toColorFormat(colorFormat),
+                                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     return static_cast<jlong>(createRenderPipelineInternal(
             *device,
@@ -2312,7 +2341,6 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
         jlong instanceId,
         jlong deviceId,
         jlong encoderId,
-        jlong pipelineId,
         jlong textureViewId,
         jboolean isSwapchain,
         jint swapchainImageIndex,
@@ -2324,7 +2352,6 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
     VulkanInstance *instance = requireInstance(static_cast<Id>(instanceId));
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     VulkanCommandEncoder *encoder = requireCommandEncoder(*device, static_cast<Id>(encoderId));
-    VulkanRenderPipeline *pipeline = requireRenderPipeline(*device, static_cast<Id>(pipelineId));
     VulkanTextureView *view = requireTextureView(*device, static_cast<Id>(textureViewId));
 
     VulkanSwapchain *swapchain = nullptr;
@@ -2346,7 +2373,6 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
     return static_cast<jlong>(beginRenderPassInternal(
             *device,
             *encoder,
-            *pipeline,
             *view,
             swapchain,
             static_cast<uint32_t>(swapchainImageIndex),
@@ -2523,6 +2549,42 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkDestroyCommandEncoder(JNIEnv *env, jcla
     VulkanInstance *instance = requireInstance(static_cast<Id>(instanceId));
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     destroyCommandEncoderInternal(*device, static_cast<Id>(encoderId));
+}
+
+JNIEXPORT void JNICALL
+Java_io_kreekt_gpu_bridge_VulkanBridge_vkDestroySwapchain(JNIEnv *env, jclass, jlong instanceId,
+                                                          jlong deviceId, jlong surfaceId,
+                                                          jlong swapchainId) {
+    (void) env;
+    std::lock_guard<std::mutex> lock(g_registryMutex);
+    kreekt::vk::destroySwapchain(
+            static_cast<std::uint64_t>(instanceId),
+            static_cast<std::uint64_t>(deviceId),
+            static_cast<std::uint64_t>(surfaceId),
+            static_cast<std::uint64_t>(swapchainId)
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_io_kreekt_gpu_bridge_VulkanBridge_vkDestroySurface(JNIEnv *env, jclass, jlong instanceId,
+                                                        jlong surfaceId) {
+    (void) env;
+    std::lock_guard<std::mutex> lock(g_registryMutex);
+    kreekt::vk::destroySurface(
+            static_cast<std::uint64_t>(instanceId),
+            static_cast<std::uint64_t>(surfaceId)
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_io_kreekt_gpu_bridge_VulkanBridge_vkDestroyDevice(JNIEnv *env, jclass, jlong instanceId,
+                                                       jlong deviceId) {
+    (void) env;
+    std::lock_guard<std::mutex> lock(g_registryMutex);
+    kreekt::vk::destroyDevice(
+            static_cast<std::uint64_t>(instanceId),
+            static_cast<std::uint64_t>(deviceId)
+    );
 }
 
 JNIEXPORT void JNICALL
