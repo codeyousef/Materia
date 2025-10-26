@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.view.Surface
 import android.view.SurfaceHolder
+import io.kreekt.BuildConfig
 import io.kreekt.gpu.bridge.VulkanBridge
 import io.kreekt.renderer.RenderSurface
 
@@ -148,7 +149,10 @@ actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInst
 actual class GpuInstance actual constructor(
     actual val descriptor: GpuInstanceDescriptor
 ) {
-    internal val handle: Long = VulkanBridge.vkInit(descriptor.label ?: "KreeKt", false)
+    internal val handle: Long = VulkanBridge.vkInit(
+        descriptor.label ?: "KreeKt",
+        BuildConfig.VK_ENABLE_VALIDATION
+    )
     private var disposed = false
 
     actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter {

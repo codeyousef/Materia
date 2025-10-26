@@ -322,6 +322,8 @@ add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 
 * Verify the end-to-end flow by running `./gradlew :examples:triangle-android:assembleDebug` once the
   Android SDK/NDK is configured locally.
+* Pass `-PvkEnableValidation=true` when you need verbose Vulkan validation output in logcat; omit it for
+  release builds.
 * Watch logcat with `VK_LAYER_KHRONOS_validation` enabled while rotating/resizing the surface to
   validate swapchain recreation.
 * Remaining engineering TODOs are captured below (validation harness, debug-utils toggle).
@@ -368,6 +370,8 @@ afterwards via `vkCommandEncoderSetPipeline`.
 
 - `VulkanBridge` loads `libkreekt_vk.so`, and `TriangleActivity` initialises
   `AndroidVulkanAssets` before the renderer boots.
+- Validation layers (when enabled via `-PvkEnableValidation=true`) also hook `VK_EXT_debug_utils` 
+  so warnings/errors are forwarded to logcat.
 - `SurfaceFactory` hands a `SurfaceHolder` to `GpuSurface`, which creates/destroys swapchains via JNI
   whenever `configure`/`resize` runs.
 - `Choreographer` drives the render loop, recording Vulkan command buffers through the bridge and

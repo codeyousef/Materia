@@ -251,6 +251,9 @@ android {
 
     defaultConfig {
         minSdk = minSdkVersion
+        val enableValidation = (project.findProperty("vkEnableValidation") as? String)
+            ?.toBooleanStrictOrNull() ?: false
+        buildConfigField("boolean", "VK_ENABLE_VALIDATION", enableValidation.toString())
     }
 
     compileOptions {
@@ -263,6 +266,10 @@ android {
             "META-INF/AL2.0",
             "META-INF/LGPL2.1"
         )
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 

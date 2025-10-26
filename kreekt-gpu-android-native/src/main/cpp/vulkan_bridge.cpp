@@ -233,6 +233,7 @@ namespace {
     struct VulkanInstance {
         VkInstance instance = VK_NULL_HANDLE;
         bool validationEnabled = false;
+        VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
         InstanceDispatch dispatch{};
         std::unordered_map<Id, std::unique_ptr<VulkanSurface>> surfaces;
         std::unordered_map<Id, std::unique_ptr<VulkanDevice>> devices;
@@ -240,6 +241,34 @@ namespace {
 
     std::unordered_map<Id, std::unique_ptr<VulkanInstance>> g_instances;
     std::mutex g_registryMutex;
+
+    VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
+            VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+            VkDebugUtilsMessageTypeFlagsEXT,
+            const VkDebugUtilsMessengerCallbackDataEXT *callbackData,
+            void *) {
+        if (!callbackData || !callbackData->pMessage) return VK_FALSE;
+        if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+            VK_LOG_ERROR("[Vulkan] %s", callbackData->pMessage);
+        } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+            VK_LOG_INFO("[Vulkan][Warn] %s", callbackData->pMessage);
+        } else {
+            VK_LOG_INFO("[Vulkan][Info] %s", callbackData->pMessage);
+        }
+        return VK_FALSE;
+    }
+
+    VkDebugUtilsMessengerCreateInfoEXT makeDebugMessengerCreateInfo() {
+        VkDebugUtilsMessengerCreateInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        info.pfnUserCallback = debugMessengerCallback;
+        return info;
+    }
 
 // Utility ------------------------------------------------------------------
 
@@ -740,12 +769,16 @@ namespace {
                 VK_KHR_SURFACE_EXTENSION_NAME,
                 VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
         };
+        if (enableValidation) {
+            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
 
         std::vector<const char *> layers;
         if (enableValidation && isValidationLayerAvailable("VK_LAYER_KHRONOS_validation")) {
             layers.push_back("VK_LAYER_KHRONOS_validation");
         }
 
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
@@ -753,6 +786,10 @@ namespace {
         createInfo.ppEnabledExtensionNames = extensions.data();
         createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
         createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+        if (!layers.empty()) {
+            debugCreateInfo = makeDebugMessengerCreateInfo();
+            createInfo.pNext = &debugCreateInfo;
+        }
 
         VkInstance instanceHandle = VK_NULL_HANDLE;
         if (vkCreateInstance(&createInfo, nullptr, &instanceHandle) != VK_SUCCESS) {
@@ -763,6 +800,17 @@ namespace {
         instance->instance = instanceHandle;
         instance->validationEnabled = enableValidation;
         populateInstanceDispatch(*instance);
+        if (enableValidation) {
+            auto createMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+                    vkGetInstanceProcAddr(instanceHandle, "vkCreateDebugUtilsMessengerEXT"));
+            if (createMessenger) {
+                VkDebugUtilsMessengerCreateInfoEXT messengerInfo = makeDebugMessengerCreateInfo();
+                if (createMessenger(instanceHandle, &messengerInfo, nullptr,
+                                    &instance->debugMessenger) != VK_SUCCESS) {
+                    VK_LOG_ERROR("Failed to create debug utils messenger");
+                }
+            }
+        }
 
         Id instanceId = storeObject(g_instances, std::move(instance));
         VK_LOG_INFO("Created Vulkan instance (id=%" PRIu64 ")", instanceId);
@@ -2106,6 +2154,14 @@ namespace kreekt::vk {
         }
         for (auto &surfaceEntry: instancePtr->surfaces) {
             destroySurfaceInternal(*instancePtr, surfaceEntry.first);
+        }
+        if (instancePtr->debugMessenger != VK_NULL_HANDLE) {
+            auto destroyMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                    vkGetInstanceProcAddr(instancePtr->instance, "vkDestroyDebugUtilsMessengerEXT"));
+            if (destroyMessenger) {
+                destroyMessenger(instancePtr->instance, instancePtr->debugMessenger, nullptr);
+            }
+            instancePtr->debugMessenger = VK_NULL_HANDLE;
         }
         if (instancePtr->instance != VK_NULL_HANDLE) {
             vkDestroyInstance(instancePtr->instance, nullptr);
