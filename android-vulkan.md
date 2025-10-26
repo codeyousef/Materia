@@ -324,7 +324,7 @@ add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
   Android SDK/NDK is configured locally.
 * Watch logcat with `VK_LAYER_KHRONOS_validation` enabled while rotating/resizing the surface to
   validate swapchain recreation.
-* Remaining engineering TODOs are captured below (timeline fences, validation harness).
+* Remaining engineering TODOs are captured below (validation harness, debug-utils toggle).
 
 # Alternatives (if you prefer)
 
@@ -346,8 +346,10 @@ afterwards via `vkCommandEncoderSetPipeline`.
   creation and command recording share compatible `VkRenderPass` handles.
 - Swapchain framebuffers are reused; offscreen targets allocate transient framebuffers for the
   duration of a render pass.
-- Command submission goes through `vkQueueSubmit` + `vkSwapchainPresentFrame`. A follow-up task will
-  replace the current fence-per-frame approach with a lightweight timeline fence.
+- Command submission goes through `vkQueueSubmit` + `vkSwapchainPresentFrame`. When the device
+  advertises `VK_KHR_timeline_semaphore`, submissions also signal a timeline semaphore and frame
+  acquisition waits on the last submitted value. Devices without timeline support continue to use
+  the per-swapchain fence path.
 
 # Kotlin actual wiring checklist
 
@@ -359,6 +361,8 @@ afterwards via `vkCommandEncoderSetPipeline`.
   on resize/destroy and clearing native resources.
 - ✅ JNI entrypoints validate handle lookups and throw `IllegalStateException` when Kotlin supplies
   missing or stale IDs.
+- ✅ Synchronisation prefers timeline semaphores when available; the legacy fence path remains as a
+  fallback for older drivers.
 
 # Android app lifecycle integration
 

@@ -190,6 +190,8 @@ namespace {
         VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
         VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
         VkFence inFlightFence = VK_NULL_HANDLE;
+        uint64_t lastSubmittedValue = 0;
+        uint64_t completedValue = 0;
     };
 
     struct VulkanSurface {
@@ -208,6 +210,9 @@ namespace {
         uint32_t presentQueueFamily = 0;
         VkCommandPool commandPool = VK_NULL_HANDLE;
         VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+        bool timelineSupported = false;
+        VkSemaphore timelineSemaphore = VK_NULL_HANDLE;
+        uint64_t timelineValue = 0;
         DeviceDispatch dispatch{};
 
         std::unordered_map<Id, std::unique_ptr<VulkanBuffer>> buffers;
@@ -729,7 +734,7 @@ namespace {
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "KreeKt";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_1;
+        appInfo.apiVersion = VK_API_VERSION_1_2;
 
         std::vector<const char *> extensions = {
                 VK_KHR_SURFACE_EXTENSION_NAME,
@@ -860,6 +865,21 @@ namespace {
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
 
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineQuery{};
+        timelineQuery.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+
+        VkPhysicalDeviceFeatures2 featureQuery{};
+        featureQuery.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        featureQuery.pNext = &timelineQuery;
+        vkGetPhysicalDeviceFeatures2(selectedDevice, &featureQuery);
+
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineEnable{};
+        timelineEnable.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        if (timelineQuery.timelineSemaphore == VK_TRUE) {
+            timelineEnable.timelineSemaphore = VK_TRUE;
+            extensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        }
+
         VkPhysicalDeviceFeatures features{};
 
         VkDeviceCreateInfo deviceInfo{};
@@ -867,6 +887,9 @@ namespace {
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
         deviceInfo.pEnabledFeatures = &features;
+        if (timelineQuery.timelineSemaphore == VK_TRUE) {
+            deviceInfo.pNext = &timelineEnable;
+        }
         deviceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         deviceInfo.ppEnabledExtensionNames = extensions.data();
 
@@ -884,6 +907,23 @@ namespace {
         vkGetDeviceQueue(deviceHandle, graphicsQueueFamily, 0, &device->graphicsQueue);
         vkGetDeviceQueue(deviceHandle, presentQueueFamily, 0, &device->presentQueue);
         populateDeviceDispatch(*device);
+        device->timelineSupported = timelineQuery.timelineSemaphore == VK_TRUE;
+        if (device->timelineSupported) {
+            VkSemaphoreTypeCreateInfo typeInfo{};
+            typeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+            typeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+            typeInfo.initialValue = 0;
+
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            semaphoreInfo.pNext = &typeInfo;
+
+            if (vkCreateSemaphore(deviceHandle, &semaphoreInfo, nullptr, &device->timelineSemaphore) !=
+                VK_SUCCESS) {
+                throw std::runtime_error("Failed to create timeline semaphore");
+            }
+            device->timelineValue = 0;
+        }
 
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -978,6 +1018,9 @@ namespace {
 
         if (devicePtr->commandPool != VK_NULL_HANDLE) {
             vkDestroyCommandPool(devicePtr->device, devicePtr->commandPool, nullptr);
+        }
+        if (devicePtr->timelineSupported && devicePtr->timelineSemaphore != VK_NULL_HANDLE) {
+            vkDestroySemaphore(devicePtr->device, devicePtr->timelineSemaphore, nullptr);
         }
         for (auto &renderPassEntry: devicePtr->renderPassCache) {
             if (renderPassEntry.second != VK_NULL_HANDLE) {
@@ -1149,9 +1192,14 @@ namespace {
                               &swapchain->renderFinishedSemaphore) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create swapchain semaphore (renderFinished)");
         }
-        if (vkCreateFence(device.device, &fenceInfo, nullptr, &swapchain->inFlightFence) !=
-            VK_SUCCESS) {
-            throw std::runtime_error("Failed to create swapchain fence");
+        if (!device.timelineSupported) {
+            if (vkCreateFence(device.device, &fenceInfo, nullptr, &swapchain->inFlightFence) !=
+                VK_SUCCESS) {
+                throw std::runtime_error("Failed to create swapchain fence");
+            }
+        } else {
+            swapchain->completedValue = device.timelineValue;
+            swapchain->lastSubmittedValue = device.timelineValue;
         }
 
         Id swapchainId = storeObject(surface.swapchains, std::move(swapchain));
@@ -1161,13 +1209,29 @@ namespace {
 
     std::unique_ptr<VulkanSurfaceFrame>
     acquireFrameInternal(VulkanDevice &device, VulkanSurface &surface, VulkanSwapchain &swapchain) {
+    if (device.timelineSupported) {
+        if (swapchain.lastSubmittedValue > swapchain.completedValue) {
+            VkSemaphore waitSemaphore = device.timelineSemaphore;
+            uint64_t waitValue = swapchain.lastSubmittedValue;
+            VkSemaphoreWaitInfo waitInfo{};
+            waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+            waitInfo.semaphoreCount = 1;
+            waitInfo.pSemaphores = &waitSemaphore;
+            waitInfo.pValues = &waitValue;
+            if (vkWaitSemaphores(device.device, &waitInfo, UINT64_MAX) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to wait for timeline semaphore");
+            }
+            swapchain.completedValue = waitValue;
+        }
+    } else {
         vkWaitForFences(device.device, 1, &swapchain.inFlightFence, VK_TRUE, UINT64_MAX);
         vkResetFences(device.device, 1, &swapchain.inFlightFence);
+    }
 
-        uint32_t imageIndex = 0;
-        VkResult res = device.dispatch.acquireNextImageKHR(
-                device.device,
-                swapchain.swapchain,
+    uint32_t imageIndex = 0;
+    VkResult res = device.dispatch.acquireNextImageKHR(
+            device.device,
+            swapchain.swapchain,
                 UINT64_MAX,
                 swapchain.imageAvailableSemaphore,
                 VK_NULL_HANDLE,
@@ -1764,36 +1828,52 @@ namespace {
     void
     submitCommandBufferInternal(VulkanDevice &device, VulkanCommandBufferWrapper &commandBuffer,
                                 VulkanSwapchain *swapchain) {
-        VkSemaphore waitSemaphores[] = {
-                swapchain ? swapchain->imageAvailableSemaphore : VK_NULL_HANDLE};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkSemaphore waitSemaphores[1];
+        VkPipelineStageFlags waitStages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        uint32_t waitCount = 0;
+        if (swapchain) {
+            waitSemaphores[waitCount++] = swapchain->imageAvailableSemaphore;
+        }
+
+        VkSemaphore signalSemaphores[2];
+        uint32_t signalCount = 0;
+
+        if (swapchain) {
+            signalSemaphores[signalCount++] = swapchain->renderFinishedSemaphore;
+        }
+
+        VkTimelineSemaphoreSubmitInfo timelineInfo{};
+        uint64_t signalValues[1];
+        if (device.timelineSupported) {
+            signalSemaphores[signalCount++] = device.timelineSemaphore;
+            timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+            device.timelineValue += 1;
+            signalValues[0] = device.timelineValue;
+            timelineInfo.signalSemaphoreValueCount = 1;
+            timelineInfo.pSignalSemaphoreValues = signalValues;
+        }
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        if (swapchain) {
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = waitSemaphores;
-            submitInfo.pWaitDstStageMask = waitStages;
-        } else {
-            submitInfo.waitSemaphoreCount = 0;
-        }
-
+        submitInfo.pNext = device.timelineSupported ? &timelineInfo : nullptr;
+        submitInfo.waitSemaphoreCount = waitCount;
+        submitInfo.pWaitSemaphores = waitCount ? waitSemaphores : nullptr;
+        submitInfo.pWaitDstStageMask = waitCount ? waitStages : nullptr;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffer.commandBuffer;
+        submitInfo.signalSemaphoreCount = signalCount;
+        submitInfo.pSignalSemaphores = signalCount ? signalSemaphores : nullptr;
 
-        VkSemaphore signalSemaphores[] = {
-                swapchain ? swapchain->renderFinishedSemaphore : VK_NULL_HANDLE};
-        if (swapchain) {
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = signalSemaphores;
-        } else {
-            submitInfo.signalSemaphoreCount = 0;
+        VkFence submissionFence = (swapchain && !device.timelineSupported)
+                                  ? swapchain->inFlightFence
+                                  : VK_NULL_HANDLE;
+
+        if (vkQueueSubmit(device.graphicsQueue, 1, &submitInfo, submissionFence) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to submit Vulkan command buffer");
         }
 
-        if (vkQueueSubmit(device.graphicsQueue, 1, &submitInfo,
-                          swapchain ? swapchain->inFlightFence : VK_NULL_HANDLE) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to submit Vulkan command buffer");
+        if (device.timelineSupported && swapchain) {
+            swapchain->lastSubmittedValue = signalValues[0];
         }
     }
 
