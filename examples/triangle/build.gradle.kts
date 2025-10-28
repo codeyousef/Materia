@@ -1,7 +1,9 @@
+import org.gradle.api.JavaVersion
 import org.gradle.api.tasks.JavaExec
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
+    id("com.android.library")
 }
 
 kotlin {
@@ -22,6 +24,12 @@ kotlin {
             testTask {
                 enabled = false
             }
+        }
+    }
+
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
     }
 
@@ -138,4 +146,18 @@ tasks.register("installDebug") {
     group = "examples"
     description = "Install the Android debug build for the Triangle example"
     dependsOn(":examples:triangle-android:installDebug")
+}
+
+android {
+    compileSdk = libs.versions.androidCompileSdk.get().toInt()
+    namespace = "io.kreekt.examples.triangle"
+
+    defaultConfig {
+        minSdk = libs.versions.androidMinSdk.get().toInt()
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
 }
