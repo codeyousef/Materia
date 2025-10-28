@@ -32,7 +32,7 @@ private const val VK_IMAGE_VIEW_TYPE_2D = 1
 private fun unsupported(feature: String): Nothing =
     throw UnsupportedOperationException("Android Vulkan backend not yet implemented ($feature)")
 
-private data class AndroidSwapchainState(
+internal data class AndroidSwapchainState(
     val instanceHandle: Long,
     val deviceHandle: Long,
     val surfaceId: Long,
@@ -62,7 +62,7 @@ object AndroidVulkanAssets {
     }
 }
 
-private fun GpuBufferUsageFlags.toNativeUsage(): Int {
+private fun GpuBufferUsageFlags.toNativeBufferUsage(): Int {
     var flags = 0
     if (this and GpuBufferUsage.COPY_SRC.mask != 0) flags =
         flags or VK_BUFFER_USAGE_TRANSFER_SRC_BIT
@@ -79,7 +79,7 @@ private fun GpuBufferUsageFlags.toNativeUsage(): Int {
     return flags
 }
 
-private fun GpuTextureUsageFlags.toNativeUsage(): Int {
+private fun GpuTextureUsageFlags.toNativeTextureUsage(): Int {
     var flags = 0
     if (this and GpuTextureUsage.COPY_SRC.mask != 0) flags =
         flags or VK_IMAGE_USAGE_TRANSFER_SRC_BIT
@@ -208,7 +208,7 @@ actual class GpuDevice actual constructor(
     actual val queue: GpuQueue = GpuQueue(descriptor.label).also { it.ownerDevice = this }
 
     actual fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer {
-        val usage = descriptor.usage.toNativeUsage()
+        val usage = descriptor.usage.toNativeBufferUsage()
         val bufferHandle = VulkanBridge.vkCreateBuffer(
             instanceHandle,
             handle,
@@ -226,7 +226,7 @@ actual class GpuDevice actual constructor(
             descriptor.format.toNativeFormat(),
             descriptor.size.first,
             descriptor.size.second,
-            descriptor.usage.toNativeUsage()
+            descriptor.usage.toNativeTextureUsage()
         )
         return GpuTexture(this, descriptor).also { it.handle = textureHandle }
     }
@@ -442,12 +442,12 @@ actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
     internal var attachedSurface: RenderSurface? = null
-    private var configuration: GpuSurfaceConfiguration? = null
-    private var configuredDevice: GpuDevice? = null
-    private var preferredFormat: GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
-    private var swapchainState: AndroidSwapchainState? = null
-    private var fallbackTexture: GpuTexture? = null
-    private var fallbackView: GpuTextureView? = null
+    internal var configuration: GpuSurfaceConfiguration? = null
+    internal var configuredDevice: GpuDevice? = null
+    internal var preferredFormat: GpuTextureFormat = GpuTextureFormat.BGRA8_UNORM
+    internal var swapchainState: AndroidSwapchainState? = null
+    internal var fallbackTexture: GpuTexture? = null
+    internal var fallbackView: GpuTextureView? = null
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
@@ -688,8 +688,6 @@ actual class GpuSampler actual constructor(
 ) {
     internal var handle: Long = 0L
 }
-
-actual class GpuPipelineLayout internal constructor()
 
 actual class GpuCommandEncoder actual constructor(
     actual val device: GpuDevice,
@@ -934,24 +932,3 @@ actual class GpuComputePipeline actual constructor(
     actual val device: GpuDevice,
     actual val descriptor: GpuComputePipelineDescriptor
 )
-
-actual object GpuDeviceFactory {
-    actual suspend fun requestContext(config: GpuRequestConfig): GpuContext =
-        unsupported("GpuDeviceFactory.requestContext")
-}
-
-actual fun GpuDevice.unwrapHandle(): Any? = handle
-actual fun GpuDevice.unwrapPhysicalHandle(): Any? = null
-actual fun GpuQueue.unwrapHandle(): Any? = null
-actual fun GpuBuffer.unwrapHandle(): Any? = handle
-actual fun GpuCommandEncoder.unwrapHandle(): Any? = null
-actual fun GpuCommandBuffer.unwrapHandle(): Any? = null
-actual fun GpuTexture.unwrapHandle(): Any? = handle
-actual fun GpuSampler.unwrapHandle(): Any? = handle
-actual fun GpuDevice.unwrapInstance(): Any? = instanceHandle
-actual fun GpuDevice.unwrapDescriptorPool(): Any? = null
-actual fun GpuDevice.queueFamilyIndex(): Int = 0
-actual fun GpuDevice.commandPoolHandle(): Long = 0L
-actual fun GpuQueue.queueFamilyIndex(): Int = 0
-actual fun GpuPipelineLayout.unwrapHandle(): Any? = null
-actual fun GpuTextureView.unwrapHandle(): Any? = handle
