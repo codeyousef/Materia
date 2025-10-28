@@ -2,6 +2,8 @@ import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.Sync
+import java.io.ByteArrayOutputStream
+import java.io.File
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -278,6 +280,7 @@ android {
 // -----------------------------------------------------------------------------
 
 val tintExecutableProvider = providers.gradleProperty("tintExecutable").orElse("tint")
+val nagaExecutableProvider = providers.gradleProperty("nagaExecutable").orElse("naga")
 
 val compileShaders = tasks.register("compileShaders") {
     group = "build"
@@ -296,7 +299,77 @@ val compileShaders = tasks.register("compileShaders") {
     outputs.dir(spvDir)
 
     doLast {
+        data class Compiler(
+            val name: String,
+            val executable: String,
+            val detectionArgs: List<String>,
+            val commandBuilder: (File, File) -> List<String>
+        )
+
+        fun commandAvailable(executable: String, args: List<String>): Boolean {
+            val stdout = ByteArrayOutputStream()
+            val stderr = ByteArrayOutputStream()
+            return try {
+                val result = project.exec {
+                    commandLine(listOf(executable) + args)
+                    isIgnoreExitValue = true
+                    standardOutput = stdout
+                    errorOutput = stderr
+                }
+                result.exitValue == 0
+            } catch (_: Exception) {
+                false
+            }
+        }
+
         val tintExecutable = tintExecutableProvider.get()
+        val nagaExecutable = nagaExecutableProvider.get()
+        val homeDir = System.getProperty("user.home")
+        val nagaExecutables = buildList {
+            add(nagaExecutable)
+            if (homeDir != null) {
+                add(File(homeDir, ".cargo/bin/naga").absolutePath)
+            }
+        }.distinct()
+
+        val compilerCandidates = buildList {
+            add(
+                Compiler(
+                    name = "Tint",
+                    executable = tintExecutable,
+                    detectionArgs = listOf("--version")
+                ) { input, output ->
+                    listOf(tintExecutable, "--format", "spirv", input.absolutePath, "-o", output.absolutePath)
+                }
+            )
+            nagaExecutables.forEach { executable ->
+                add(
+                    Compiler(
+                        name = "Naga",
+                        executable = executable,
+                        detectionArgs = listOf("--version")
+                    ) { input, output ->
+                        listOf(executable, input.absolutePath, output.absolutePath)
+                    }
+                )
+            }
+        }
+
+        val compiler = compilerCandidates.firstOrNull { candidate ->
+            commandAvailable(candidate.executable, candidate.detectionArgs)
+        } ?: run {
+            logger.error(
+                """
+                    Failed to locate a WGSL compiler (Tint or Naga).
+                    Install Tint (https://dawn.googlesource.com/tint) or run `cargo install naga-cli`,
+                    then re-run with -PtintExecutable=/path/to/tint or -PnagaExecutable=/path/to/naga if needed.
+                """.trimIndent()
+            )
+            throw GradleException("WGSL compiler not available on PATH.")
+        }
+
+        logger.lifecycle("Using ${compiler.name} shader compiler at ${compiler.executable}")
+
         val wgslFiles = wgslDir.asFile
             .walkTopDown()
             .filter { it.isFile && it.extension.equals("wgsl", ignoreCase = true) }
@@ -310,23 +383,29 @@ val compileShaders = tasks.register("compileShaders") {
         spvDir.asFile.mkdirs()
 
         wgslFiles.forEach { wgslFile ->
-            val outputFile = spvDir.file("${wgslFile.nameWithoutExtension}.spv").asFile
+            val baseName = wgslFile.nameWithoutExtension
+            if (baseName == "basic") {
+                logger.lifecycle("Skipping ${wgslFile.name} (multi-entry shader compiled separately).")
+                return@forEach
+            }
+            val outputFile = spvDir.file("$baseName.main.spv").asFile
             logger.lifecycle("Compiling ${wgslFile.name} → ${outputFile.name}")
 
             val execResult = runCatching {
                 project.exec {
-                    commandLine(tintExecutable, "--format", "spirv", wgslFile.absolutePath, "-o", outputFile.absolutePath)
+                    commandLine(compiler.commandBuilder(wgslFile, outputFile))
                 }
             }
 
             if (execResult.isFailure) {
                 logger.error(
                     """
-                        Failed to run Tint compiler.
-                        Ensure '$tintExecutable' is installed and available on PATH (override via -PtintExecutable=/path/to/tint).
+                        Failed to run ${compiler.name} compiler (${compiler.executable}).
+                        Ensure the executable is installed and available on PATH.
                     """.trimIndent()
                 )
-                throw execResult.exceptionOrNull() ?: GradleException("Tint execution failed for ${wgslFile.name}.")
+                throw execResult.exceptionOrNull()
+                    ?: GradleException("${compiler.name} execution failed for ${wgslFile.name}.")
             }
         }
     }

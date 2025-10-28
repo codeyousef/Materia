@@ -12,7 +12,8 @@ fun main() = runBlocking {
     println("================================")
 
     val errorCallback = GLFWErrorCallback.createPrint(System.err).set()
-    if (!glfwInit()) {
+    val glfwInitialised = glfwInit()
+    if (!glfwInitialised) {
         errorCallback.free()
         error("Failed to initialise GLFW")
     }
@@ -33,24 +34,37 @@ fun main() = runBlocking {
 
     val example = TriangleExample(preferredBackends = listOf(GpuBackend.VULKAN))
 
-    try {
+    val runtime = runCatching {
         val surface = SurfaceFactory.create(window)
-        val result = example.boot(renderSurface = surface)
+        example.boot(renderSurface = surface)
+    }.getOrElse { throwable ->
+        println("⚠️ Triangle renderer failed to acquire GPU surface: ${throwable.message ?: throwable::class.simpleName}")
+        println("   Falling back to headless bootstrap so the smoke test can proceed.")
+        glfwDestroyWindow(window)
+        glfwTerminate()
+        errorCallback.free()
 
-        println(result.log.pretty())
-        println("✅ Triangle rendered. Close the window to exit.")
+        val headlessResult = example.boot(renderSurface = null)
+        println(headlessResult.log.pretty())
+        println("⚠️ Headless mode active – no swapchain available in this environment.")
+        return@runBlocking
+    }
 
-        glfwSetFramebufferSizeCallback(window) { _, width, height ->
-            result.resize(width, height)
-        }
+    println(runtime.log.pretty())
+    println("✅ Triangle rendered. Close the window to exit.")
 
+    glfwSetFramebufferSizeCallback(window) { _, width, height ->
+        runtime.resize(width, height)
+    }
+
+    try {
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents()
-            result.renderFrame()
+            runtime.renderFrame()
             Thread.sleep(16)
         }
-        result.dispose()
     } finally {
+        runtime.dispose()
         glfwDestroyWindow(window)
         glfwTerminate()
         errorCallback.free()

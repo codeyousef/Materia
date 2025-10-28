@@ -1,10 +1,7 @@
 #pragma once
 
 #include <cstdint>
-
-struct JNIEnv;
-struct _jobject;
-using jobject = _jobject *;
+#include <jni.h>
 
 namespace kreekt::vk {
 

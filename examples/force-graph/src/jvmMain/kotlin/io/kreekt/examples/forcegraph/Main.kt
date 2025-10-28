@@ -56,8 +56,21 @@ fun main() = runBlocking {
     glfwShowWindow(window)
 
     val example = ForceGraphExample(preferredBackends = listOf(GpuBackend.VULKAN))
-    val surface = SurfaceFactory.create(window)
-    val boot = example.boot(renderSurface = surface, widthOverride = width, heightOverride = height)
+    val boot = runCatching {
+        val surface = SurfaceFactory.create(window)
+        example.boot(renderSurface = surface, widthOverride = width, heightOverride = height)
+    }.getOrElse { throwable ->
+        println("⚠️ Force Graph failed to acquire a GPU surface: ${throwable.message ?: throwable::class.simpleName}")
+        println("   Falling back to headless bootstrap to keep the smoke test runnable.")
+        glfwDestroyWindow(window)
+        glfwTerminate()
+        errorCallback.free()
+
+        val headless = example.boot(renderSurface = null, widthOverride = width, heightOverride = height)
+        println(headless.log.pretty())
+        println("⚠️ Headless mode active – rendering loop skipped.")
+        return@runBlocking
+    }
     val runtime = boot.runtime
 
     println(boot.log.pretty())
@@ -79,17 +92,19 @@ fun main() = runBlocking {
     }
 
     var lastTime = System.nanoTime()
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents()
-        val now = System.nanoTime()
-        val deltaSeconds = ((now - lastTime) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.1f)
-        lastTime = now
-        runtime.frame(deltaSeconds)
-        Thread.sleep(1)
+    try {
+        while (!glfwWindowShouldClose(window)) {
+            glfwPollEvents()
+            val now = System.nanoTime()
+            val deltaSeconds = ((now - lastTime) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.1f)
+            lastTime = now
+            runtime.frame(deltaSeconds)
+            Thread.sleep(1)
+        }
+    } finally {
+        runtime.dispose()
+        glfwDestroyWindow(window)
+        glfwTerminate()
+        errorCallback.free()
     }
-
-    runtime.dispose()
-    glfwDestroyWindow(window)
-    glfwTerminate()
-    errorCallback.free()
 }

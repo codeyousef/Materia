@@ -57,6 +57,7 @@ namespace {
         PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getSurfaceCapabilitiesKHR = nullptr;
         PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getSurfaceFormatsKHR = nullptr;
         PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getSurfacePresentModesKHR = nullptr;
+        PFN_vkGetPhysicalDeviceFeatures2 getPhysicalDeviceFeatures2 = nullptr;
     };
 
     struct DeviceDispatch {
@@ -65,6 +66,7 @@ namespace {
         PFN_vkGetSwapchainImagesKHR getSwapchainImagesKHR = nullptr;
         PFN_vkAcquireNextImageKHR acquireNextImageKHR = nullptr;
         PFN_vkQueuePresentKHR queuePresentKHR = nullptr;
+        PFN_vkWaitSemaphores waitSemaphores = nullptr;
     };
 
     struct VulkanBuffer {
@@ -289,8 +291,8 @@ namespace {
         return it == registry.end() ? nullptr : it->second.get();
     }
 
-    template<typename Registry, typename Object>
-    std::unique_ptr<Object> removeObject(Registry &registry, Id id) {
+    template<typename Registry>
+    auto removeObject(Registry &registry, Id id) -> typename Registry::mapped_type {
         auto it = registry.find(id);
         if (it == registry.end()) return nullptr;
         auto ptr = std::move(it->second);
@@ -445,6 +447,12 @@ namespace {
                 instance.instance, "vkGetPhysicalDeviceSurfaceFormatsKHR"));
         instance.dispatch.getSurfacePresentModesKHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(loadInstanceProc(
                 instance.instance, "vkGetPhysicalDeviceSurfacePresentModesKHR"));
+        instance.dispatch.getPhysicalDeviceFeatures2 = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(loadInstanceProc(
+                instance.instance, "vkGetPhysicalDeviceFeatures2"));
+        if (instance.dispatch.getPhysicalDeviceFeatures2 == nullptr) {
+            instance.dispatch.getPhysicalDeviceFeatures2 = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(loadInstanceProc(
+                    instance.instance, "vkGetPhysicalDeviceFeatures2KHR"));
+        }
     }
 
     void populateDeviceDispatch(VulkanDevice &device) {
@@ -458,6 +466,12 @@ namespace {
                 device.device, "vkAcquireNextImageKHR"));
         device.dispatch.queuePresentKHR = reinterpret_cast<PFN_vkQueuePresentKHR>(loadDeviceProc(
                 device.device, "vkQueuePresentKHR"));
+        device.dispatch.waitSemaphores = reinterpret_cast<PFN_vkWaitSemaphores>(loadDeviceProc(
+                device.device, "vkWaitSemaphores"));
+        if (device.dispatch.waitSemaphores == nullptr) {
+            device.dispatch.waitSemaphores = reinterpret_cast<PFN_vkWaitSemaphores>(loadDeviceProc(
+                    device.device, "vkWaitSemaphoresKHR"));
+        }
     }
 
     bool isValidationLayerAvailable(const char *layerName) {
@@ -919,7 +933,11 @@ namespace {
         VkPhysicalDeviceFeatures2 featureQuery{};
         featureQuery.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
         featureQuery.pNext = &timelineQuery;
-        vkGetPhysicalDeviceFeatures2(selectedDevice, &featureQuery);
+        if (instance.dispatch.getPhysicalDeviceFeatures2 != nullptr) {
+            instance.dispatch.getPhysicalDeviceFeatures2(selectedDevice, &featureQuery);
+        } else {
+            timelineQuery.timelineSemaphore = VK_FALSE;
+        }
 
         VkPhysicalDeviceTimelineSemaphoreFeatures timelineEnable{};
         timelineEnable.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
@@ -955,7 +973,8 @@ namespace {
         vkGetDeviceQueue(deviceHandle, graphicsQueueFamily, 0, &device->graphicsQueue);
         vkGetDeviceQueue(deviceHandle, presentQueueFamily, 0, &device->presentQueue);
         populateDeviceDispatch(*device);
-        device->timelineSupported = timelineQuery.timelineSemaphore == VK_TRUE;
+        device->timelineSupported = timelineQuery.timelineSemaphore == VK_TRUE &&
+                                    device->dispatch.waitSemaphores != nullptr;
         if (device->timelineSupported) {
             VkSemaphoreTypeCreateInfo typeInfo{};
             typeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
@@ -1257,29 +1276,30 @@ namespace {
 
     std::unique_ptr<VulkanSurfaceFrame>
     acquireFrameInternal(VulkanDevice &device, VulkanSurface &surface, VulkanSwapchain &swapchain) {
-    if (device.timelineSupported) {
-        if (swapchain.lastSubmittedValue > swapchain.completedValue) {
-            VkSemaphore waitSemaphore = device.timelineSemaphore;
-            uint64_t waitValue = swapchain.lastSubmittedValue;
-            VkSemaphoreWaitInfo waitInfo{};
-            waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
-            waitInfo.semaphoreCount = 1;
-            waitInfo.pSemaphores = &waitSemaphore;
-            waitInfo.pValues = &waitValue;
-            if (vkWaitSemaphores(device.device, &waitInfo, UINT64_MAX) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to wait for timeline semaphore");
+        if (device.timelineSupported) {
+            if (swapchain.lastSubmittedValue > swapchain.completedValue) {
+                VkSemaphore waitSemaphore = device.timelineSemaphore;
+                uint64_t waitValue = swapchain.lastSubmittedValue;
+                VkSemaphoreWaitInfo waitInfo{};
+                waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+                waitInfo.semaphoreCount = 1;
+                waitInfo.pSemaphores = &waitSemaphore;
+                waitInfo.pValues = &waitValue;
+                if (device.dispatch.waitSemaphores == nullptr ||
+                    device.dispatch.waitSemaphores(device.device, &waitInfo, UINT64_MAX) != VK_SUCCESS) {
+                    throw std::runtime_error("Failed to wait for timeline semaphore");
+                }
+                swapchain.completedValue = waitValue;
             }
-            swapchain.completedValue = waitValue;
+        } else {
+            vkWaitForFences(device.device, 1, &swapchain.inFlightFence, VK_TRUE, UINT64_MAX);
+            vkResetFences(device.device, 1, &swapchain.inFlightFence);
         }
-    } else {
-        vkWaitForFences(device.device, 1, &swapchain.inFlightFence, VK_TRUE, UINT64_MAX);
-        vkResetFences(device.device, 1, &swapchain.inFlightFence);
-    }
 
-    uint32_t imageIndex = 0;
-    VkResult res = device.dispatch.acquireNextImageKHR(
-            device.device,
-            swapchain.swapchain,
+        uint32_t imageIndex = 0;
+        VkResult res = device.dispatch.acquireNextImageKHR(
+                device.device,
+                swapchain.swapchain,
                 UINT64_MAX,
                 swapchain.imageAvailableSemaphore,
                 VK_NULL_HANDLE,
@@ -2441,7 +2461,7 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCreateRenderPipeline(
 
     VkRenderPass renderPass =
             renderPassHandle != 0 ? reinterpret_cast<VkRenderPass>(renderPassHandle)
-                                  : getOrCreateRenderPass(device,
+                                  : getOrCreateRenderPass(*device,
                                                           toColorFormat(colorFormat),
                                                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 

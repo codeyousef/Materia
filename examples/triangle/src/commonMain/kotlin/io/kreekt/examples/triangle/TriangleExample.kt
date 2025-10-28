@@ -27,7 +27,7 @@ import io.kreekt.renderer.RendererConfig
 import io.kreekt.renderer.RendererFactory
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.system.measureTimeMillis
+import kotlin.time.TimeSource
 
 data class TriangleBootLog(
     val backend: BackendType,
@@ -100,9 +100,9 @@ class TriangleExample(
 
         engineRenderer.resize(targetWidth, targetHeight)
 
-        val frameTimeMs = measureTimeMillis {
-            engineRenderer.render(scene, camera)
-        }.toDouble()
+        val mark = TimeSource.Monotonic.markNow()
+        engineRenderer.render(scene, camera)
+        val frameTimeMs = mark.elapsedNow().inWholeNanoseconds / 1_000_000.0
 
         val log = TriangleBootLog(
             backend = engineRenderer.backend,
