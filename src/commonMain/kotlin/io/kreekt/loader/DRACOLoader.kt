@@ -1,15 +1,7 @@
 package io.kreekt.loader
 
-class DRACOLoader : AssetLoader<Any> {
-
-    override suspend fun load(path: String): Any {
-        // DRACO loading implementation
-        return loadAsset(path)
-    }
-
-    private suspend fun loadAsset(path: String): Any {
-        // Platform-specific loading
-        return Any()
+class DRACOLoader : AssetLoader<ModelAsset> {
+    override suspend fun load(path: String): ModelAsset {
+        throw UnsupportedOperationException("DRACO mesh decoding requires native bindings that are not bundled yet.")
     }
 }
-

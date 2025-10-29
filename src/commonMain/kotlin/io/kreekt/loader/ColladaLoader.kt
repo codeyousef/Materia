@@ -1,15 +1,7 @@
 package io.kreekt.loader
 
-class ColladaLoader : AssetLoader<Any> {
-
-    override suspend fun load(path: String): Any {
-        // Collada loading implementation
-        return loadAsset(path)
-    }
-
-    private suspend fun loadAsset(path: String): Any {
-        // Platform-specific loading
-        return Any()
+class ColladaLoader : AssetLoader<ModelAsset> {
+    override suspend fun load(path: String): ModelAsset {
+        throw UnsupportedOperationException("COLLADA loading is not supported. Use glTF or OBJ pipelines instead.")
     }
 }
-

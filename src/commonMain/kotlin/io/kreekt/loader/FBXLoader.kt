@@ -1,15 +1,11 @@
 package io.kreekt.loader
 
-class FBXLoader : AssetLoader<Any> {
-
-    override suspend fun load(path: String): Any {
-        // FBX loading implementation
-        return loadAsset(path)
-    }
-
-    private suspend fun loadAsset(path: String): Any {
-        // Platform-specific loading
-        return Any()
+/**
+ * Placeholder for future FBX support. For now we surface a clear error instead
+ * of returning an unusable stub value.
+ */
+class FBXLoader : AssetLoader<ModelAsset> {
+    override suspend fun load(path: String): ModelAsset {
+        throw UnsupportedOperationException("FBX loading is not supported. Convert assets to glTF for KreeKt pipelines.")
     }
 }
-

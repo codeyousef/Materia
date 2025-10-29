@@ -4,7 +4,7 @@ import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
 
 internal actual object PlatformImageDecoder {
-    actual fun decode(bytes: ByteArray): DecodedImage {
+    actual suspend fun decode(bytes: ByteArray): DecodedImage {
         val image = ImageIO.read(ByteArrayInputStream(bytes))
             ?: throw IllegalArgumentException("Unsupported image format")
 

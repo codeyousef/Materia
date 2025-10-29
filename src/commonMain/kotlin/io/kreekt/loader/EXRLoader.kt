@@ -1,15 +1,9 @@
 package io.kreekt.loader
 
-class EXRLoader : AssetLoader<Any> {
+import io.kreekt.texture.Texture2D
 
-    override suspend fun load(path: String): Any {
-        // EXR loading implementation
-        return loadAsset(path)
-    }
-
-    private suspend fun loadAsset(path: String): Any {
-        // Platform-specific loading
-        return Any()
+class EXRLoader : AssetLoader<Texture2D> {
+    override suspend fun load(path: String): Texture2D {
+        throw UnsupportedOperationException("EXR HDR image decoding is not bundled. Use preprocessed KTX or PNG textures.")
     }
 }
-

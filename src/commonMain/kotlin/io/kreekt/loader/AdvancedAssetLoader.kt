@@ -1,80 +1,48 @@
-/**
- * Advanced Asset Loading System
- * Provides loading for various 3D model formats with support for compression,
- * streaming, format conversion, and platform-specific optimizations
- */
 package io.kreekt.loader
 
 import io.kreekt.core.Result
-import io.kreekt.renderer.Texture
+import io.kreekt.texture.Texture2D
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Stub implementations for missing types
-typealias AssetCache = MutableMap<String, Any>
-typealias Model3D = Any
-typealias Texture2D = Texture
-typealias ModelLoadOptions = LoadOptions
-typealias TextureLoadOptions = LoadOptions
-
-data class LoadOptions(
-    val enableCaching: Boolean = true,
-    val generateMipmaps: Boolean = true,
-    val loadCompressedGeometry: Boolean = true,
-    val loadCompressedTextures: Boolean = true,
-    val enableStreaming: Boolean = false
-)
-
-enum class ModelFormat {
-    GLTF, GLB, OBJ, FBX, USD, COLLADA
-}
-
-// Texture data class for internal use
-data class TextureData(
-    val width: Int,
-    val height: Int,
-    val data: ByteArray,
-    val format: String
-) {
-    fun dispose() {
-        // Release memory
-        // In real implementation, this would release GPU resources
-    }
-}
-
 /**
- * Advanced asset loader implementation
+ * High level asset loader that routes to the appropriate format-specific loader
+ * and applies shared caching policies.
  */
-class AdvancedAssetLoader {
-    private val assetCache: AssetCache = mutableMapOf()
+class AdvancedAssetLoader(
+    private val gltfLoader: GLTFLoader = GLTFLoader(),
+    private val objLoader: OBJLoader = OBJLoader(),
+    private val plyLoader: PLYLoader = PLYLoader(),
+    private val stlLoader: STLLoader = STLLoader(),
+    private val resolver: AssetResolver = AssetResolver.default()
+) {
 
-    /**
-     * Load 3D model with advanced format detection and processing
-     */
+    private val modelCache = mutableMapOf<String, ModelAsset>()
+    private val textureCache = mutableMapOf<String, Texture2D>()
+
     suspend fun loadModel(
         path: String,
-        options: ModelLoadOptions = LoadOptions()
-    ): Result<Model3D> = withContext(Dispatchers.Default) {
+        options: LoadOptions = LoadOptions()
+    ): Result<ModelAsset> = withContext(Dispatchers.Default) {
         try {
-            // Check cache first
-            assetCache[path]?.let {
-                return@withContext Result.Success(it)
+            val cached = if (options.enableCaching) modelCache[path] else null
+            if (cached != null) {
+                return@withContext Result.Success(cached)
             }
 
-            // Detect format from file extension
             val format = detectModelFormat(path)
-
-            // Load model based on format
             val model = when (format) {
-                ModelFormat.GLTF, ModelFormat.GLB -> loadGLTF(path, options)
-                ModelFormat.OBJ -> loadOBJ(path, options)
-                ModelFormat.FBX -> loadFBX(path, options)
-                ModelFormat.USD -> loadUSD(path, options)
-                ModelFormat.COLLADA -> loadCOLLADA(path, options)
+                ModelFormat.GLTF, ModelFormat.GLB -> loadGLTF(path)
+                ModelFormat.OBJ -> objLoader.load(path)
+                ModelFormat.PLY -> plyLoader.load(path)
+                ModelFormat.STL -> stlLoader.load(path)
+                ModelFormat.FBX -> throw UnsupportedOperationException("FBX loading is not yet supported")
+                ModelFormat.USD -> throw UnsupportedOperationException("USD loading is not yet supported")
+                ModelFormat.COLLADA -> throw UnsupportedOperationException("COLLADA loading is not yet supported")
             }
 
             if (options.enableCaching) {
-                assetCache[path] = model
+                modelCache[path] = model
             }
             Result.Success(model)
         } catch (e: Exception) {
@@ -82,63 +50,55 @@ class AdvancedAssetLoader {
         }
     }
 
-    /**
-     * Load texture with platform-appropriate format selection
-     */
     suspend fun loadTexture(
         path: String,
-        options: TextureLoadOptions = LoadOptions()
+        options: LoadOptions = LoadOptions()
     ): Result<Texture2D> = withContext(Dispatchers.Default) {
         try {
-            // Check cache first
-            assetCache[path]?.let {
-                return@withContext Result.Success(it as Texture)
+            val cached = if (options.enableCaching) textureCache[path] else null
+            if (cached != null) {
+                return@withContext Result.Success(cached)
             }
 
-            // Detect texture format from file extension
-            val format = detectTextureFormat(path)
-
-            // Load texture with appropriate decoder
-            val textureData = when (format) {
-                "png", "jpg", "jpeg" -> loadStandardImage(path, options)
-                "dds" -> loadDDSTexture(path, options)
-                "ktx", "ktx2" -> loadKTXTexture(path, options)
-                "basis" -> loadBasisTexture(path, options)
-                "webp" -> loadWebPTexture(path, options)
-                else -> throw UnsupportedOperationException("Unsupported texture format: $format")
-            }
-
-            // Create texture object
-            val texture = object : Texture {
-                override val id: Int = path.hashCode()
-                override var needsUpdate: Boolean = true
-                override val width: Int = textureData.width
-                override val height: Int = textureData.height
-
-                override fun dispose() {
-                    // Release texture resources
-                    textureData.dispose()
-                    assetCache.remove(path)
-                }
+            val bytes = resolver.load(path, deriveBasePath(path))
+            val decoded = PlatformImageDecoder.decode(bytes)
+            val texture = Texture2D.fromImageData(decoded.width, decoded.height, decoded.pixels).apply {
+                setTextureName(path.substringAfterLast('/'))
+                generateMipmaps = options.generateMipmaps
             }
 
             if (options.enableCaching) {
-                assetCache[path] = texture
+                textureCache[path] = texture
             }
+
             Result.Success(texture)
         } catch (e: Exception) {
             Result.Error("Failed to load texture: $path", e)
         }
     }
 
-    // Helper functions for format detection
+    private suspend fun loadGLTF(path: String): ModelAsset {
+        val asset = gltfLoader.load(path)
+        return ModelAsset(
+            scene = asset.scene,
+            materials = asset.materials,
+            animations = asset.animations
+        )
+    }
 
     private fun detectModelFormat(path: String): ModelFormat {
-        val extension = path.substringAfterLast('.').lowercase()
+        val extension = path.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        if (extension.isEmpty()) {
+            if (path.startsWith("data:", ignoreCase = true)) {
+                return ModelFormat.GLTF
+            }
+        }
         return when (extension) {
             "gltf" -> ModelFormat.GLTF
             "glb" -> ModelFormat.GLB
             "obj" -> ModelFormat.OBJ
+            "ply" -> ModelFormat.PLY
+            "stl" -> ModelFormat.STL
             "fbx" -> ModelFormat.FBX
             "usd", "usda", "usdc", "usdz" -> ModelFormat.USD
             "dae" -> ModelFormat.COLLADA
@@ -146,96 +106,25 @@ class AdvancedAssetLoader {
         }
     }
 
-    private fun detectTextureFormat(path: String): String {
-        return path.substringAfterLast('.').lowercase()
+    private fun deriveBasePath(path: String): String? {
+        val normalized = path.replace('\\', '/')
+        val lastSlash = normalized.lastIndexOf('/')
+        return if (lastSlash >= 0) normalized.substring(0, lastSlash + 1) else null
     }
+}
 
-    // Model loading implementations
+data class LoadOptions(
+    val enableCaching: Boolean = true,
+    val generateMipmaps: Boolean = true
+)
 
-    private suspend fun loadGLTF(path: String, options: LoadOptions): Model3D {
-        // GLTF loading implementation
-        // In production, this would parse the GLTF JSON and binary buffers
-        return "GLTF_Model_$path"
-    }
-
-    private suspend fun loadOBJ(path: String, options: LoadOptions): Model3D {
-        // OBJ loading implementation
-        // In production, this would parse the OBJ text format
-        return "OBJ_Model_$path"
-    }
-
-    private suspend fun loadFBX(path: String, options: LoadOptions): Model3D {
-        // FBX loading implementation
-        // In production, this would use FBX SDK or custom parser
-        return "FBX_Model_$path"
-    }
-
-    private suspend fun loadUSD(path: String, options: LoadOptions): Model3D {
-        // USD loading implementation
-        // In production, this would use OpenUSD library
-        return "USD_Model_$path"
-    }
-
-    private suspend fun loadCOLLADA(path: String, options: LoadOptions): Model3D {
-        // COLLADA loading implementation
-        // In production, this would parse the DAE XML format
-        return "COLLADA_Model_$path"
-    }
-
-    // Texture loading implementations
-
-    private suspend fun loadStandardImage(path: String, options: LoadOptions): TextureData {
-        // Standard image loading (PNG, JPG, etc.)
-        // In production, this would use platform-specific image decoders
-        return TextureData(
-            width = 1024,
-            height = 1024,
-            data = ByteArray(1024 * 1024 * 4), // RGBA
-            format = "rgba8"
-        )
-    }
-
-    private suspend fun loadDDSTexture(path: String, options: LoadOptions): TextureData {
-        // DDS (DirectDraw Surface) texture loading
-        // Supports compressed formats like DXT1, DXT5, BC7
-        return TextureData(
-            width = 1024,
-            height = 1024,
-            data = ByteArray(1024 * 1024 / 8), // Compressed size estimate
-            format = "dxt5"
-        )
-    }
-
-    private suspend fun loadKTXTexture(path: String, options: LoadOptions): TextureData {
-        // KTX (Khronos Texture) loading
-        // Supports various compressed formats
-        return TextureData(
-            width = 1024,
-            height = 1024,
-            data = ByteArray(1024 * 1024 / 4), // Compressed size estimate
-            format = "etc2"
-        )
-    }
-
-    private suspend fun loadBasisTexture(path: String, options: LoadOptions): TextureData {
-        // Basis Universal texture loading
-        // Transcodes to platform-appropriate format
-        return TextureData(
-            width = 1024,
-            height = 1024,
-            data = ByteArray(1024 * 1024 / 6), // Highly compressed
-            format = "basis"
-        )
-    }
-
-    private suspend fun loadWebPTexture(path: String, options: LoadOptions): TextureData {
-        // WebP texture loading
-        // Supports both lossy and lossless compression
-        return TextureData(
-            width = 1024,
-            height = 1024,
-            data = ByteArray(1024 * 1024 * 3), // RGB
-            format = "webp"
-        )
-    }
+enum class ModelFormat {
+    GLTF,
+    GLB,
+    OBJ,
+    PLY,
+    STL,
+    FBX,
+    USD,
+    COLLADA
 }

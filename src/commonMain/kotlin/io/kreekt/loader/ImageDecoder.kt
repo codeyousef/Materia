@@ -10,5 +10,5 @@ internal data class DecodedImage(
 )
 
 internal expect object PlatformImageDecoder {
-    fun decode(bytes: ByteArray): DecodedImage
+    suspend fun decode(bytes: ByteArray): DecodedImage
 }

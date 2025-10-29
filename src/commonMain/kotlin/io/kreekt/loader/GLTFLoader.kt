@@ -144,13 +144,16 @@ class GLTFLoader(
         buffers: List<ByteArray>,
         basePath: String?,
         progress: ((LoadingProgress) -> Unit)?
-    ): List<ByteArray?> {
+    ): List<Texture2D?> {
         if (document.images.isEmpty()) return emptyList()
 
         val total = document.images.size.toLong()
         var loaded = 0L
 
-        val images = document.images.mapIndexed { index, image ->
+        val textures = ArrayList<Texture2D?>(document.images.size)
+
+        for (index in document.images.indices) {
+            val image = document.images[index]
             val bytes = when {
                 image.bufferView != null -> {
                     val view = document.bufferViews.getOrNull(image.bufferView)
@@ -170,10 +173,15 @@ class GLTFLoader(
             }
             loaded += 1
             progress?.invoke(LoadingProgress(loaded, total))
-            bytes
+
+            if (bytes != null) {
+                textures.add(RawImageDecoder.decode(bytes, image.name ?: "Image_$index"))
+            } else {
+                textures.add(null)
+            }
         }
 
-        return images
+        return textures
     }
 
     private fun parseDocument(bytes: ByteArray, url: String): ParsedDocument {
@@ -237,7 +245,7 @@ class GLTFLoader(
     private fun buildScenes(
         document: GltfDocument,
         buffers: List<ByteArray>,
-        images: List<ByteArray?>
+        images: List<Texture2D?>
     ): GLTFAsset {
         val accessorReader = AccessorReader(document, buffers)
         val materialFactory = MaterialFactory(document, images)
@@ -480,7 +488,7 @@ class GLTFLoader(
 
     private class MaterialFactory(
         private val document: GltfDocument,
-        private val images: List<ByteArray?>
+        private val textures: List<Texture2D?>
     ) {
         val materialCache = LinkedHashMap<Int, Material>()
 
@@ -496,23 +504,22 @@ class GLTFLoader(
 
         private fun createMaterial(def: GltfMaterial): Material {
             val pbr = def.pbr
-                val colorFactor = pbr?.baseColorFactor ?: listOf(1f, 1f, 1f, 1f)
-                val material = MeshStandardMaterial(
-                    color = Color(colorFactor[0], colorFactor[1], colorFactor[2]),
-                    metalness = pbr?.metallicFactor ?: 1f,
-                    roughness = pbr?.roughnessFactor ?: 1f
-                )
-                material.transparent = (def.alphaMode == "BLEND") || colorFactor.getOrNull(3)?.let { it < 0.999f } == true
-                material.opacity = colorFactor.getOrNull(3) ?: 1f
-                material.side = if (def.doubleSided) MaterialSide.DOUBLE else MaterialSide.FRONT
-                def.name?.let { material.name = it }
+            val colorFactor = pbr?.baseColorFactor ?: listOf(1f, 1f, 1f, 1f)
+            val material = MeshStandardMaterial(
+                color = Color(colorFactor[0], colorFactor[1], colorFactor[2]),
+                metalness = pbr?.metallicFactor ?: 1f,
+                roughness = pbr?.roughnessFactor ?: 1f
+            )
+            material.transparent = (def.alphaMode == "BLEND") || colorFactor.getOrNull(3)?.let { it < 0.999f } == true
+            material.opacity = colorFactor.getOrNull(3) ?: 1f
+            material.side = if (def.doubleSided) MaterialSide.DOUBLE else MaterialSide.FRONT
+            def.name?.let { material.name = it }
 
-                if (pbr?.baseColorTexture != null) {
-                    val texIndex = document.textures.getOrNull(pbr.baseColorTexture.index)?.source
-                    val imageBytes = texIndex?.let { images.getOrNull(it) }
-                if (imageBytes != null) {
-                    val texture = RawImageDecoder.decode(imageBytes)
-                    material.map = texture
+            if (pbr?.baseColorTexture != null) {
+                val texIndex = document.textures.getOrNull(pbr.baseColorTexture.index)?.source
+                val texture = texIndex?.let { textures.getOrNull(it) }
+                if (texture != null) {
+                    material.map = texture.clone()
                 }
             }
 
@@ -604,9 +611,10 @@ class GLTFLoader(
      * texture initialization. Decoding routes through platform-specific helpers.
      */
     private object RawImageDecoder {
-        fun decode(bytes: ByteArray): Texture2D {
+        suspend fun decode(bytes: ByteArray, name: String? = null): Texture2D {
             val decoded = PlatformImageDecoder.decode(bytes)
             val texture = Texture2D.fromImageData(decoded.width, decoded.height, decoded.pixels)
+            name?.let { texture.setTextureName(it) }
             texture.generateMipmaps = true
             return texture
         }

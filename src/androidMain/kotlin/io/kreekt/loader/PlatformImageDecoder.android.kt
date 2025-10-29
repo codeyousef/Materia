@@ -3,7 +3,7 @@ package io.kreekt.loader
 import android.graphics.BitmapFactory
 
 internal actual object PlatformImageDecoder {
-    actual fun decode(bytes: ByteArray): DecodedImage {
+    actual suspend fun decode(bytes: ByteArray): DecodedImage {
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             ?: throw IllegalArgumentException("Unsupported image format")
 

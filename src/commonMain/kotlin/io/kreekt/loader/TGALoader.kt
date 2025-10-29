@@ -1,15 +1,9 @@
 package io.kreekt.loader
 
-class TGALoader : AssetLoader<Any> {
+import io.kreekt.texture.Texture2D
 
-    override suspend fun load(path: String): Any {
-        // TGA loading implementation
-        return loadAsset(path)
-    }
-
-    private suspend fun loadAsset(path: String): Any {
-        // Platform-specific loading
-        return Any()
+class TGALoader : AssetLoader<Texture2D> {
+    override suspend fun load(path: String): Texture2D {
+        throw UnsupportedOperationException("TGA decoding is not implemented. Convert textures to PNG or KTX2.")
     }
 }
-
