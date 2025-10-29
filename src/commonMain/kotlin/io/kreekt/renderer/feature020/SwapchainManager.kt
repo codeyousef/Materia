@@ -57,4 +57,4 @@ data class SwapchainImage(
 /**
  * Exception thrown when swapchain acquire/present fails.
  */
-class SwapchainException(message: String) : Exception(message)
+class SwapchainException(message: String, cause: Throwable? = null) : Exception(message, cause)

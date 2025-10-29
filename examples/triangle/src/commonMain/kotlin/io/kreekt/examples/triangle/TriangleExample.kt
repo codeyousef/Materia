@@ -7,6 +7,7 @@ import io.kreekt.engine.geometry.Geometry
 import io.kreekt.engine.geometry.GeometryAttribute
 import io.kreekt.engine.geometry.GeometryLayout
 import io.kreekt.engine.material.BlendMode
+import io.kreekt.engine.material.CullMode
 import io.kreekt.engine.material.RenderState
 import io.kreekt.engine.material.UnlitColorMaterial
 import io.kreekt.engine.material.UnlitPointsMaterial
@@ -134,7 +135,11 @@ class TriangleExample(
         val triangleMaterial = UnlitColorMaterial(
             label = "triangle",
             color = Color.fromFloats(1f, 0.4f, 0.2f),
-            renderState = RenderState(depthTest = false, depthWrite = false)
+            renderState = RenderState(
+                depthTest = false,
+                depthWrite = false,
+                cullMode = CullMode.NONE
+            )
         )
 
         val triangleMesh = Mesh(

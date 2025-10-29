@@ -592,6 +592,7 @@ actual class GpuBuffer actual constructor(
     actual val descriptor: GpuBufferDescriptor
 ) {
     private lateinit var rendererBuffer: RendererGpuBuffer
+    private var destroyed = false
 
     actual fun write(data: ByteArray, offset: Int) {
         check(::rendererBuffer.isInitialized) { "Renderer buffer not attached" }
@@ -614,13 +615,16 @@ actual class GpuBuffer actual constructor(
     }
 
     actual fun destroy() {
-        if (::rendererBuffer.isInitialized) {
-            device.destroyBuffer(rendererBuffer)
+        if (!::rendererBuffer.isInitialized || destroyed) {
+            return
         }
+        destroyed = true
+        device.destroyBuffer(rendererBuffer)
     }
 
     internal fun attach(buffer: RendererGpuBuffer) {
         rendererBuffer = buffer
+        destroyed = false
     }
 
     internal fun nativeBuffer(): RendererGpuBuffer {

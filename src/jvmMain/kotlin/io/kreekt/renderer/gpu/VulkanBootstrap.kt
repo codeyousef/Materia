@@ -5,6 +5,7 @@ import java.nio.FloatBuffer
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.vulkan.KHRPortabilityEnumeration
 import org.lwjgl.vulkan.KHRPortabilitySubset
+import org.lwjgl.vulkan.KHRSwapchain
 import org.lwjgl.vulkan.VK10.*
 import org.lwjgl.vulkan.VK11
 import org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1
@@ -291,10 +292,21 @@ internal object VulkanBootstrap {
 
             val features = VkPhysicalDeviceFeatures.calloc(stack)
 
-            val enabledExtensions = mutableListOf<String>()
-            if (deviceExtensions.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
-                enabledExtensions += KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
+            val requiredExtensions = listOf(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME)
+            val optionalExtensions = buildList {
+                if (deviceExtensions.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
+                    add(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)
+                }
             }
+
+            val missingRequired = requiredExtensions.filterNot(deviceExtensions::contains)
+            if (missingRequired.isNotEmpty()) {
+                throw IllegalStateException(
+                    "Physical device is missing required Vulkan extensions: $missingRequired"
+                )
+            }
+
+            val enabledExtensions = (requiredExtensions + optionalExtensions).distinct()
 
             val ppExtensions = if (enabledExtensions.isNotEmpty()) {
                 val buffer = stack.mallocPointer(enabledExtensions.size)
