@@ -142,8 +142,12 @@ across JVM, Web, Android, iOS, and Native platforms.
 ## Asset Pipeline
 
 - GLTF/GLB loader (complete)
-- OBJ/PLY/STL loaders (ASCII)
-- Additional source formats should be converted to glTF prior to import.
+- FBX ASCII loader (static meshes)
+- COLLADA `.dae` loader (triangle meshes)
+- OBJ / PLY / STL loaders (ASCII/Binary)
+- Draco JSON loader for compact meshes
+- KTX2 uncompressed RGBA textures
+- EXR (RGB float, uncompressed)
 - Texture compression (DRACO, KTX2)
 - Size: ~500KB
 
