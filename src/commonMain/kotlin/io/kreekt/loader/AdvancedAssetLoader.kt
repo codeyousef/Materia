@@ -17,6 +17,8 @@ class AdvancedAssetLoader(
     private val resolver: AssetResolver = AssetResolver.default()
 ) {
 
+    private val tgaLoader = TGALoader(resolver)
+
     private val modelCache = mutableMapOf<String, ModelAsset>()
     private val textureCache = mutableMapOf<String, Texture2D>()
 
@@ -60,11 +62,19 @@ class AdvancedAssetLoader(
                 return@withContext Result.Success(cached)
             }
 
-            val bytes = resolver.load(path, deriveBasePath(path))
-            val decoded = PlatformImageDecoder.decode(bytes)
-            val texture = Texture2D.fromImageData(decoded.width, decoded.height, decoded.pixels).apply {
-                setTextureName(path.substringAfterLast('/'))
-                generateMipmaps = options.generateMipmaps
+            val extension = detectTextureExtension(path)
+            val texture = when (extension) {
+                "tga" -> tgaLoader.load(path).apply {
+                    generateMipmaps = options.generateMipmaps
+                }
+                else -> {
+                    val bytes = resolver.load(path, deriveBasePath(path))
+                    val decoded = PlatformImageDecoder.decode(bytes)
+                    Texture2D.fromImageData(decoded.width, decoded.height, decoded.pixels).apply {
+                        setTextureName(path.substringAfterLast('/'))
+                        generateMipmaps = options.generateMipmaps
+                    }
+                }
             }
 
             if (options.enableCaching) {
@@ -110,6 +120,26 @@ class AdvancedAssetLoader(
         val normalized = path.replace('\\', '/')
         val lastSlash = normalized.lastIndexOf('/')
         return if (lastSlash >= 0) normalized.substring(0, lastSlash + 1) else null
+    }
+
+    private fun detectTextureExtension(path: String): String? {
+        if (path.startsWith("data:", ignoreCase = true)) {
+            val mimeEnd = path.indexOf(';', startIndex = 5)
+            if (mimeEnd > 5) {
+                val mime = path.substring(5, mimeEnd).lowercase()
+                return when (mime) {
+                    "image/x-tga", "image/tga" -> "tga"
+                    "image/png" -> "png"
+                    "image/jpeg", "image/jpg" -> "jpg"
+                    "image/webp" -> "webp"
+                    else -> null
+                }
+            }
+            return null
+        }
+
+        val ext = path.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        return ext.ifEmpty { null }
     }
 }
 
