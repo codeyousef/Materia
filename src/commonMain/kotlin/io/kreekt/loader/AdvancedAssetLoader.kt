@@ -12,7 +12,6 @@ import kotlinx.coroutines.withContext
 
 // Stub implementations for missing types
 typealias AssetCache = MutableMap<String, Any>
-typealias LoadingProgress = Float
 typealias Model3D = Any
 typealias Texture2D = Texture
 typealias ModelLoadOptions = LoadOptions
