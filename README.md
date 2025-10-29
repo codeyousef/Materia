@@ -96,7 +96,7 @@ KreeKt follows a modular architecture with clear separation of concerns:
 ├── 📐 kreekt-geometry      # Geometry classes and primitives
 ├── 🎭 kreekt-material      # Material system and shaders
 ├── 🎬 kreekt-animation     # Animation clips and mixers
-├── 📁 kreekt-loader        # Asset loading (GLTF, OBJ, FBX)
+├── 📁 kreekt-loader        # Asset loading (GLTF, OBJ, PLY, STL)
 ├── 🎮 kreekt-controls      # Camera controls and interaction
 ├── ⚡ kreekt-physics       # Physics engine integration
 ├── 🥽 kreekt-xr           # VR/AR support

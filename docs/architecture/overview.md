@@ -139,7 +139,11 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 - GLTF/GLB loader
 - OBJ loader
-- FBX loader
+## Asset Pipeline
+
+- GLTF/GLB loader (complete)
+- OBJ/PLY/STL loaders (ASCII)
+- Additional source formats should be converted to glTF prior to import.
 - Texture compression (DRACO, KTX2)
 - Size: ~500KB
 

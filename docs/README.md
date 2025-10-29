@@ -35,7 +35,7 @@ rendering backends. Write 3D applications once and deploy across **JVM, Web (Jav
 | Feature              | Status         | Notes                                               |
 |----------------------|----------------|-----------------------------------------------------|
 | **Lighting System**  | ⚠️ Partial     | Type definitions exist, full implementation pending |
-| **Asset Loaders**    | 📋 Planned     | GLTF, OBJ, FBX support planned                      |
+| **Asset Loaders**    | ✅ Available   | GLTF, GLB, OBJ, PLY, STL                             |
 | **Post-Processing**  | 🚫 Disabled    | Implemented but disabled on Windows build           |
 | **Native Renderers** | ⚠️ In Progress | Vulkan implementation in progress                   |
 

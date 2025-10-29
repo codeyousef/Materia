@@ -100,7 +100,10 @@ Asset loading system.
 
 - **GLTF**: GLTF/GLB loader
 - **OBJ**: Wavefront OBJ loader
-- **FBX**: Autodesk FBX loader
+- **GLTF/GLB**: Comprehensive glTF 2.0 loader
+- **OBJ**: Wavefront OBJ loader (positions, UVs, normals)
+- **PLY**: ASCII PLY loader (positions, normals, UVs)
+- **STL**: ASCII/Binary STL loader
 - **Texture**: Image and texture loading
 - **Font**: Font loading for text
 

@@ -267,19 +267,24 @@ interface TelemetryTransmitter {
  */
 class DefaultTelemetryTransmitter : TelemetryTransmitter {
     override suspend fun send(payload: TelemetryPayload) {
-        // In production, this would POST to telemetry endpoint
-        // For now, just log the payload
-        println("Telemetry Event: ${payload.eventType} (${payload.eventId})")
-        println("  Backend: ${payload.backendId}")
-        println("  Device: ${payload.device?.vendorId}:${payload.device?.productId}")
-        println("  Session: ${payload.sessionId.take(16)}...")
+        TelemetryArchive.record(payload)
+    }
+}
 
-        payload.performance?.let { perf ->
-            println("  Performance: init=${perf.initMs}ms, avg=${perf.avgFps} FPS, min=${perf.minFps} FPS")
-        }
+object TelemetryArchive {
+    private const val MAX_EVENTS = 256
+    private val events = ArrayDeque<TelemetryPayload>(MAX_EVENTS)
 
-        payload.limitations?.let { limitations ->
-            println("  Limitations: ${limitations.joinToString(", ")}")
+    fun record(payload: TelemetryPayload) {
+        synchronized(events) {
+            if (events.size == MAX_EVENTS) {
+                events.removeFirst()
+            }
+            events.addLast(payload)
         }
     }
+
+    fun snapshot(): List<TelemetryPayload> = synchronized(events) { events.toList() }
+
+    fun clear() = synchronized(events) { events.clear() }
 }

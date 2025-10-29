@@ -38,9 +38,6 @@ class AdvancedAssetLoader(
                 ModelFormat.OBJ -> objLoader.load(path)
                 ModelFormat.PLY -> plyLoader.load(path)
                 ModelFormat.STL -> stlLoader.load(path)
-                ModelFormat.FBX -> throw UnsupportedOperationException("FBX loading is not yet supported")
-                ModelFormat.USD -> throw UnsupportedOperationException("USD loading is not yet supported")
-                ModelFormat.COLLADA -> throw UnsupportedOperationException("COLLADA loading is not yet supported")
             }
 
             if (options.enableCaching) {
@@ -109,9 +106,6 @@ class AdvancedAssetLoader(
             "obj" -> ModelFormat.OBJ
             "ply" -> ModelFormat.PLY
             "stl" -> ModelFormat.STL
-            "fbx" -> ModelFormat.FBX
-            "usd", "usda", "usdc", "usdz" -> ModelFormat.USD
-            "dae" -> ModelFormat.COLLADA
             else -> throw IllegalArgumentException("Unknown model format: $extension")
         }
     }
@@ -153,8 +147,5 @@ enum class ModelFormat {
     GLB,
     OBJ,
     PLY,
-    STL,
-    FBX,
-    USD,
-    COLLADA
+    STL
 }

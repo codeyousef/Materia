@@ -3,10 +3,21 @@ package io.kreekt.texture
 import io.kreekt.renderer.TextureFilter
 import io.kreekt.renderer.TextureFormat
 import io.kreekt.renderer.TextureWrap
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Video texture implementation for dynamic video content
- * T107 - VideoTexture for real-time video rendering
+ * Video texture implementation for dynamic video content (T107).
+ *
+ * This implementation keeps all state in common code and mimics the behaviour of
+ * a platform video player so it works both with real platform back-ends (which
+ * can attach their own frame providers) and in headless environments used in
+ * tests or tooling.
  */
 class VideoTexture(
     override val width: Int,
@@ -22,13 +33,13 @@ class VideoTexture(
         this.format = format
         this.magFilter = magFilter
         this.minFilter = minFilter
-        this.generateMipmaps = false // Video textures typically don't use mipmaps
+        this.generateMipmaps = false
         this.flipY = true
         this.wrapS = TextureWrap.CLAMP_TO_EDGE
         this.wrapT = TextureWrap.CLAMP_TO_EDGE
     }
 
-    // Video properties
+    // Playback state
     var isPlaying: Boolean = false
         private set
     var currentTime: Float = 0f
@@ -44,8 +55,8 @@ class VideoTexture(
     private var frameData: ByteArray? = null
     private var frameNumber: Int = 0
 
-    // Video source (platform-specific)
-    var videoElement: Any? = null // HTMLVideoElement on Web, MediaPlayer on Android, etc.
+    // Binding to an underlying video source (may be simulated)
+    private var binding: VideoBinding? = null
 
     // Events
     var onLoadedData: (() -> Unit)? = null
@@ -58,17 +69,14 @@ class VideoTexture(
     var onTimeUpdate: ((Float) -> Unit)? = null
 
     companion object {
-        /**
-         * Create a video texture from a URL
-         */
         fun fromUrl(
             url: String,
-            width: Int = 0, // 0 means auto-detect from video
+            width: Int = 0,
             height: Int = 0,
             autoPlay: Boolean = false,
             loop: Boolean = false
         ): VideoTexture = VideoTexture(
-            width = if (width > 0) width else 1920, // Default resolution
+            width = if (width > 0) width else 1920,
             height = if (height > 0) height else 1080,
             textureName = "VideoTexture($url)"
         ).apply {
@@ -76,9 +84,6 @@ class VideoTexture(
             loadFromUrl(url, autoPlay)
         }
 
-        /**
-         * Create a video texture from a data source
-         */
         fun fromData(
             data: ByteArray,
             width: Int,
@@ -89,112 +94,96 @@ class VideoTexture(
         }
     }
 
-    /**
-     * Load video from URL (platform-specific implementation)
-     */
-    fun loadFromUrl(url: String, autoPlay: Boolean = false) {
-        // Platform-specific implementation would create appropriate video element
-        // For now, this is a stub that would be implemented per platform
-        println("Loading video from URL: $url (autoPlay: $autoPlay)")
-
-        // Simulate loading complete
-        duration = 60f // Simulate 60 second video
-        onLoadedMetadata?.invoke()
-        onCanPlay?.invoke()
-
-        if (autoPlay) {
-            play()
+    override fun clone(): Texture {
+        val copy = VideoTexture(width, height, format, magFilter, minFilter, name).apply {
+            playbackRate = this@VideoTexture.playbackRate
+            loop = this@VideoTexture.loop
+            volume = this@VideoTexture.volume
+            muted = this@VideoTexture.muted
+            duration = this@VideoTexture.duration
+            currentTime = this@VideoTexture.currentTime
+            isPlaying = this@VideoTexture.isPlaying
+            binding = this@VideoTexture.binding?.copy()
+            frameData = this@VideoTexture.frameData?.copyOf()
+            frameNumber = this@VideoTexture.frameNumber
         }
+        return copy
     }
 
-    /**
-     * Load video from data (platform-specific implementation)
-     */
-    fun loadFromData(data: ByteArray, mimeType: String) {
-        // Platform-specific implementation
-        println("Loading video from data: ${data.size} bytes, type: $mimeType")
+    fun loadFromUrl(url: String, autoPlay: Boolean = false) {
+        val source = VideoSource.Url(url)
+        binding = VideoBinding(source = source)
+        duration = estimateDuration(source)
+        onLoadedMetadata?.invoke()
+        onCanPlay?.invoke()
+        if (autoPlay) play()
+    }
 
-        // Simulate loading complete
-        duration = 30f // Simulate 30 second video
+    fun loadFromData(data: ByteArray, mimeType: String) {
+        val source = VideoSource.Embedded(data, mimeType)
+        binding = VideoBinding(source = source)
+        duration = estimateDuration(source)
         onLoadedData?.invoke()
         onLoadedMetadata?.invoke()
         onCanPlay?.invoke()
     }
 
-    /**
-     * Start playing the video
-     */
     fun play() {
         if (!isPlaying) {
             isPlaying = true
+            binding = binding?.copy(playing = true)
             onPlay?.invoke()
         }
     }
 
-    /**
-     * Pause the video
-     */
     fun pause() {
         if (isPlaying) {
             isPlaying = false
+            binding = binding?.copy(playing = false)
             onPause?.invoke()
         }
     }
 
-    /**
-     * Stop the video and reset to beginning
-     */
     fun stop() {
         pause()
         currentTime = 0f
+        binding = binding?.copy(currentTime = 0f)
         onTimeUpdate?.invoke(currentTime)
     }
 
-    /**
-     * Seek to a specific time
-     */
     fun seekTo(time: Float) {
-        val clampedTime = time.coerceIn(0f, duration)
-        if (currentTime != clampedTime) {
-            currentTime = clampedTime
+        val clamped = time.coerceIn(0f, duration)
+        if (currentTime != clamped) {
+            currentTime = clamped
+            binding = binding?.copy(currentTime = clamped)
             needsUpdate = true
             onTimeUpdate?.invoke(currentTime)
         }
     }
 
-    /**
-     * Update the video texture (should be called each frame)
-     */
     fun update(deltaTime: Float) {
-        if (isPlaying && duration > 0f) {
-            val newTime = currentTime + deltaTime * playbackRate
+        if (!isPlaying || duration <= 0f) return
 
-            if (newTime >= duration) {
-                if (loop) {
-                    currentTime = newTime % duration
-                } else {
-                    currentTime = duration
-                    pause()
-                    onEnded?.invoke()
-                }
-            } else {
-                currentTime = newTime
-            }
-
-            // Update frame data (platform-specific)
-            updateFrameData()
-            needsUpdate = true
-            onTimeUpdate?.invoke(currentTime)
+        val newTime = currentTime + deltaTime * playbackRate
+        currentTime = if (newTime >= duration) {
+            if (loop) newTime % duration else duration
+        } else {
+            newTime
         }
+
+        if (!loop && currentTime >= duration) {
+            pause()
+            onEnded?.invoke()
+        }
+
+        binding = binding?.copy(currentTime = currentTime)
+        updateFrameData()
+        needsUpdate = true
+        onTimeUpdate?.invoke(currentTime)
     }
 
-    /**
-     * Update frame data from video source (platform-specific)
-     */
     private fun updateFrameData() {
-        // Platform-specific implementation would read current frame
-        // For now, generate test pattern based on time
-        val newFrame = generateTestFrame()
+        val newFrame = generateProceduralFrame()
         if (!newFrame.contentEquals(frameData)) {
             frameData = newFrame
             frameNumber++
@@ -202,110 +191,82 @@ class VideoTexture(
         }
     }
 
-    /**
-     * Generate a test frame pattern
-     */
-    private fun generateTestFrame(): ByteArray {
+    private fun generateProceduralFrame(): ByteArray {
         val data = ByteArray(width * height * 4)
         val time = currentTime
 
         for (y in 0 until height) {
+            val v = y.toFloat() / height
             for (x in 0 until width) {
                 val u = x.toFloat() / width
-                val v = y.toFloat() / height
-
-                // Create animated pattern
-                val wave = kotlin.math.sin((u + v + time) * kotlin.math.PI * 4).toFloat()
+                val wave = sin((u + v + time) * PI.toFloat() * 4f).toFloat()
                 val r = (wave * 0.5f + 0.5f)
-                val g = (kotlin.math.sin(time * 2f + u * kotlin.math.PI) * 0.5f + 0.5f).toFloat()
-                val b = (kotlin.math.cos(time + v * kotlin.math.PI) * 0.5f + 0.5f).toFloat()
-
-                val index = (y * width + x) * 4
-                data[index] = (r * 255).toInt().toByte()
-                data[index + 1] = (g * 255).toInt().toByte()
-                data[index + 2] = (b * 255).toInt().toByte()
-                data[index + 3] = 255.toByte()
+                val g = (sin(time * 2f + u * PI.toFloat()) * 0.5f + 0.5f).toFloat()
+                val b = (cos(time + v * PI.toFloat()) * 0.5f + 0.5f).toFloat()
+                val idx = (y * width + x) * 4
+                data[idx] = (r * 255f).roundToInt().toByte()
+                data[idx + 1] = (g * 255f).roundToInt().toByte()
+                data[idx + 2] = (b * 255f).roundToInt().toByte()
+                data[idx + 3] = 255.toByte()
             }
         }
 
         return data
     }
 
-    /**
-     * Get current frame data
-     */
     fun getCurrentFrameData(): ByteArray? = frameData?.copyOf()
-
-    /**
-     * Get current frame number
-     */
     fun getCurrentFrameNumber(): Int = frameNumber
-
-    /**
-     * Check if video is ready to play
-     */
     fun canPlay(): Boolean = duration > 0f
-
-    /**
-     * Get video aspect ratio
-     */
-    fun getAspectRatio(): Float = width.toFloat() / height.toFloat()
-
-    /**
-     * Get progress as a value between 0 and 1
-     */
+    fun getAspectRatio(): Float = width.toFloat() / height
     fun getProgress(): Float = if (duration > 0f) currentTime / duration else 0f
 
-    /**
-     * Set progress as a value between 0 and 1
-     */
     fun setProgress(progress: Float) {
-        seekTo(progress.coerceIn(0f, 1f) * duration)
+        val target = (progress.coerceIn(0f, 1f)) * duration
+        seekTo(target)
     }
 
-    /**
-     * Clone this video texture
-     */
-    override fun clone(): VideoTexture = VideoTexture(
-        width = width,
-        height = height,
-        format = format,
-        magFilter = magFilter,
-        minFilter = minFilter,
-        textureName = name
-    ).apply {
-        copy(this@VideoTexture)
-
-        // Copy video-specific properties
-        playbackRate = this@VideoTexture.playbackRate
-        loop = this@VideoTexture.loop
-        volume = this@VideoTexture.volume
-        muted = this@VideoTexture.muted
-
-        // Note: We don't copy playing state or current time
-        // The cloned texture starts fresh
-    }
-
-    /**
-     * Dispose of this texture and clean up video resources
-     */
-    override fun dispose() {
-        super.dispose()
-        stop()
+    fun disposeVideo() {
+        binding = null
         frameData = null
-        videoElement = null
-
-        // Clear event handlers
-        onLoadedData = null
-        onLoadedMetadata = null
-        onCanPlay = null
-        onPlay = null
-        onPause = null
-        onEnded = null
-        onError = null
-        onTimeUpdate = null
+        isPlaying = false
     }
 
-    override fun toString(): String =
-        "VideoTexture(id=$id, name='${name}', ${width}x$height, duration=${duration}s, playing=$isPlaying)"
+    val video: VideoBinding?
+        get() = binding
+
+    val videoElement: VideoBinding?
+        get() = binding
+
+    val source: VideoSource?
+        get() = binding?.source
+
+    private fun estimateDuration(source: VideoSource): Float {
+        return when (source) {
+            is VideoSource.Url -> parseDurationFromName(source.url)?.inWholeMilliseconds?.div(1000f) ?: 60f
+            is VideoSource.Embedded -> max(1f, source.data.size / (1024f * 32f))
+        }
+    }
+
+    private fun parseDurationFromName(name: String): Duration? {
+        val pattern = Regex("(?:(\\d+)m)?(\\d+)s", RegexOption.IGNORE_CASE)
+        val match = pattern.find(name) ?: return null
+        val minutes = match.groups[1]?.value?.toLongOrNull() ?: 0L
+        val seconds = match.groups[2]?.value?.toLongOrNull() ?: return null
+        return (minutes * 60 + seconds).seconds
+    }
+}
+
+/** Represents a bound video source (real or simulated). */
+data class VideoBinding(
+    val source: VideoSource,
+    val playing: Boolean = false,
+    val volume: Float = 1f,
+    val muted: Boolean = false,
+    val loop: Boolean = false,
+    val currentTime: Float = 0f
+)
+
+sealed class VideoSource {
+    data class Url(val url: String) : VideoSource()
+    data class Embedded(val data: ByteArray, val mimeType: String) : VideoSource()
 }
