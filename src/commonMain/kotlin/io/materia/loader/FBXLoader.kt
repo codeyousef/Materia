@@ -44,13 +44,13 @@ class FBXLoader(
                 ?: throw IllegalArgumentException("FBX file missing Vertices array")
             val polygonIndices = readIntArray("PolygonVertexIndex")
                 ?: throw IllegalArgumentException("FBX file missing PolygonVertexIndex array")
-            val normals = readLayerFloatArray("LayerElementNormal", "Normals")
-            val uvs = readLayerFloatArray("LayerElementUV", "UV")
+            val normalsSource = readLayerFloatArray("LayerElementNormal", "Normals")
+            val uvsSource = readLayerFloatArray("LayerElementUV", "UV")
 
             val triangles = triangulate(polygonIndices)
             val finalPositions = FloatArray(triangles.size * 3)
-            val finalNormals = normals?.let { FloatArray(triangles.size * 3) }
-            val finalUVs = uvs?.let { FloatArray(triangles.size * 2) }
+            val finalNormals = normalsSource?.let { FloatArray(triangles.size * 3) }
+            val finalUVs = uvsSource?.let { FloatArray(triangles.size * 2) }
 
             for (i in triangles.indices) {
                 val vertexIndex = triangles[i]
@@ -60,17 +60,26 @@ class FBXLoader(
                 finalPositions[dstPosBase + 1] = vertices[posBase + 1]
                 finalPositions[dstPosBase + 2] = vertices[posBase + 2]
 
-                if (finalNormals != null && normals != null && vertexIndex * 3 + 2 < normals.size) {
-                    finalNormals[dstPosBase] = normals[posBase]
-                    finalNormals[dstPosBase + 1] = normals[posBase + 1]
-                    finalNormals[dstPosBase + 2] = normals[posBase + 2]
+                finalNormals?.let { normalsTarget ->
+                    normalsSource?.let { normals ->
+                        val normalBase = vertexIndex * 3
+                        if (normalBase + 2 < normals.size) {
+                            normalsTarget[dstPosBase] = normals[normalBase]
+                            normalsTarget[dstPosBase + 1] = normals[normalBase + 1]
+                            normalsTarget[dstPosBase + 2] = normals[normalBase + 2]
+                        }
+                    }
                 }
 
-                if (finalUVs != null && uvs != null && vertexIndex * 2 + 1 < uvs.size) {
-                    val uvBase = vertexIndex * 2
-                    val dstUvBase = i * 2
-                    finalUVs[dstUvBase] = uvs[uvBase]
-                    finalUVs[dstUvBase + 1] = 1f - uvs[uvBase + 1] // FBX V axis is flipped
+                finalUVs?.let { uvsTarget ->
+                    uvsSource?.let { uvs ->
+                        val uvBase = vertexIndex * 2
+                        if (uvBase + 1 < uvs.size) {
+                            val dstUvBase = i * 2
+                            uvsTarget[dstUvBase] = uvs[uvBase]
+                            uvsTarget[dstUvBase + 1] = 1f - uvs[uvBase + 1] // FBX V axis is flipped
+                        }
+                    }
                 }
             }
 

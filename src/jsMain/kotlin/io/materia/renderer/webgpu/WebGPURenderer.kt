@@ -1,3 +1,5 @@
+@file:Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE", "USELESS_IS_CHECK")
+
 package io.materia.renderer.webgpu
 
 import io.materia.camera.Camera
@@ -11,14 +13,32 @@ import io.materia.lighting.ibl.PrefilterMipSelector
 import io.materia.material.MeshBasicMaterial
 import io.materia.material.MeshStandardMaterial
 import io.materia.optimization.Frustum
-import io.materia.renderer.*
+import io.materia.renderer.BackendType
+import io.materia.renderer.RenderStats
+import io.materia.renderer.Renderer
+import io.materia.renderer.RendererCapabilities
+import io.materia.renderer.RendererConfig
+import io.materia.renderer.Texture2D
 import io.materia.renderer.geometry.GeometryAttribute
 import io.materia.renderer.geometry.GeometryMetadata
 import io.materia.renderer.geometry.buildGeometryOptions
-import io.materia.renderer.gpu.*
+import io.materia.renderer.gpu.GpuBackend
+import io.materia.renderer.gpu.GpuBindGroupLayout
+import io.materia.renderer.gpu.GpuDeviceFactory
+import io.materia.renderer.gpu.GpuDiagnostics
+import io.materia.renderer.gpu.GpuPowerPreference
+import io.materia.renderer.gpu.GpuRequestConfig
+import io.materia.renderer.gpu.unwrapHandle
+import io.materia.renderer.gpu.unwrapHandleAdapter
 import io.materia.renderer.lighting.SceneLightingUniforms
 import io.materia.renderer.lighting.collectSceneLightingUniforms
-import io.materia.renderer.material.*
+import io.materia.renderer.material.MaterialBindingSource
+import io.materia.renderer.material.MaterialBindingType
+import io.materia.renderer.material.MaterialDescriptor
+import io.materia.renderer.material.MaterialDescriptorRegistry
+import io.materia.renderer.material.ResolvedMaterialDescriptor
+import io.materia.renderer.material.bindingGroups
+import io.materia.renderer.material.requiresBinding
 import io.materia.renderer.shader.MaterialShaderDescriptor
 import io.materia.renderer.shader.MaterialShaderGenerator
 import io.materia.renderer.shader.withOverrides

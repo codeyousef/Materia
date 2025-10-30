@@ -5,6 +5,7 @@ import io.materia.core.scene.Fog
 import io.materia.core.scene.Scene
 import io.materia.light.AmbientLight
 import io.materia.light.DirectionalLight
+import io.materia.lighting.Light
 
 data class SceneLightingUniforms(
     val ambientColor: FloatArray,
@@ -25,31 +26,16 @@ data class SceneLightingUniforms(
 }
 
 fun collectSceneLightingUniforms(scene: Scene): SceneLightingUniforms {
-    var ambientR = 0f
-    var ambientG = 0f
-    var ambientB = 0f
+    val lights = collectLights(scene)
 
-    var strongestDirectional: DirectionalLight? = null
-    var strongestDirectionalIntensity = -Float.MAX_VALUE
+    val ambientLights = lights.filterIsInstance<AmbientLight>()
+    val ambientR = ambientLights.sumOf { (it.color.r * it.intensity).toDouble() }.toFloat()
+    val ambientG = ambientLights.sumOf { (it.color.g * it.intensity).toDouble() }.toFloat()
+    val ambientB = ambientLights.sumOf { (it.color.b * it.intensity).toDouble() }.toFloat()
 
-    scene.traverse { obj ->
-        when (obj) {
-            is AmbientLight -> {
-                val intensity = obj.intensity
-                val color = obj.color
-                ambientR += color.r * intensity
-                ambientG += color.g * intensity
-                ambientB += color.b * intensity
-            }
-
-            is DirectionalLight -> {
-                if (obj.intensity > strongestDirectionalIntensity) {
-                    strongestDirectionalIntensity = obj.intensity
-                    strongestDirectional = obj
-                }
-            }
-        }
-    }
+    val strongestDirectional = lights
+        .filterIsInstance<DirectionalLight>()
+        .maxByOrNull { it.intensity }
 
     val ambientColor = floatArrayOf(
         ambientR,
@@ -100,4 +86,14 @@ fun collectSceneLightingUniforms(scene: Scene): SceneLightingUniforms {
         mainLightDirection = mainLightDirection,
         mainLightColor = mainLightColor
     )
+}
+
+private fun collectLights(scene: Scene): List<Light> {
+    val registry = scene.userData["lights"]
+    return when (registry) {
+        is Light -> listOf(registry)
+        is Collection<*> -> registry.filterIsInstance<Light>()
+        is Array<*> -> registry.filterIsInstance<Light>()
+        else -> emptyList()
+    }
 }

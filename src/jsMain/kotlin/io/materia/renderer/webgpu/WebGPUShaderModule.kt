@@ -48,8 +48,8 @@ class WebGPUShaderModule(
             // Attempt compilation and check for errors
             val testDescriptor = js("({})").unsafeCast<GPUShaderModuleDescriptor>()
             testDescriptor.code = descriptor.code
-            val testModule = device.createShaderModule(testDescriptor)
-            testModule != null
+            device.createShaderModule(testDescriptor)
+            true
         } catch (e: Exception) {
             false
         }

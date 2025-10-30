@@ -1,8 +1,6 @@
 package io.materia.renderer.backend
 
-import kotlinx.datetime.Clock
-
-/**
+/** 
  * Android Vulkan backend negotiator for Android API 33+ devices.
  * Uses native Vulkan API with Android-specific extensions.
  */

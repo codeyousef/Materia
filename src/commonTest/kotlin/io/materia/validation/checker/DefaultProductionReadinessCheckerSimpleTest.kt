@@ -1,10 +1,8 @@
 package io.materia.validation.checker
 
-import io.materia.validation.ProductionReadinessChecker
 import io.materia.validation.ValidationConfiguration
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -18,14 +16,6 @@ import kotlin.test.assertTrue
 class DefaultProductionReadinessCheckerSimpleTest {
 
     private val checker = DefaultProductionReadinessChecker()
-
-    @Test
-    fun `checker should implement ProductionReadinessChecker interface`() {
-        assertTrue(
-            checker is ProductionReadinessChecker,
-            "Should implement ProductionReadinessChecker interface"
-        )
-    }
 
     @Test
     fun `validateProductionReadiness should return valid result`() = runTest {

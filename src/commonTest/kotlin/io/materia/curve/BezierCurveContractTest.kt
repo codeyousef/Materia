@@ -1,31 +1,43 @@
 package io.materia.curve
 
+import kotlin.math.pow
 import kotlin.test.Test
-import kotlin.test.Ignore
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Contract test for Bézier curves - T019
- * Covers: FR-CR004, FR-CR005 from contracts/curve-api.kt
+ * Simplified contract tests for Bézier curve evaluation.
+ * Uses light-weight stubs until full geometry implementation is available.
  */
 class BezierCurveContractTest {
+
     @Test
     fun testCubicBezier() {
         val curve = CubicBezierCurve3()
-        assertTrue(curve.evaluate(0.5f) != null)
+        val point = curve.evaluate(0.5f)
+        assertNotNull(point)
+        assertTrue(point.first >= 0f)
     }
 
     @Test
     fun testQuadraticBezier() {
         val curve = QuadraticBezierCurve3()
-        assertTrue(curve.evaluate(0.5f) != null)
+        val point = curve.evaluate(0.5f)
+        assertNotNull(point)
+        assertTrue(point.first >= 0f)
     }
 }
 
-class CubicBezierCurve3 {
-    fun evaluate(t: Float) = Any()
+private class CubicBezierCurve3 {
+    fun evaluate(t: Float): Triple<Float, Float, Float>? = when {
+        t < 0f || t > 1f -> null
+        else -> Triple(t, t * t, t * t * t)
+    }
 }
 
-class QuadraticBezierCurve3 {
-    fun evaluate(t: Float) = Any()
+private class QuadraticBezierCurve3 {
+    fun evaluate(t: Float): Pair<Float, Float>? = when {
+        t < 0f || t > 1f -> null
+        else -> t to t.pow(2)
+    }
 }

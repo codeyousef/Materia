@@ -12,16 +12,14 @@
  */
 package io.materia.helper
 
-import io.materia.core.scene.Object3D
+import io.materia.core.math.Box3
 import io.materia.core.math.Color
 import io.materia.core.scene.Mesh
 import io.materia.geometry.primitives.BoxGeometry
 import io.materia.material.MeshBasicMaterial
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class DebugHelpersContractTest {
 
@@ -123,33 +121,21 @@ class DebugHelpersContractTest {
         // When: Updating helper
         helper.update()
 
-        // Then: Should not throw exception
-        assertTrue(true, "BoxHelper update should execute without error")
+        // Then: helper should still reference source object
+        assertEquals(mesh, helper.`object`)
     }
 
     @Test
     fun testBox3HelperFromBoundingBox() {
-        // Given: A bounding box (Box3)
-        // Note: Box3 might not be implemented yet, so this tests the API
-        // val box = Box3(min = Vector3(-1f, -1f, -1f), max = Vector3(1f, 1f, 1f))
+        val box = Box3()
+        box.min.set(-1f, -1f, -1f)
+        box.max.set(1f, 1f, 1f)
 
-        // When: Creating Box3Helper
-        // val helper = Box3Helper(box)
+        val helper = Box3Helper(box)
 
-        // Then: Helper should exist
-        // assertNotNull(helper, "Box3Helper should be created")
-        assertTrue(true, "Box3Helper test placeholder")
-    }
-
-    @Test
-    fun testHelperIsObject3D() {
-        // Given: Various helpers
-        val axesHelper = AxesHelper(5f)
-        val gridHelper = GridHelper(100f, 10)
-
-        // Then: Should be Object3D instances
-        assertTrue(axesHelper is Object3D, "AxesHelper should extend Object3D")
-        assertTrue(gridHelper is Object3D, "GridHelper should extend Object3D")
+        assertNotNull(helper)
+        helper.update()
+        assertEquals("Box3Helper", helper.name)
     }
 
     @Test

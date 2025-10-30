@@ -4,17 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.nio.file.SimpleFileVisitor
-import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.BasicFileAttributes
-import kotlin.io.path.bufferedReader
-import kotlin.io.path.extension
+import java.io.File
 
 actual object FileScannerFactory {
     actual fun createFileScanner(): FileScanner = AndroidFileScanner()
@@ -28,141 +19,134 @@ private class AndroidFileScanner : FileScanner {
         pattern: String?,
         recursive: Boolean
     ): Flow<FileInfo> = flow {
-        val root = Paths.get(path)
-        if (!Files.exists(root)) return@flow
+        val root = File(path)
+        if (!root.exists() || !root.isDirectory) return@flow
 
-        val matcher = pattern?.let { FileSystems.getDefault().getPathMatcher("glob:$it") }
-
-        if (recursive) {
-            Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
-                override fun visitFile(
-                    file: Path,
-                    attrs: BasicFileAttributes
-                ): java.nio.file.FileVisitResult {
-                    if (matcher == null || matcher.matches(file.fileName)) {
-                        runBlocking { emit(createFileInfo(file, attrs)) }
-                    }
-                    return java.nio.file.FileVisitResult.CONTINUE
-                }
-            })
+        val matcher = pattern?.let(::globToRegex)
+        val files = if (recursive) {
+            root.walkTopDown().filter { it.isFile }
         } else {
-            Files.newDirectoryStream(root, pattern ?: "*").use { stream ->
-                stream.forEach { file ->
-                    if (Files.isRegularFile(file)) {
-                        emit(createFileInfo(file))
-                    }
-                }
+            root.listFiles()?.asSequence()?.filter { it.isFile } ?: emptySequence()
+        }
+
+        for (file in files) {
+            if (matcher == null || matcher.matches(file.name)) {
+                createFileInfo(file)?.let { emit(it) }
             }
         }
     }.flowOn(dispatcher)
 
     override suspend fun findFiles(baseDir: String, patterns: List<String>): List<FileInfo> =
         withContext(dispatcher) {
-            val dir = Paths.get(baseDir)
-            if (!Files.exists(dir)) return@withContext emptyList<FileInfo>()
+            val root = File(baseDir)
+            if (!root.exists() || !root.isDirectory) return@withContext emptyList()
 
-            val results = mutableListOf<FileInfo>()
-            Files.walk(dir).use { paths ->
-                paths.filter { Files.isRegularFile(it) }.forEach { path ->
-                    if (patterns.isEmpty() || patterns.any { pattern ->
-                            path.fileName.toString().matchesGlob(pattern)
-                        }) {
-                        createFileInfo(path)?.let { results += it }
-                    }
+            val matchers = patterns.map(::globToRegex)
+            root.walkTopDown()
+                .filter { it.isFile }
+                .filter { file ->
+                    matchers.isEmpty() || matchers.any { regex -> regex.matches(file.name) }
                 }
-            }
-            results
+                .mapNotNull(::createFileInfo)
+                .toList()
         }
 
     override suspend fun getFileInfo(path: String): FileInfo? = withContext(dispatcher) {
-        val file = Paths.get(path)
-        if (Files.exists(file)) createFileInfo(file) else null
+        createFileInfo(File(path))
     }
 
     override suspend fun readFileContent(path: String): String? = withContext(dispatcher) {
-        val file = Paths.get(path)
-        if (!Files.exists(file) || !Files.isRegularFile(file)) {
+        val file = File(path)
+        if (!file.exists() || !file.isFile || !file.canRead()) {
             null
         } else {
-            file.bufferedReader().use { it.readText() }
+            runCatching { file.readText() }.getOrNull()
         }
     }
 
     override suspend fun writeFileContent(path: String, content: String): Boolean =
         withContext(dispatcher) {
-            try {
-                val file = Paths.get(path)
-                Files.createDirectories(file.parent)
-                Files.write(file, content.toByteArray())
-                true
-            } catch (_: Exception) {
-                false
-            }
+            val file = File(path)
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.writeText(content)
+            }.isSuccess
         }
 
     override suspend fun exists(path: String): Boolean = withContext(dispatcher) {
-        Files.exists(Paths.get(path))
+        File(path).exists()
     }
 
     override suspend fun delete(path: String): Boolean = withContext(dispatcher) {
-        runCatching { Files.deleteIfExists(Paths.get(path)) }.getOrElse { false }
+        val file = File(path)
+        file.exists() && runCatching { file.delete() }.getOrElse { false }
     }
 
     override suspend fun createDirectory(path: String): Boolean = withContext(dispatcher) {
-        try {
-            Files.createDirectories(Paths.get(path))
-            true
-        } catch (_: Exception) {
-            false
-        }
+        val dir = File(path)
+        if (dir.exists()) dir.isDirectory else dir.mkdirs()
     }
 
     override suspend fun copyFile(sourcePath: String, destinationPath: String): Boolean =
         withContext(dispatcher) {
-            try {
-                val source = Paths.get(sourcePath)
-                val destination = Paths.get(destinationPath)
-                Files.createDirectories(destination.parent)
-                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
-                true
-            } catch (_: Exception) {
-                false
-            }
+            val source = File(sourcePath)
+            val destination = File(destinationPath)
+            if (!source.exists() || !source.isFile) return@withContext false
+
+            runCatching {
+                destination.parentFile?.mkdirs()
+                source.inputStream().use { input ->
+                    destination.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }.isSuccess
         }
 
     override suspend fun moveFile(sourcePath: String, destinationPath: String): Boolean =
         withContext(dispatcher) {
-            try {
-                val source = Paths.get(sourcePath)
-                val destination = Paths.get(destinationPath)
-                Files.createDirectories(destination.parent)
-                Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING)
+            val source = File(sourcePath)
+            if (!source.exists()) return@withContext false
+
+            val destination = File(destinationPath)
+            destination.parentFile?.mkdirs()
+            if (source.renameTo(destination)) {
                 true
-            } catch (_: Exception) {
-                false
+            } else {
+                copyFile(sourcePath, destinationPath) && source.delete()
             }
         }
 
-    private fun createFileInfo(path: Path, attrs: BasicFileAttributes? = null): FileInfo {
-        val attributes = attrs ?: Files.readAttributes(path, BasicFileAttributes::class.java)
+    private fun createFileInfo(file: File): FileInfo? {
+        if (!file.exists()) return null
+
+        val canonical = runCatching { file.canonicalFile }.getOrElse { file.absoluteFile }
+        val size = if (canonical.isFile) canonical.length() else 0L
+        val lastModified = canonical.lastModified()
+
         return FileInfo(
-            path = path.toAbsolutePath().toString(),
-            name = path.fileName?.toString() ?: "",
-            extension = path.extension.takeIf { it.isNotEmpty() },
-            size = attributes.size(),
-            lastModified = attributes.lastModifiedTime().toMillis(),
-            isDirectory = attributes.isDirectory,
-            isFile = attributes.isRegularFile,
-            isReadable = Files.isReadable(path),
-            isWritable = Files.isWritable(path)
+            path = canonical.absolutePath,
+            name = canonical.name,
+            extension = canonical.extension.takeIf { it.isNotEmpty() },
+            size = size,
+            lastModified = lastModified,
+            isDirectory = canonical.isDirectory,
+            isFile = canonical.isFile,
+            isReadable = canonical.canRead(),
+            isWritable = canonical.canWrite()
         )
     }
 }
 
-private fun String.matchesGlob(pattern: String): Boolean {
-    val regex = pattern
-        .replace(".", "\\.")
-        .replace("*", ".*")
-        .replace("?", ".")
-    return this.matches(Regex(regex))
+private fun globToRegex(pattern: String): Regex {
+    val escaped = buildString {
+        pattern.forEach { char ->
+            when (char) {
+                '*' -> append(".*")
+                '?' -> append('.')
+                else -> append(Regex.escape(char.toString()))
+            }
+        }
+    }
+    return Regex("^$escaped$", RegexOption.IGNORE_CASE)
 }

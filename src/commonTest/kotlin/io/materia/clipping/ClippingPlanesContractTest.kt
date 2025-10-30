@@ -7,7 +7,6 @@ import io.materia.geometry.BufferGeometry
 import io.materia.geometry.primitives.BoxGeometry
 import io.materia.material.MeshBasicMaterial
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -366,19 +365,7 @@ class ShadowMapper {
 
 data class ShadowMap(val respectsClipping: Boolean)
 
+fun Plane.toVector4(): Vector4 = Vector4(normal.x, normal.y, normal.z, constant)
+
 // Note: Plane.applyMatrix4 is already defined in io.materia.core.math.Plane
 // No need to define an extension - it will mutate the plane
-
-fun Plane.toVector4(): Vector4 {
-    return Vector4(normal.x, normal.y, normal.z, constant)
-}
-
-fun Plane.distanceToPoint(point: Vector3): Float {
-    return normal.dot(point) + constant
-}
-
-fun Plane.normalize() {
-    val length = normal.length()
-    normal.divideScalar(length)
-    constant /= length
-}

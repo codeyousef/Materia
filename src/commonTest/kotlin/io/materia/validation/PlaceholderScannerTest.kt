@@ -3,8 +3,8 @@ package io.materia.validation
 import io.materia.validation.scanner.DefaultPlaceholderScanner
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -63,7 +63,7 @@ class PlaceholderScannerTest {
         val fileContent = "// $PLACEHOLDER_TOKEN: implement this\nfun test() {}"
         val isValid = scanner.validatePlaceholder(testInstance, fileContent)
 
-        assertTrue(isValid is Boolean)
+        assertIs<Boolean>(isValid)
     }
 
     @Test
@@ -85,7 +85,7 @@ class PlaceholderScannerTest {
         val effort = scanner.estimateReplacementEffort(testInstance, fileContent)
 
         assertNotNull(effort)
-        assertTrue(effort is EffortLevel)
+        assertIs<EffortLevel>(effort)
     }
 
     @Test

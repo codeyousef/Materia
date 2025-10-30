@@ -2,14 +2,12 @@ package io.materia.helper
 
 import io.materia.camera.PerspectiveCamera
 import io.materia.core.math.Color
-import io.materia.core.scene.Object3D
 import io.materia.geometry.BufferGeometry
 import io.materia.light.DirectionalLight
 import io.materia.light.HemisphereLight
 import io.materia.light.PointLight
 import io.materia.light.SpotLight
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -41,9 +39,6 @@ class LightCameraHelpersContractTest {
 
         // Verify camera reference
         assertEquals(camera, cameraHelper.camera, "CameraHelper should reference the camera")
-
-        // Verify it's an Object3D
-        assertTrue(cameraHelper is Object3D, "CameraHelper should extend Object3D")
 
         // Verify geometry exists for frustum visualization
         assertNotNull(cameraHelper.geometry, "CameraHelper should have geometry")
@@ -103,9 +98,6 @@ class LightCameraHelpersContractTest {
             "DirectionalLightHelper color should match"
         )
 
-        // Verify it's an Object3D
-        assertTrue(lightHelper is Object3D, "DirectionalLightHelper should extend Object3D")
-
         // Verify geometry exists
         assertNotNull(lightHelper.geometry, "DirectionalLightHelper should have geometry")
     }
@@ -154,9 +146,6 @@ class LightCameraHelpersContractTest {
 
         // Verify color
         assertNotNull(lightHelper.color, "SpotLightHelper should have color")
-
-        // Verify it's an Object3D
-        assertTrue(lightHelper is Object3D, "SpotLightHelper should extend Object3D")
 
         // Verify geometry exists (cone shape)
         assertNotNull(lightHelper.geometry, "SpotLightHelper should have geometry")
@@ -208,9 +197,6 @@ class LightCameraHelpersContractTest {
         // Verify color
         assertNotNull(lightHelper.color, "PointLightHelper should have color")
 
-        // Verify it's an Object3D
-        assertTrue(lightHelper is Object3D, "PointLightHelper should extend Object3D")
-
         // Verify geometry exists (sphere)
         assertNotNull(lightHelper.geometry, "PointLightHelper should have geometry")
     }
@@ -253,9 +239,6 @@ class LightCameraHelpersContractTest {
 
         // Verify size
         assertEquals(3f, lightHelper.size, "HemisphereLightHelper should preserve size")
-
-        // Verify it's an Object3D
-        assertTrue(lightHelper is Object3D, "HemisphereLightHelper should extend Object3D")
 
         // Verify geometry exists (split sphere)
         assertNotNull(lightHelper.geometry, "HemisphereLightHelper should have geometry")

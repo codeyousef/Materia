@@ -15,14 +15,13 @@ package io.materia.instancing
 import io.materia.core.math.Color
 import io.materia.core.math.Euler
 import io.materia.core.math.Matrix4
-import io.materia.core.math.Vector3
 import io.materia.core.math.Quaternion
-import io.materia.geometry.primitives.BoxGeometry
+import io.materia.core.math.Vector3
 import io.materia.geometry.BufferGeometry
-import io.materia.material.MeshBasicMaterial
+import io.materia.geometry.primitives.BoxGeometry
 import io.materia.material.Material
+import io.materia.material.MeshBasicMaterial
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -341,12 +340,3 @@ class MeshPhysicalMaterial : Material() {
 }
 
 class SphereGeometry(radius: Float) : BufferGeometry()
-
-// Extension functions for Matrix4
-fun Matrix4.toArray(array: FloatArray, offset: Int) {
-    // Implementation would copy matrix elements to array
-}
-
-fun Matrix4.fromArray(array: FloatArray, offset: Int) {
-    // Implementation would load matrix elements from array
-}

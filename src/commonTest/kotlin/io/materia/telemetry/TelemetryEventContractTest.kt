@@ -6,6 +6,7 @@ import io.materia.renderer.backend.DeviceCapabilityReport
 import io.materia.renderer.backend.FeatureStatus
 import io.materia.renderer.metrics.InitializationStats
 import io.materia.renderer.metrics.PerformanceAssessment
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.currentTime
@@ -17,6 +18,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TelemetryEventContractTest {
 
     private fun TestScope.newEmitter(

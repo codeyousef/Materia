@@ -74,9 +74,13 @@ class ColladaLoader(
                 ?: throw IllegalArgumentException("COLLADA triangles missing <p> element")
             val rawIndices = indexData.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }.map { it.toInt() }
 
-            val positionsSource = resolveSource(inputs, "VERTEX", verticesMap)
-            val normalsSource = resolveSource(inputs, "NORMAL", emptyMap())
-            val uvSource = resolveSource(inputs, "TEXCOORD", emptyMap())
+            val vertexInput = inputs.find { it.semantic == "VERTEX" }
+            val normalInput = inputs.find { it.semantic == "NORMAL" }
+            val uvInput = inputs.find { it.semantic == "TEXCOORD" }
+
+            val positionsSource = resolveSource(vertexInput, verticesMap)
+            val normalsSource = resolveSource(normalInput, emptyMap())
+            val uvSource = resolveSource(uvInput, emptyMap())
 
             val positionArrayId = positionsSource?.let { sourceMap[it] ?: it }
                 ?: throw IllegalArgumentException("COLLADA missing VERTEX input")
@@ -94,39 +98,48 @@ class ColladaLoader(
 
             val vertexCount = if (stride > 0) rawIndices.size / stride else rawIndices.size
             val positions = FloatArray(vertexCount * 3)
-            val normals = normalsArray?.let { FloatArray(vertexCount * 3) }
-            val uvs = uvArray?.let { FloatArray(vertexCount * 2) }
+            val normalsTarget = normalsArray?.let { FloatArray(vertexCount * 3) }
+            val uvsTarget = uvArray?.let { FloatArray(vertexCount * 2) }
             val indices = IntArray(vertexCount) { it }
+            val vertexOffset = vertexInput?.offset ?: 0
+            val normalOffset = normalInput?.offset
+            val uvOffset = uvInput?.offset
 
             for (vertex in 0 until vertexCount) {
                 val base = vertex * stride
-                val posIndex = rawIndices[base + (inputs.find { it.semantic == "VERTEX" }?.offset ?: 0)]
+                val posIndex = rawIndices[base + vertexOffset]
                 val posBase = posIndex * positionStride
                 val dstPos = vertex * 3
                 positions[dstPos] = positionsArray[posBase]
                 positions[dstPos + 1] = positionsArray[posBase + 1]
                 positions[dstPos + 2] = positionsArray[posBase + 2]
 
-                normals?.let {
-                    val normalOffset = inputs.find { it.semantic == "NORMAL" }?.offset
-                    if (normalOffset != null && normalsArray != null) {
-                        val normalIndex = rawIndices[base + normalOffset]
-                        val normalBase = normalIndex * normalStride
-                        val dstNormal = vertex * 3
-                        it[dstNormal] = normalsArray[normalBase]
-                        it[dstNormal + 1] = normalsArray[normalBase + 1]
-                        it[dstNormal + 2] = normalsArray[normalBase + 2]
+                if (normalOffset != null) {
+                    normalsTarget?.let { target ->
+                        normalsArray?.let { normals ->
+                            val normalIndex = rawIndices[base + normalOffset]
+                            val normalBase = normalIndex * normalStride
+                            if (normalBase + 2 < normals.size) {
+                                val dstNormal = vertex * 3
+                                target[dstNormal] = normals[normalBase]
+                                target[dstNormal + 1] = normals[normalBase + 1]
+                                target[dstNormal + 2] = normals[normalBase + 2]
+                            }
+                        }
                     }
                 }
 
-                uvs?.let {
-                    val uvOffset = inputs.find { it.semantic == "TEXCOORD" }?.offset
-                    if (uvOffset != null && uvArray != null) {
-                        val uvIndex = rawIndices[base + uvOffset]
-                        val uvBase = uvIndex * uvStride
-                        val dstUv = vertex * 2
-                        it[dstUv] = uvArray[uvBase]
-                        it[dstUv + 1] = 1f - uvArray[uvBase + 1]
+                if (uvOffset != null) {
+                    uvsTarget?.let { target ->
+                        uvArray?.let { uvs ->
+                            val uvIndex = rawIndices[base + uvOffset]
+                            val uvBase = uvIndex * uvStride
+                            if (uvBase + 1 < uvs.size) {
+                                val dstUv = vertex * 2
+                                target[dstUv] = uvs[uvBase]
+                                target[dstUv + 1] = 1f - uvs[uvBase + 1]
+                            }
+                        }
                     }
                 }
             }
@@ -135,8 +148,8 @@ class ColladaLoader(
                 name = guessMeshName(),
                 materialName = materialName,
                 positions = positions,
-                normals = normals,
-                uvs = uvs,
+                normals = normalsTarget,
+                uvs = uvsTarget,
                 indices = indices
             )
         }
@@ -184,8 +197,8 @@ class ColladaLoader(
             }
         }
 
-        private fun resolveSource(inputs: List<InputEntry>, semantic: String, vertices: Map<String, String>): String? {
-            val entry = inputs.find { it.semantic == semantic } ?: return null
+        private fun resolveSource(entry: InputEntry?, vertices: Map<String, String>): String? {
+            entry ?: return null
             val source = entry.source
             return vertices[source] ?: source
         }

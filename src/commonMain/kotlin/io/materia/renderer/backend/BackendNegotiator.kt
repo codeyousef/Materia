@@ -1,12 +1,7 @@
 package io.materia.renderer.backend
 
 import io.materia.datetime.currentTimeMillis
-import io.materia.renderer.backend.FeatureParityMatrix
-import io.materia.telemetry.BackendDiagnosticsLog
-import io.materia.telemetry.DiagnosticEventType
-import io.materia.telemetry.TelemetryPayload
 import kotlinx.coroutines.withTimeout
-import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
 /**

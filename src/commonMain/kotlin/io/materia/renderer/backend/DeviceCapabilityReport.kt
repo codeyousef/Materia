@@ -1,6 +1,5 @@
 package io.materia.renderer.backend
 
-import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
 /**

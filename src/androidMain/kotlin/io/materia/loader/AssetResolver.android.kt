@@ -1,12 +1,14 @@
 package io.materia.loader
 
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.net.URL
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 internal class DefaultAssetResolver : AssetResolver {
 
@@ -28,7 +30,7 @@ internal class DefaultAssetResolver : AssetResolver {
         val dataPart = uri.substring(commaIndex + 1)
         val isBase64 = metadata.endsWith(";base64", ignoreCase = true)
         return if (isBase64) {
-            Base64.getDecoder().decode(dataPart)
+            decodeBase64(dataPart)
         } else {
             dataPart.toByteArray(Charsets.UTF_8)
         }
@@ -62,6 +64,25 @@ internal class DefaultAssetResolver : AssetResolver {
             buffer.write(data, 0, read)
         }
         return buffer.toByteArray()
+    }
+}
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun decodeBase64(value: String): ByteArray {
+    return when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
+            java.util.Base64.getDecoder().decode(value)
+
+        else -> try {
+            android.util.Base64.decode(value, android.util.Base64.DEFAULT)
+        } catch (runtime: RuntimeException) {
+            // Robolectric stubs may throw "not mocked" - fall back to Kotlin implementation.
+            if (runtime.message?.contains("not mocked", ignoreCase = true) == true) {
+                Base64.decode(value)
+            } else {
+                throw runtime
+            }
+        }
     }
 }
 

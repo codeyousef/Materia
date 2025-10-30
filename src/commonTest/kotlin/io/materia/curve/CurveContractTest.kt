@@ -2,7 +2,7 @@ package io.materia.curve
 
 import io.materia.core.math.Vector3
 import kotlin.test.Test
-import kotlin.test.Ignore
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -13,13 +13,17 @@ class CurveContractTest {
     @Test
     fun testGetPoint() {
         val curve = TestCurve()
-        assertTrue(curve.getPoint(0.5f) != null)
+        val point = curve.getPoint(0.5f)
+        assertEquals(0.5f, point.x)
+        assertEquals(0.5f, point.y)
+        assertEquals(0.5f, point.z)
     }
 
     @Test
     fun testGetTangent() {
         val curve = TestCurve()
-        assertTrue(curve.getTangent(0.5f) != null)
+        val tangent = curve.getTangent(0.5f)
+        assertTrue(tangent.length() > 0f)
     }
 }
 

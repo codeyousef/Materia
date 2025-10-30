@@ -2,8 +2,13 @@ package io.materia.validation
 
 import io.materia.validation.validator.DefaultImplementationValidator
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Clock
-import kotlin.test.*
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Contract tests for ImplementationValidator interface.
@@ -35,7 +40,7 @@ class ImplementationValidatorTest {
             assertNotNull(result)
             assertEquals(platforms, result.platformsCovered)
             assertTrue(result.analysisTimestamp > 0)
-            assertTrue(result.gaps.isEmpty() || result.gaps.isNotEmpty()) // Either result is acceptable for this smoke check
+            assertNotNull(result.gaps)
         }
     }
 
@@ -49,9 +54,7 @@ class ImplementationValidatorTest {
             // This should not crash and return a list (even if empty)
             val gaps = validator.validateExpectActualPairs(expectFilePath, platforms)
 
-            // Verify it returns a list and doesn't crash
-            assertNotNull(gaps)
-            assertTrue(gaps is List)
+            assertIs<List<*>>(gaps)
         }
     }
 
@@ -63,11 +66,9 @@ class ImplementationValidatorTest {
             val platform = Platform.JVM
             val sourceRoot = "/tmp/test-source"
 
-            // Since we don't have actual files, this should return false
             val result = validator.hasActualImplementation(expectDeclaration, platform, sourceRoot)
 
-            // For now, just verify the method doesn't crash and returns a boolean
-            assertTrue(result == true || result == false)
+            assertIs<Boolean>(result)
         }
     }
 
@@ -100,7 +101,7 @@ class ImplementationValidatorTest {
 
             // Verify it returns a valid status
             assertNotNull(status)
-            assertTrue(status is ImplementationStatus)
+            assertIs<ImplementationStatus>(status)
         }
     }
 
@@ -129,9 +130,7 @@ class ImplementationValidatorTest {
             // This should not crash and return a list (even if empty)
             val declarations = validator.findExpectDeclarations(sourceRoot)
 
-            // Verify it returns a list and doesn't crash
-            assertNotNull(declarations)
-            assertTrue(declarations is List<String>)
+            assertIs<List<*>>(declarations)
         }
     }
 
@@ -145,9 +144,7 @@ class ImplementationValidatorTest {
             // This should not crash and return a list (even if empty)
             val stubs = validator.findStubImplementations(sourceRoot, platform)
 
-            // Verify it returns a list and doesn't crash
-            assertNotNull(stubs)
-            assertTrue(stubs is List)
+            assertIs<List<*>>(stubs)
         }
     }
 
@@ -180,7 +177,7 @@ class ImplementationValidatorTest {
 
             // Verify it handles the nested structure
             assertNotNull(result)
-            assertTrue(result.modulesCovered.isNotEmpty() || result.modulesCovered.isEmpty()) // Either is valid
+            assertNotNull(result.modulesCovered)
         }
     }
 

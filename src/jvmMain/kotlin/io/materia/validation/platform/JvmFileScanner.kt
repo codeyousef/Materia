@@ -1,8 +1,27 @@
 package io.materia.validation.platform
 
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import java.nio.file.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import java.nio.file.FileSystems
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardWatchEventKinds
+import java.nio.file.WatchService
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.bufferedReader
 import kotlin.io.path.extension
@@ -165,13 +184,13 @@ class JvmFileScanner : FileScanner {
         }
     }
 
-    override suspend fun copyFile(source: String, destination: String): Boolean {
+    override suspend fun copyFile(sourcePath: String, destinationPath: String): Boolean {
         return try {
             withContext(dispatcher) {
-                val sourcePath = Paths.get(source)
-                val destPath = Paths.get(destination)
-                Files.createDirectories(destPath.parent)
-                Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING)
+                val source = Paths.get(sourcePath)
+                val destination = Paths.get(destinationPath)
+                Files.createDirectories(destination.parent)
+                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
                 true
             }
         } catch (e: Exception) {
@@ -179,14 +198,14 @@ class JvmFileScanner : FileScanner {
         }
     }
 
-    override suspend fun moveFile(source: String, destination: String): Boolean {
+    override suspend fun moveFile(sourcePath: String, destinationPath: String): Boolean {
         return try {
             withContext(dispatcher) {
-                val sourcePath = Paths.get(source)
-                val destPath = Paths.get(destination)
-                Files.createDirectories(destPath.parent)
-                Files.move(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING)
-                fileCache.remove(source)
+                val source = Paths.get(sourcePath)
+                val destination = Paths.get(destinationPath)
+                Files.createDirectories(destination.parent)
+                Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                fileCache.remove(sourcePath)
                 true
             }
         } catch (e: Exception) {
