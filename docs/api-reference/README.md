@@ -100,7 +100,13 @@ Asset loading system.
 
 - **GLTF**: GLTF/GLB loader
 - **OBJ**: Wavefront OBJ loader
-- **FBX**: Autodesk FBX loader
+- **GLTF/GLB**: Comprehensive glTF 2.0 loader
+- **FBX**: ASCII FBX loader (static geometry)
+- **COLLADA**: `.dae` loader for triangle meshes
+- **OBJ / PLY / STL**: Geometry loaders for classic mesh formats
+- **Draco JSON**: Compact JSON container for Draco meshes
+- **KTX2**: Uncompressed RGBA8 textures
+- **EXR**: Uncompressed RGB float EXR images
 - **Texture**: Image and texture loading
 - **Font**: Font loading for text
 

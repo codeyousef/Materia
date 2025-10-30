@@ -113,27 +113,46 @@ class CPUTimer {
  * Timer for GPU measurements (stub implementation)
  */
 class GPUTimer(private val renderer: Renderer) {
-    private var startTime: Long = 0L
-    private var endTime: Long = 0L
+    private var startTimeNs: Long = 0L
+    private var lastMeasuredMs: Float = 0f
+    private var startStatsTimestamp: Long = 0L
+    private var startFrameTime: Double = 0.0
     private var isRunning: Boolean = false
 
     fun start() {
-        startTime = getTimeNanos()
+        val stats = renderer.stats
+        startTimeNs = getTimeNanos()
+        startStatsTimestamp = stats.timestamp
+        startFrameTime = stats.frameTime
         isRunning = true
     }
 
     fun stop() {
-        if (isRunning) {
-            endTime = getTimeNanos()
-            isRunning = false
+        if (!isRunning) return
+
+        val stats = renderer.stats
+        val elapsedNs = getTimeNanos() - startTimeNs
+        val statsDeltaMs = if (stats.timestamp > startStatsTimestamp) {
+            (stats.timestamp - startStatsTimestamp).toFloat()
+        } else {
+            0f
         }
+        val frameDeltaMs = (stats.frameTime - startFrameTime).toFloat()
+
+        lastMeasuredMs = when {
+            statsDeltaMs > 0f && frameDeltaMs > 0f -> minOf(statsDeltaMs, frameDeltaMs)
+            statsDeltaMs > 0f -> statsDeltaMs
+            frameDeltaMs > 0f -> frameDeltaMs
+            else -> elapsedNs / 1_000_000f
+        }
+        isRunning = false
     }
 
     fun getElapsedTimeMs(): Float {
         return if (isRunning) {
-            (getTimeNanos() - startTime) / 1_000_000f
+            (getTimeNanos() - startTimeNs) / 1_000_000f
         } else {
-            (endTime - startTime) / 1_000_000f
+            lastMeasuredMs
         }
     }
 }

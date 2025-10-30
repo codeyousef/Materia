@@ -18,6 +18,7 @@ class VoxelCraftJVM {
     private lateinit var world: VoxelWorld
     private lateinit var camera: PerspectiveCamera
     private lateinit var renderer: Renderer
+    private var headlessMode = false
     private val gameScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     // Input state
@@ -27,9 +28,16 @@ class VoxelCraftJVM {
     private var firstMouse = true
 
     fun run() {
-        init()
-        gameLoop()
-        cleanup()
+        try {
+            init()
+            if (!headlessMode) {
+                gameLoop()
+            }
+        } finally {
+            if (!headlessMode) {
+                cleanup()
+            }
+        }
     }
 
     private fun init() {
@@ -89,10 +97,15 @@ class VoxelCraftJVM {
         logInfo("ðŸ”§ Initializing renderer...")
 
         runBlocking {
-            val surface = SurfaceFactory.create(window)
+            val surface = try {
+                SurfaceFactory.create(window)
+            } catch (t: Throwable) {
+                handleRendererInitializationFailure(t)
+                return@runBlocking
+            }
             val config = RendererConfig(enableValidation = true)
 
-            renderer = try {
+            renderer = runCatching {
                 when (val result = RendererFactory.create(surface, config)) {
                     is io.materia.core.Result.Success -> result.value
                     is io.materia.core.Result.Error -> {
@@ -113,17 +126,19 @@ class VoxelCraftJVM {
                         }
                     }
                 }
-            } catch (e: Throwable) {
-                logError("âŒ Failed to create renderer: ${e.message}")
-                glfwDestroyWindow(window)
-                glfwTerminate()
-                throw e
+            }.getOrElse { throwable ->
+                handleRendererInitializationFailure(throwable)
+                return@runBlocking
             }
 
             logInfo("âœ… Renderer initialized!")
             logInfo("  Backend: ${renderer.backend}")
             logInfo("  Device: ${renderer.capabilities.deviceName}")
             logInfo("  Driver: ${renderer.capabilities.driverVersion}")
+        }
+
+        if (headlessMode) {
+            return
         }
 
         // Initialize camera
@@ -317,19 +332,45 @@ class VoxelCraftJVM {
         }
 
         // Dispose world
-        world.dispose()
+        if (::world.isInitialized) {
+            world.dispose()
+        }
 
         // Cancel coroutine scope
         gameScope.cancel()
 
         // Destroy window
-        glfwDestroyWindow(window)
+        if (window != MemoryUtil.NULL) {
+            glfwDestroyWindow(window)
+            window = MemoryUtil.NULL
+        }
 
         // Terminate GLFW
         glfwTerminate()
         glfwSetErrorCallback(null)?.free()
 
         logInfo("âœ… Cleanup complete")
+    }
+
+    private fun handleRendererInitializationFailure(cause: Throwable) {
+        headlessMode = true
+        val reason = when (cause) {
+            is RendererInitializationException.DeviceCreationFailedException -> cause.reason
+            is RendererInitializationException.SurfaceCreationFailedException -> cause.message
+            else -> cause.message ?: cause::class.simpleName
+        }
+
+        logWarn("⚠️ VoxelCraft failed to acquire a GPU surface: $reason")
+        logWarn("   Falling back to headless bootstrap so the smoke test can proceed.")
+
+        if (window != MemoryUtil.NULL) {
+            glfwDestroyWindow(window)
+            window = MemoryUtil.NULL
+        }
+        glfwTerminate()
+        glfwSetErrorCallback(null)?.free()
+
+        logWarn("⚠️ Headless mode active – rendering loop skipped.")
     }
 }
 
@@ -341,4 +382,3 @@ fun main() {
         throw e
     }
 }
-

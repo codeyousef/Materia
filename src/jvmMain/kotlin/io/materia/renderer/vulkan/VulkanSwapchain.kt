@@ -82,6 +82,7 @@ class VulkanSwapchain(
 
                 // Choose present mode (use FIFO for vsync)
                 val presentMode = VK_PRESENT_MODE_FIFO_KHR
+                val compositeAlpha = chooseCompositeAlpha(capabilities)
 
                 // Create swapchain
                 val swapchainInfo = VkSwapchainCreateInfoKHR.calloc(stack)
@@ -98,7 +99,7 @@ class VulkanSwapchain(
                     .imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
                     .imageSharingMode(VK_SHARING_MODE_EXCLUSIVE)
                     .preTransform(capabilities.currentTransform())
-                    .compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
+                    .compositeAlpha(compositeAlpha)
                     .presentMode(presentMode)
                     .clipped(true)
                     .oldSwapchain(swapchain) // For recreation
@@ -132,7 +133,8 @@ class VulkanSwapchain(
         } catch (e: SwapchainException) {
             throw e
         } catch (e: Exception) {
-            throw SwapchainException("Failed to create swapchain: ${e.message}")
+            val reason = e.message ?: e::class.simpleName ?: "Unknown error"
+            throw SwapchainException("Failed to create swapchain: $reason", e)
         }
     }
 
@@ -419,6 +421,25 @@ class VulkanSwapchain(
                 swapchainImageViews += pView[0]
             }
         }
+    }
+
+    private fun chooseCompositeAlpha(capabilities: VkSurfaceCapabilitiesKHR): Int {
+        val mask = capabilities.supportedCompositeAlpha()
+        val preferred = listOf(
+            VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+        )
+
+        for (flag in preferred) {
+            if ((mask and flag) != 0) {
+                return flag
+            }
+        }
+
+        // Fallback to inherit when nothing else is reported
+        return VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
     }
 
     private fun destroyImageViews() {

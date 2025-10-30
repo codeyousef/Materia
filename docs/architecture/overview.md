@@ -140,7 +140,15 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 - GLTF/GLB loader
 - OBJ loader
-- FBX loader
+## Asset Pipeline
+
+- GLTF/GLB loader (complete)
+- FBX ASCII loader (static meshes)
+- COLLADA `.dae` loader (triangle meshes)
+- OBJ / PLY / STL loaders (ASCII/Binary)
+- Draco JSON loader for compact meshes
+- KTX2 uncompressed RGBA textures
+- EXR (RGB float, uncompressed)
 - Texture compression (DRACO, KTX2)
 - Size: ~500KB
 
