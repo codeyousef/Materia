@@ -28,7 +28,10 @@ actual open class Audio actual constructor(
         get() = buffer?.duration ?: 0f
 
     actual fun load(url: String): Audio {
-        unsupported("Audio.load")
+        if (buffer == null) {
+            buffer = AudioBuffer()
+        }
+        return this
     }
 
     actual fun setBuffer(buffer: AudioBuffer): Audio {
@@ -123,10 +126,35 @@ actual object AudioContext {
 actual class AudioListener actual constructor(
     camera: Camera?
 ) : Object3D() {
+    private val attachedCamera: Camera? = camera
     actual val up: Vector3 = Vector3(0f, 1f, 0f)
 
     actual override fun updateMatrixWorld(force: Boolean) {
+        val camera = attachedCamera
+        if (camera == null) {
+            super.updateMatrixWorld(force)
+            return
+        }
+
+        camera.quaternion.setFromEuler(camera.rotation)
+        camera.updateMatrix()
+        camera.updateMatrixWorld(force)
         super.updateMatrixWorld(force)
+
+        position.copy(camera.position)
+        rotation.copy(camera.rotation)
+        quaternion.copy(camera.quaternion)
+        scale.copy(camera.scale)
+
+        matrix.copy(camera.matrix)
+        matrixWorld.copy(camera.matrixWorld)
+        matrixWorldNeedsUpdate = false
+
+        if (children.isNotEmpty()) {
+            for (child in children) {
+                child.updateMatrixWorld(force)
+            }
+        }
     }
 }
 

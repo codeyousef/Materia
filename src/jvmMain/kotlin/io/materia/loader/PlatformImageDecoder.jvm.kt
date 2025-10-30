@@ -1,4 +1,4 @@
-package io.kreekt.loader
+package io.materia.loader
 
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO

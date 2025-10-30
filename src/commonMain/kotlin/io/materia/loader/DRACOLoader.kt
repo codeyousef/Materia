@@ -1,16 +1,16 @@
 package io.materia.loader
 
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BufferAttribute
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.material.MeshStandardMaterial
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Scene
+import io.materia.geometry.BufferAttribute
+import io.materia.geometry.BufferGeometry
+import io.materia.material.MeshStandardMaterial
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * Loader for the simplified Draco JSON interchange format used by KreeKt.
+ * Loader for the simplified Draco JSON interchange format used by Materia.
  * Files are expected to contain a JSON object with position, index, and optional
  * normal/uv arrays (all stored as base64 or raw numeric lists). This keeps the
  * loader dependency-free while still providing a compact mesh container that can

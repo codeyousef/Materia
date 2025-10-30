@@ -1,10 +1,10 @@
 package io.materia.loader
 
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BufferAttribute
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.material.MeshStandardMaterial
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Scene
+import io.materia.geometry.BufferAttribute
+import io.materia.geometry.BufferGeometry
+import io.materia.material.MeshStandardMaterial
 
 /**
  * Lightweight COLLADA (.dae) loader that supports meshes exported by Blender
@@ -36,13 +36,13 @@ class ColladaLoader(
 
     private class ColladaMeshParser(private val xml: String) {
         private val floatArrayRegex =
-            Regex("""<float_array[^>]*id="([^"]+)"[^>]*>(.*?)</float_array>""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""(?s)<float_array[^>]*id="([^"]+)"[^>]*>(.*?)</float_array>""")
         private val accessorRegex =
             Regex("""<accessor[^>]*source="#([^"]+)"[^>]*stride="(\d+)"[^>]*/?>""")
         private val verticesRegex =
-            Regex("""<vertices[^>]*id="([^"]+)"[^>]*>(.*?)</vertices>""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""(?s)<vertices[^>]*id="([^"]+)"[^>]*>(.*?)</vertices>""")
         private val sourceRegex =
-            Regex("""<source[^>]*id="([^"]+)"[^>]*>(.*?)</source>""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""(?s)<source[^>]*id="([^"]+)"[^>]*>(.*?)</source>""")
         private val nestedFloatArrayRegex =
             Regex("""<float_array[^>]*id="([^"]+)"""")
 
@@ -53,8 +53,7 @@ class ColladaLoader(
             val verticesMap = parseVertices()
 
             val trianglesMatch = Regex(
-                """<triangles[^>]*material="?([^" ]*)"?[^>]*>(.*?)</triangles>""",
-                RegexOption.DOT_MATCHES_ALL
+                """(?s)<triangles[^>]*material="?([^" ]*)"?[^>]*>(.*?)</triangles>"""
             ).find(xml)
                 ?: throw IllegalArgumentException("COLLADA file missing <triangles> element")
             val trianglesBody = trianglesMatch.groupValues[2]
@@ -70,7 +69,7 @@ class ColladaLoader(
                 .toList()
 
             val stride = inputs.maxOfOrNull { it.offset }?.plus(1) ?: 1
-            val indexData = Regex("""<p>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL).find(trianglesBody)
+            val indexData = Regex("""(?s)<p>(.*?)</p>""").find(trianglesBody)
                 ?.groupValues?.get(1)
                 ?: throw IllegalArgumentException("COLLADA triangles missing <p> element")
             val rawIndices = indexData.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }.map { it.toInt() }

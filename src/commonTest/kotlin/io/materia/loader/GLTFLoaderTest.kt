@@ -60,7 +60,7 @@ class GLTFLoaderTest {
         assertTrue(asset.scenes.isNotEmpty(), "Expected at least one scene")
         assertNotNull(asset.scene, "Primary scene should not be null")
         val rootChild = asset.scene.children.firstOrNull()
-        val mesh = assertIs<io.kreekt.core.scene.Mesh>(rootChild)
+        val mesh = assertIs<io.materia.core.scene.Mesh>(rootChild)
         val positionAttribute = mesh.geometry.getAttribute("position")
         assertNotNull(positionAttribute, "Position attribute must be present")
         assertEquals(3, positionAttribute.count)

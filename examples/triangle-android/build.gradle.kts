@@ -1,5 +1,3 @@
-import org.gradle.api.JavaVersion
-
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -42,6 +40,8 @@ dependencies {
     implementation(project(":examples:triangle"))
     implementation(project(":materia-examples-common"))
     implementation(project(":materia-gpu-android-native"))
+    implementation(project(":materia-gpu"))
+    implementation(project(":"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

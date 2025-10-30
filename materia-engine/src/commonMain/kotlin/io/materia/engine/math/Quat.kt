@@ -89,15 +89,15 @@ value class Quat @PublishedApi internal constructor(internal val data: FloatArra
         val data = out.data
         out.setIdentity()
         data[0] = 1f - 2f * (yy + zz)
-        data[4] = 2f * (xy + wz)
-        data[8] = 2f * (xz - wy)
+        data[4] = 2f * (xy - wz)
+        data[8] = 2f * (xz + wy)
 
-        data[1] = 2f * (xy - wz)
+        data[1] = 2f * (xy + wz)
         data[5] = 1f - 2f * (xx + zz)
-        data[9] = 2f * (yz + wx)
+        data[9] = 2f * (yz - wx)
 
-        data[2] = 2f * (xz + wy)
-        data[6] = 2f * (yz - wx)
+        data[2] = 2f * (xz - wy)
+        data[6] = 2f * (yz + wx)
         data[10] = 1f - 2f * (xx + yy)
 
         return out

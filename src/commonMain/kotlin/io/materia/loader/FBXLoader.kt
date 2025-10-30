@@ -1,10 +1,10 @@
 package io.materia.loader
 
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BufferAttribute
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.material.MeshStandardMaterial
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Scene
+import io.materia.geometry.BufferAttribute
+import io.materia.geometry.BufferGeometry
+import io.materia.material.MeshStandardMaterial
 
 /**
  * Minimal ASCII FBX loader supporting static meshes (positions, normals, UVs).
@@ -111,7 +111,7 @@ class FBXLoader(
         }
 
         private fun readFloatArray(name: String): FloatArray? {
-            val regex = Regex("""$name:\s*\*\d+\s*\{(.*?)\}""", RegexOption.DOT_MATCHES_ALL)
+            val regex = Regex("""(?s)$name:\s*\*\d+\s*\{(.*?)\}""")
             val match = regex.find(content) ?: return null
             return match.groupValues[1]
                 .split(',', '\n', '\r', '\t', ' ')
@@ -121,7 +121,7 @@ class FBXLoader(
         }
 
         private fun readIntArray(name: String): IntArray? {
-            val regex = Regex("""$name:\s*\*\d+\s*\{(.*?)\}""", RegexOption.DOT_MATCHES_ALL)
+            val regex = Regex("""(?s)$name:\s*\*\d+\s*\{(.*?)\}""")
             val match = regex.find(content) ?: return null
             return match.groupValues[1]
                 .split(',', '\n', '\r', '\t', ' ')
@@ -131,10 +131,10 @@ class FBXLoader(
         }
 
         private fun readLayerFloatArray(layerName: String, arrayName: String): FloatArray? {
-            val layerRegex = Regex("""$layerName:[^{]+\{(.*?)\}""", RegexOption.DOT_MATCHES_ALL)
+            val layerRegex = Regex("""(?s)$layerName:[^{]+\{(.*?)\}""")
             val layerMatch = layerRegex.find(content) ?: return null
             val body = layerMatch.groupValues[1]
-            val arrayRegex = Regex("""$arrayName:\s*\*\d+\s*\{(.*?)\}""", RegexOption.DOT_MATCHES_ALL)
+            val arrayRegex = Regex("""(?s)$arrayName:\s*\*\d+\s*\{(.*?)\}""")
             val arrayMatch = arrayRegex.find(body) ?: return null
             return arrayMatch.groupValues[1]
                 .split(',', '\n', '\r', '\t', ' ')

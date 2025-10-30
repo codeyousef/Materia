@@ -1,10 +1,10 @@
 package io.materia.loader
 
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.BufferAttribute
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.material.MeshStandardMaterial
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Scene
+import io.materia.geometry.BufferAttribute
+import io.materia.geometry.BufferGeometry
+import io.materia.material.MeshStandardMaterial
 import kotlin.math.max
 
 private data class ObjVertexKey(val positionIndex: Int, val uvIndex: Int?, val normalIndex: Int?)

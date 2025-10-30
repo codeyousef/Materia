@@ -9,7 +9,9 @@
 - [ ] Implement a native `PerformanceMonitor` counterpart that reports real metrics rather than returning a stubbed monitor.
 
 ## Web XR
-- [ ] Replace the stubbed WebXR bridge in `src/jsMain/kotlin/io/kreekt/xr/XRPlatformStubs.kt` with actual feature detection and permission handling to match the expect API.
+
+- [ ] Replace the stubbed WebXR bridge in `src/jsMain/kotlin/io/materia/xr/XRPlatformStubs.kt` with
+  actual feature detection and permission handling to match the expect API.
 
 ## Validation & Coverage
 - [ ] Expand loader regression coverage (Collada/FBX/Draco/KTX2/EXR) with real-world fixtures and malformed cases as outlined in the previous checkpoint summary.

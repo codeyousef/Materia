@@ -1,12 +1,12 @@
 package io.materia.loader
 
-import io.kreekt.core.scene.Mesh
+import io.materia.core.scene.Mesh
+import kotlinx.coroutines.test.runTest
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlinx.coroutines.test.runTest
 
 class OBJLoaderTest {
 

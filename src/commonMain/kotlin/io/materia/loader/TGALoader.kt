@@ -1,6 +1,6 @@
 package io.materia.loader
 
-import io.kreekt.texture.Texture2D
+import io.materia.texture.Texture2D
 
 /**
  * Loader for TGA textures (24/32-bit, uncompressed or RLE). Implemented fully in

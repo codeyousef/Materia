@@ -5,17 +5,35 @@ import io.materia.core.math.Vector3
 import io.materia.core.scene.Object3D
 
 actual class AudioListener actual constructor(camera: Camera?) : Object3D() {
-    private val _camera = camera
+    private val attachedCamera = camera
 
     actual val up: Vector3 = Vector3(0f, 1f, 0f)
 
     actual override fun updateMatrixWorld(force: Boolean) {
-        _camera?.let {
-            // Copy position from camera
-            position.copy(it.position)
-            // Sync quaternion from camera's rotation (in case rotation was set directly)
-            quaternion.setFromEuler(it.rotation)
+        val camera = attachedCamera
+        if (camera == null) {
+            super.updateMatrixWorld(force)
+            return
         }
+
+        camera.quaternion.setFromEuler(camera.rotation)
+        camera.updateMatrix()
+        camera.updateMatrixWorld(force)
         super.updateMatrixWorld(force)
+
+        position.copy(camera.position)
+        rotation.copy(camera.rotation)
+        quaternion.copy(camera.quaternion)
+        scale.copy(camera.scale)
+
+        matrix.copy(camera.matrix)
+        matrixWorld.copy(camera.matrixWorld)
+        matrixWorldNeedsUpdate = false
+
+        if (children.isNotEmpty()) {
+            for (child in children) {
+                child.updateMatrixWorld(force)
+            }
+        }
     }
 }

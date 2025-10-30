@@ -124,9 +124,11 @@ class TriangleActivity : ComponentActivity() {
     private fun startRenderLoop() {
         if (frameCallback != null) return
         val choreographer = Choreographer.getInstance()
-        val callback = Choreographer.FrameCallback {
-            triangleRuntime?.renderFrame()
-            choreographer.postFrameCallback(callback)
+        val callback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                triangleRuntime?.renderFrame()
+                choreographer.postFrameCallback(this)
+            }
         }
         frameCallback = callback
         choreographer.postFrameCallback(callback)

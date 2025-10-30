@@ -1,24 +1,26 @@
-package io.kreekt.loader
+package io.materia.loader
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.io.InputStream
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.Base64
-import kotlin.io.DEFAULT_BUFFER_SIZE
 
-internal actual class DefaultAssetResolver : AssetResolver {
+internal class DefaultAssetResolver : AssetResolver {
 
-    override suspend fun load(uri: String, basePath: String?): ByteArray = withContext(Dispatchers.IO) {
-        when {
-            uri.startsWith("data:", ignoreCase = true) -> decodeDataUri(uri)
-            uri.startsWith("http://", ignoreCase = true) ||
-                uri.startsWith("https://", ignoreCase = true) -> readRemote(uri)
-            else -> readLocal(uri, basePath)
+    override suspend fun load(uri: String, basePath: String?): ByteArray =
+        withContext(Dispatchers.IO) {
+            when {
+                uri.startsWith("data:", ignoreCase = true) -> decodeDataUri(uri)
+                uri.startsWith("http://", ignoreCase = true) ||
+                        uri.startsWith("https://", ignoreCase = true) -> readRemote(uri)
+
+                else -> readLocal(uri, basePath)
+            }
         }
-    }
 
     private fun decodeDataUri(uri: String): ByteArray {
         val commaIndex = uri.indexOf(',')
@@ -40,16 +42,16 @@ internal actual class DefaultAssetResolver : AssetResolver {
     }
 
     private fun readLocal(uri: String, basePath: String?): ByteArray {
-        val file = if (basePath != null) {
-            File(basePath, uri).canonicalFile
+        val resolved = if (basePath != null && !Paths.get(uri).isAbsolute) {
+            Paths.get(basePath, uri).normalize()
         } else {
-            File(uri).canonicalFile
+            Paths.get(uri).normalize()
         }
 
-        if (!file.exists()) {
-            throw IllegalArgumentException("Resource not found: ${file.path}")
+        if (!Files.exists(resolved)) {
+            throw IllegalArgumentException("Resource not found: $resolved")
         }
-        return file.inputStream().use { it.readAllBytesCompat() }
+        return Files.readAllBytes(resolved)
     }
 
     private fun InputStream.readAllBytesCompat(): ByteArray {
@@ -63,3 +65,5 @@ internal actual class DefaultAssetResolver : AssetResolver {
         return buffer.toByteArray()
     }
 }
+
+internal actual fun createDefaultAssetResolver(): AssetResolver = DefaultAssetResolver()

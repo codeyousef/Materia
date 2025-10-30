@@ -5,7 +5,15 @@ import io.materia.renderer.backend.BackendId
 import io.materia.renderer.backend.DeviceCapabilityReport
 import io.materia.renderer.metrics.InitializationStats
 import io.materia.renderer.metrics.PerformanceAssessment
-import kotlinx.coroutines.*
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
 
@@ -275,9 +283,10 @@ class DefaultTelemetryTransmitter : TelemetryTransmitter {
 object TelemetryArchive {
     private const val MAX_EVENTS = 256
     private val events = ArrayDeque<TelemetryPayload>(MAX_EVENTS)
+    private val lock = SynchronizedObject()
 
     fun record(payload: TelemetryPayload) {
-        synchronized(events) {
+        synchronized(lock) {
             if (events.size == MAX_EVENTS) {
                 events.removeFirst()
             }
@@ -285,7 +294,7 @@ object TelemetryArchive {
         }
     }
 
-    fun snapshot(): List<TelemetryPayload> = synchronized(events) { events.toList() }
+    fun snapshot(): List<TelemetryPayload> = synchronized(lock) { events.toList() }
 
-    fun clear() = synchronized(events) { events.clear() }
+    fun clear() = synchronized(lock) { events.clear() }
 }

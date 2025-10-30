@@ -3,10 +3,9 @@ package io.materia.engine.geometry
 import io.materia.engine.scene.VertexBuffer
 
 fun Geometry.vertexCount(): Int {
-    val positionAttr = layout.attributes[AttributeSemantic.POSITION]
-        ?: return vertexBuffer.data.size / (layout.stride / Float.SIZE_BYTES)
-    val components = positionAttr.components
-    return vertexBuffer.data.size / components
+    val strideFloats = (layout.stride / Float.SIZE_BYTES).takeIf { it > 0 }
+        ?: return 0
+    return vertexBuffer.data.size / strideFloats
 }
 
 data class InterleavedGeometrySource(

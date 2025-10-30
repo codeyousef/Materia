@@ -1,9 +1,9 @@
 package io.materia.loader
 
-import io.kreekt.renderer.TextureFilter
-import io.kreekt.renderer.TextureFormat
-import io.kreekt.renderer.TextureWrap
-import io.kreekt.texture.Texture2D
+import io.materia.renderer.TextureFilter
+import io.materia.renderer.TextureFormat
+import io.materia.renderer.TextureWrap
+import io.materia.texture.Texture2D
 import kotlin.math.max
 import kotlin.math.min
 

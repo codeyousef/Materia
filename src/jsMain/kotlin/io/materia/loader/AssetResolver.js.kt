@@ -1,12 +1,11 @@
-package io.kreekt.loader
+package io.materia.loader
 
 import kotlinx.coroutines.await
 import org.khronos.webgl.ArrayBuffer
-import org.khronos.webgl.Int8Array
 import org.khronos.webgl.Uint8Array
 import kotlin.js.Promise
 
-internal actual class DefaultAssetResolver : AssetResolver {
+internal class DefaultAssetResolver : AssetResolver {
 
     override suspend fun load(uri: String, basePath: String?): ByteArray {
         return when {
@@ -38,7 +37,7 @@ internal actual class DefaultAssetResolver : AssetResolver {
 
         val buffer = (response.arrayBuffer() as Promise<ArrayBuffer>).await()
         val view = Uint8Array(buffer)
-        return ByteArray(view.length) { index -> view[index] }
+        return ByteArray(view.length) { index -> (view.asDynamic()[index] as Int).toByte() }
     }
 
     private fun decodeDataUri(uri: String): ByteArray {
@@ -55,3 +54,5 @@ internal actual class DefaultAssetResolver : AssetResolver {
         }
     }
 }
+
+internal actual fun createDefaultAssetResolver(): AssetResolver = DefaultAssetResolver()
