@@ -1,7 +1,7 @@
-package io.kreekt.tools.profiler.gpu
+package io.materia.tools.profiler.gpu
 
-import io.kreekt.tools.profiler.data.*
-import io.kreekt.tools.profiler.metrics.*
+import io.materia.tools.profiler.data.*
+import io.materia.tools.profiler.metrics.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock

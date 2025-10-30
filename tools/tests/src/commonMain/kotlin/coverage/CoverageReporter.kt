@@ -6,7 +6,7 @@ import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
 /**
- * Comprehensive code coverage reporting system for KreeKt testing infrastructure.
+ * Comprehensive code coverage reporting system for Materia testing infrastructure.
  * Provides multi-format coverage reports with detailed analysis and visualization.
  */
 @Serializable

@@ -1,11 +1,11 @@
-package io.kreekt.tools.editor.material
+package io.materia.tools.editor.material
 
-import io.kreekt.tools.editor.data.MaterialDefinition
-import io.kreekt.tools.editor.data.MaterialType
-import io.kreekt.tools.editor.data.UniformValue
-import io.kreekt.tools.editor.data.UniformType
-import io.kreekt.tools.editor.data.MaterialSettings
-import io.kreekt.tools.editor.data.MaterialMetadata
+import io.materia.tools.editor.data.MaterialDefinition
+import io.materia.tools.editor.data.MaterialType
+import io.materia.tools.editor.data.UniformValue
+import io.materia.tools.editor.data.UniformType
+import io.materia.tools.editor.data.MaterialSettings
+import io.materia.tools.editor.data.MaterialMetadata
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -632,7 +632,7 @@ class MaterialLibrary(
             name = "Imported WGSL Material",
             color = listOf(1f, 1f, 1f)
         ).copy(
-            shaderSource = io.kreekt.tools.editor.data.ShaderCode(
+            shaderSource = io.materia.tools.editor.data.ShaderCode(
                 vertex = extractVertexShader(data),
                 fragment = extractFragmentShader(data)
             )
@@ -732,7 +732,7 @@ class MaterialLibrary(
         return ExportResult(
             success = true,
             data = json,
-            filename = "material_library.kreekt",
+            filename = "material_library.materia",
             errors = emptyList()
         )
     }
@@ -998,7 +998,7 @@ data class MaterialTemplate @OptIn(ExperimentalUuidApi::class) constructor(
             name = name,
             type = MaterialType.CUSTOM_SHADER,
             shaderSource = shaderTemplate?.let { template ->
-                io.kreekt.tools.editor.data.ShaderCode(
+                io.materia.tools.editor.data.ShaderCode(
                     vertex = extractVertexFromTemplate(template),
                     fragment = extractFragmentFromTemplate(template)
                 )

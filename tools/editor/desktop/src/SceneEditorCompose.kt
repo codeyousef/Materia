@@ -1,4 +1,4 @@
-package io.kreekt.tools.editor.desktop
+package io.materia.tools.editor.desktop
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
-import io.kreekt.tools.editor.SceneEditor
-import io.kreekt.tools.editor.data.*
+import io.materia.tools.editor.SceneEditor
+import io.materia.tools.editor.data.*
 import kotlinx.coroutines.launch
 import org.lwjgl.opengl.GL
 import org.lwjgl.opengl.GL11.*
@@ -660,7 +660,7 @@ class LWJGLCanvas(
         glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
         // Render the scene
-        // This would integrate with the actual KreeKt renderer
+        // This would integrate with the actual Materia renderer
         renderScene()
 
         // Update statistics
@@ -669,7 +669,7 @@ class LWJGLCanvas(
 
     private fun renderScene() {
         // Placeholder for actual scene rendering
-        // This would use the KreeKt rendering engine
+        // This would use the Materia rendering engine
     }
 }
 
@@ -1367,7 +1367,7 @@ fun main() = application {
 
     Window(
         onCloseRequest = ::exitApplication,
-        title = "KreeKt Scene Editor",
+        title = "Materia Scene Editor",
         state = WindowState(width = 1400.dp, height = 900.dp)
     ) {
         SceneEditorWindow(

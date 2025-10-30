@@ -7,7 +7,7 @@ import kotlinx.serialization.json.*
 import java.io.File
 
 /**
- * Migration guide generator for KreeKt documentation.
+ * Migration guide generator for Materia documentation.
  * Creates comprehensive migration guides from other 3D libraries (Three.js, Babylon.js, etc.)
  */
 @Serializable
@@ -222,7 +222,7 @@ class MigrationGuideGenerator {
     }
 
     /**
-     * Generate comprehensive migration guide from source library to KreeKt
+     * Generate comprehensive migration guide from source library to Materia
      */
     suspend fun generateMigrationGuide(
         fromLibrary: SourceLibrary,
@@ -250,8 +250,8 @@ class MigrationGuideGenerator {
         val migrationSteps = generateMigrationSteps(fromLibrary, strategy)
 
         MigrationGuide(
-            id = "migration-${fromLibrary.name.lowercase()}-to-kreekt",
-            title = "Migrating from ${fromLibrary.name} to KreeKt",
+            id = "migration-${fromLibrary.name.lowercase()}-to-materia",
+            title = "Migrating from ${fromLibrary.name} to Materia",
             fromLibrary = fromLibrary,
             toVersion = targetVersion,
             sections = sections,
@@ -260,7 +260,7 @@ class MigrationGuideGenerator {
             breakingChanges = breakingChanges,
             migrationSteps = migrationSteps,
             metadata = GuideMetadata(
-                author = "KreeKt Migration Tool",
+                author = "Materia Migration Tool",
                 createdDate = kotlinx.datetime.Clock.System.now().toString(),
                 lastUpdated = kotlinx.datetime.Clock.System.now().toString(),
                 version = "1.0",
@@ -458,7 +458,7 @@ class MigrationGuideGenerator {
             MigrationExample(
                 id = "threejs_basic_scene",
                 title = "Basic Scene Setup",
-                description = "Converting Three.js scene initialization to KreeKt",
+                description = "Converting Three.js scene initialization to Materia",
                 beforeCode = CodeSnippet(
                     language = "javascript",
                     code = """
@@ -477,7 +477,7 @@ class MigrationGuideGenerator {
                 afterCode = CodeSnippet(
                     language = "kotlin",
                     code = """
-                        // KreeKt
+                        // Materia
                         val scene = Scene()
                         val camera = PerspectiveCamera(
                             fov = 75.0,
@@ -490,11 +490,11 @@ class MigrationGuideGenerator {
 
                         camera.position.z = 5.0
                     """.trimIndent(),
-                    library = "KreeKt",
+                    library = "Materia",
                     version = "1.0+"
                 ),
                 explanation = """
-                    The main differences in KreeKt:
+                    The main differences in Materia:
                     1. No 'new' keyword - Kotlin uses constructor calls directly
                     2. Type-safe parameters with explicit types (Double instead of Number)
                     3. WebGPU renderer instead of WebGL (with WebGL fallback)
@@ -507,7 +507,7 @@ class MigrationGuideGenerator {
             MigrationExample(
                 id = "threejs_mesh_creation",
                 title = "Creating Meshes",
-                description = "Converting Three.js mesh creation to KreeKt",
+                description = "Converting Three.js mesh creation to Materia",
                 beforeCode = CodeSnippet(
                     language = "javascript",
                     code = """
@@ -523,17 +523,17 @@ class MigrationGuideGenerator {
                 afterCode = CodeSnippet(
                     language = "kotlin",
                     code = """
-                        // KreeKt
+                        // Materia
                         val geometry = BoxGeometry(1.0, 1.0, 1.0)
                         val material = BasicMaterial(color = Color.RED)
                         val cube = Mesh(geometry, material)
                         scene.add(cube)
                     """.trimIndent(),
-                    library = "KreeKt",
+                    library = "Materia",
                     version = "1.0+"
                 ),
                 explanation = """
-                    KreeKt simplifications:
+                    Materia simplifications:
                     1. Constructor parameters are directly passed, no object literals
                     2. Color.RED constant instead of hex values
                     3. Type safety ensures correct parameter types
@@ -546,7 +546,7 @@ class MigrationGuideGenerator {
             MigrationExample(
                 id = "threejs_animation_loop",
                 title = "Animation Loop",
-                description = "Converting Three.js animation loop to KreeKt",
+                description = "Converting Three.js animation loop to Materia",
                 beforeCode = CodeSnippet(
                     language = "javascript",
                     code = """
@@ -567,7 +567,7 @@ class MigrationGuideGenerator {
                 afterCode = CodeSnippet(
                     language = "kotlin",
                     code = """
-                        // KreeKt
+                        // Materia
                         fun animate() {
                             cube.rotation.x += 0.01
                             cube.rotation.y += 0.01
@@ -578,11 +578,11 @@ class MigrationGuideGenerator {
                         }
                         animate()
                     """.trimIndent(),
-                    library = "KreeKt",
+                    library = "Materia",
                     version = "1.0+"
                 ),
                 explanation = """
-                    KreeKt animation patterns:
+                    Materia animation patterns:
                     1. Function reference syntax (::animate) instead of string names
                     2. Same logical structure as Three.js
                     3. Type-safe numeric operations
@@ -599,7 +599,7 @@ class MigrationGuideGenerator {
             MigrationExample(
                 id = "babylonjs_engine_setup",
                 title = "Engine and Scene Setup",
-                description = "Converting Babylon.js engine initialization to KreeKt",
+                description = "Converting Babylon.js engine initialization to Materia",
                 beforeCode = CodeSnippet(
                     language = "javascript",
                     code = """
@@ -618,7 +618,7 @@ class MigrationGuideGenerator {
                 afterCode = CodeSnippet(
                     language = "kotlin",
                     code = """
-                        // KreeKt
+                        // Materia
                         val canvas = document.getElementById("renderCanvas") as HTMLCanvasElement
                         val renderer = WebGPURenderer()
                         renderer.setCanvas(canvas)
@@ -631,11 +631,11 @@ class MigrationGuideGenerator {
                         camera.lookAt(Vector3.ZERO)
                         camera.attachControls(canvas)
                     """.trimIndent(),
-                    library = "KreeKt",
+                    library = "Materia",
                     version = "1.0+"
                 ),
                 explanation = """
-                    Key differences in KreeKt:
+                    Key differences in Materia:
                     1. Renderer abstraction instead of engine
                     2. Type-safe canvas handling
                     3. Named parameters for clarity
@@ -652,7 +652,7 @@ class MigrationGuideGenerator {
             MigrationExample(
                 id = "unity_gameobject_creation",
                 title = "GameObject to Mesh",
-                description = "Converting Unity GameObject patterns to KreeKt Mesh objects",
+                description = "Converting Unity GameObject patterns to Materia Mesh objects",
                 beforeCode = CodeSnippet(
                     language = "csharp",
                     code = """
@@ -670,7 +670,7 @@ class MigrationGuideGenerator {
                 afterCode = CodeSnippet(
                     language = "kotlin",
                     code = """
-                        // KreeKt
+                        // Materia
                         val geometry = BoxGeometry(1.0, 1.0, 1.0)
                         val material = BasicMaterial(color = Color.RED)
                         val cube = Mesh(geometry, material)
@@ -680,11 +680,11 @@ class MigrationGuideGenerator {
 
                         scene.add(cube)
                     """.trimIndent(),
-                    library = "KreeKt",
+                    library = "Materia",
                     version = "1.0+"
                 ),
                 explanation = """
-                    Unity to KreeKt conceptual mapping:
+                    Unity to Materia conceptual mapping:
                     1. GameObject + Primitive -> Geometry + Material + Mesh
                     2. Transform component -> Direct position/rotation properties
                     3. Component-based -> Composition-based architecture
@@ -841,15 +841,15 @@ class MigrationGuideGenerator {
             "dependencies" -> MigrationStep(
                 order = order,
                 title = "Update Dependencies",
-                description = "Replace ${fromLibrary.name} dependencies with KreeKt",
+                description = "Replace ${fromLibrary.name} dependencies with Materia",
                 actions = listOf(
                     MigrationAction(
                         type = ActionType.UPDATE_DEPENDENCY,
-                        description = "Add KreeKt dependencies to build.gradle.kts",
+                        description = "Add Materia dependencies to build.gradle.kts",
                         code = """
                             dependencies {
-                                implementation("io.github.kreekt:kreekt-core:1.0.0")
-                                implementation("io.github.kreekt:kreekt-renderer:1.0.0")
+                                implementation("io.github.materia:materia-core:1.0.0")
+                                implementation("io.github.materia:materia-renderer:1.0.0")
                             }
                         """.trimIndent(),
                         automated = false
@@ -871,7 +871,7 @@ class MigrationGuideGenerator {
             else -> MigrationStep(
                 order = order,
                 title = "Migrate $topic",
-                description = "Convert $topic from ${fromLibrary.name} to KreeKt",
+                description = "Convert $topic from ${fromLibrary.name} to Materia",
                 actions = emptyList(),
                 validation = ValidationStep("Manual verification", emptyList(), emptyList()),
                 estimatedTime = 30
@@ -915,7 +915,7 @@ class MigrationGuideGenerator {
         if (content.contains("new THREE.")) {
             suggestions.add(MigrationSuggestion(
                 type = "SYNTAX_IMPROVEMENT",
-                description = "Remove 'new' keyword and 'THREE.' prefix in KreeKt",
+                description = "Remove 'new' keyword and 'THREE.' prefix in Materia",
                 example = "THREE.Scene() -> Scene()"
             ))
         }
@@ -938,7 +938,7 @@ class MigrationGuideGenerator {
     private fun buildMigrationMarkdown(guide: MigrationGuide): String = buildString {
         appendLine("# ${guide.title}")
         appendLine()
-        appendLine("Migration guide from ${guide.fromLibrary.name} ${guide.fromLibrary.version} to KreeKt ${guide.toVersion}")
+        appendLine("Migration guide from ${guide.fromLibrary.name} ${guide.fromLibrary.version} to Materia ${guide.toVersion}")
         appendLine()
 
         // Table of contents
@@ -988,7 +988,7 @@ class MigrationGuideGenerator {
 
         // API mappings
         appendLine("## API Reference")
-        appendLine("| ${guide.fromLibrary.name} | KreeKt | Type | Notes |")
+        appendLine("| ${guide.fromLibrary.name} | Materia | Type | Notes |")
         appendLine("|---|---|---|---|")
         guide.apiMappings.forEach { mapping ->
             appendLine("| `${mapping.sourceAPI}` | `${mapping.targetAPI}` | ${mapping.mappingType} | ${mapping.notes} |")
@@ -1058,13 +1058,13 @@ class MigrationGuideGenerator {
     }
 
     private fun generateSectionContent(phase: MigrationPhase, fromLibrary: SourceLibrary): String {
-        return "Migration guidance for ${phase.title} when converting from ${fromLibrary.name} to KreeKt."
+        return "Migration guidance for ${phase.title} when converting from ${fromLibrary.name} to Materia."
     }
 
     private fun estimatePhaseTime(phase: MigrationPhase): Int = phase.topics.size * 30 // 30 minutes per topic
 
     private fun generatePhaseResources(phase: MigrationPhase): List<String> {
-        return listOf("KreeKt documentation", "API reference", "Examples")
+        return listOf("Materia documentation", "API reference", "Examples")
     }
 
     private fun calculateMigrationComplexity(issues: List<MigrationIssue>): MigrationComplexity {
@@ -1113,22 +1113,22 @@ class MigrationGuideGenerator {
         val scriptContent = buildString {
             appendLine("// Generated migration script for Gradle")
             appendLine("dependencies {")
-            appendLine("    implementation(\"io.github.kreekt:kreekt-core:${guide.toVersion}\")")
-            appendLine("    implementation(\"io.github.kreekt:kreekt-renderer:${guide.toVersion}\")")
+            appendLine("    implementation(\"io.github.materia:materia-core:${guide.toVersion}\")")
+            appendLine("    implementation(\"io.github.materia:materia-renderer:${guide.toVersion}\")")
             appendLine("}")
         }
 
         return MigrationScript(
             type = ScriptType.GRADLE_SCRIPT,
             content = scriptContent,
-            description = "Gradle build script updates for KreeKt migration"
+            description = "Gradle build script updates for Materia migration"
         )
     }
 
     private fun generateShellScript(guide: MigrationGuide): MigrationScript {
         return MigrationScript(
             type = ScriptType.SHELL_SCRIPT,
-            content = "#!/bin/bash\necho 'Migration script for ${guide.fromLibrary.name} to KreeKt'",
+            content = "#!/bin/bash\necho 'Migration script for ${guide.fromLibrary.name} to Materia'",
             description = "Shell script for automated migration tasks"
         )
     }

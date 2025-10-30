@@ -1,6 +1,6 @@
 # Platform-Specific Guide
 
-This guide covers platform-specific considerations when using KreeKt across different targets.
+This guide covers platform-specific considerations when using Materia across different targets.
 
 ## Platform Overview
 
@@ -32,7 +32,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation("io.kreekt:kreekt-jvm:1.0.0")
+                implementation("io.materia:materia-jvm:1.0.0")
                 implementation("org.lwjgl:lwjgl:3.3.3")
                 implementation("org.lwjgl:lwjgl-vulkan:3.3.3")
 
@@ -55,7 +55,7 @@ kotlin {
 ### Renderer Initialization
 
 ```kotlin
-import io.kreekt.renderer.VulkanRenderer
+import io.materia.renderer.VulkanRenderer
 import org.lwjgl.glfw.GLFW
 import org.lwjgl.system.MemoryStack
 
@@ -67,7 +67,7 @@ fun main() {
 
     // Create window (no OpenGL context)
     GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_NO_API)
-    val window = GLFW.glfwCreateWindow(800, 600, "KreeKt App", 0, 0)
+    val window = GLFW.glfwCreateWindow(800, 600, "Materia App", 0, 0)
 
     // Create Vulkan renderer
     val renderer = VulkanRenderer(window)
@@ -121,7 +121,7 @@ kotlin {
     sourceSets {
         val jsMain by getting {
             dependencies {
-                implementation("io.kreekt:kreekt-js:1.0.0")
+                implementation("io.materia:materia-js:1.0.0")
             }
         }
     }
@@ -136,7 +136,7 @@ kotlin {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KreeKt WebGPU App</title>
+    <title>Materia WebGPU App</title>
     <style>
         body {
             margin: 0;
@@ -151,7 +151,7 @@ kotlin {
 </head>
 <body>
     <canvas id="renderCanvas"></canvas>
-    <script src="kreekt-app.js"></script>
+    <script src="materia-app.js"></script>
 </body>
 </html>
 ```
@@ -159,7 +159,7 @@ kotlin {
 ### Renderer Initialization
 
 ```kotlin
-import io.kreekt.renderer.WebGPURenderer
+import io.materia.renderer.WebGPURenderer
 import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLCanvasElement
@@ -240,11 +240,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.kreekt"
+    namespace = "com.example.materia"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.kreekt"
+        applicationId = "com.example.materia"
         minSdk = 24
         targetSdk = 34
     }
@@ -266,7 +266,7 @@ kotlin {
     sourceSets {
         val androidMain by getting {
             dependencies {
-                implementation("io.kreekt:kreekt-android:1.0.0")
+                implementation("io.materia:materia-android:1.0.0")
                 implementation("androidx.core:core-ktx:1.12.0")
                 implementation("androidx.appcompat:appcompat:1.6.1")
             }
@@ -320,17 +320,17 @@ kotlin {
 import android.os.Bundle
 import android.view.Surface
 import androidx.appcompat.app.AppCompatActivity
-import io.kreekt.renderer.VulkanRenderer
+import io.materia.renderer.VulkanRenderer
 
 class MainActivity : AppCompatActivity() {
     private lateinit var renderer: VulkanRenderer
-    private lateinit var surfaceView: KreektSurfaceView
+    private lateinit var surfaceView: MateriaSurfaceView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Create surface view
-        surfaceView = KreektSurfaceView(this).apply {
+        surfaceView = MateriaSurfaceView(this).apply {
             holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) {
                     // Initialize renderer with Android Surface
@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity() {
 
 ### Performance Considerations
 
-- **Vulkan vs OpenGL ES**: KreeKt prefers Vulkan but falls back to OpenGL ES 3.0
+- **Vulkan vs OpenGL ES**: Materia prefers Vulkan but falls back to OpenGL ES 3.0
 - **Thermal Throttling**: Monitor device temperature
 - **Battery Usage**: Implement adaptive quality settings
 - **Screen Orientation**: Handle configuration changes
@@ -415,7 +415,7 @@ kotlin {
         val iosMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.kreekt:kreekt-ios:1.0.0")
+                implementation("io.materia:materia-ios:1.0.0")
             }
         }
 
@@ -430,7 +430,7 @@ kotlin {
 
 ```swift
 import UIKit
-import KreeKt
+import Materia
 
 class GameViewController: UIViewController {
     var renderer: VulkanRenderer!
@@ -444,7 +444,7 @@ class GameViewController: UIViewController {
         metalView.device = MTLCreateSystemDefaultDevice()
         view.addSubview(metalView)
 
-        // Initialize KreeKt renderer (uses MoltenVK)
+        // Initialize Materia renderer (uses MoltenVK)
         renderer = VulkanRenderer(metalView: metalView)
 
         // Start render loop
@@ -485,7 +485,7 @@ kotlin {
         val nativeMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.kreekt:kreekt-native:1.0.0")
+                implementation("io.materia:materia-native:1.0.0")
             }
         }
 
@@ -500,7 +500,7 @@ kotlin {
 ### Platform-Specific Initialization
 
 ```kotlin
-import io.kreekt.renderer.VulkanRenderer
+import io.materia.renderer.VulkanRenderer
 import platform.vulkan.*
 
 fun main() {

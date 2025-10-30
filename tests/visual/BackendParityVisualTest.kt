@@ -1,4 +1,4 @@
-package io.kreekt.visual
+package io.materia.visual
 
 import kotlin.test.Test
 import kotlin.test.fail

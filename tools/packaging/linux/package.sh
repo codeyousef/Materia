@@ -1,16 +1,16 @@
 #!/bin/bash
-# KreeKt Tools - Linux Desktop Packaging Script
+# Materia Tools - Linux Desktop Packaging Script
 # Creates AppImage, DEB, RPM, and Flatpak packages
 
 set -e
 
 echo "========================================"
-echo "KreeKt Tools - Linux Packaging"
+echo "Materia Tools - Linux Packaging"
 echo "========================================"
 
 # Configuration
-APP_NAME="KreeKt Tools"
-APP_ID="dev.kreekt.tools"
+APP_NAME="Materia Tools"
+APP_ID="dev.materia.tools"
 APP_VERSION="1.0.0"
 JAVA_VERSION="17"
 BUILD_DIR="$(pwd)/build"
@@ -44,7 +44,7 @@ echo "Build completed successfully."
 # Copy application JARs
 cp tools/editor/desktop/build/libs/*.jar "$BUILD_DIR/"
 cp tools/profiler/desktop/build/libs/*.jar "$BUILD_DIR/"
-cp tools/api-server/build/libs/*-all.jar "$BUILD_DIR/kreekt-api-server.jar"
+cp tools/api-server/build/libs/*-all.jar "$BUILD_DIR/materia-api-server.jar"
 
 echo "Creating custom JRE with jlink..."
 
@@ -60,7 +60,7 @@ $JAVA_HOME/bin/jlink \
 echo "Creating application structure..."
 
 # Create application directory structure
-APP_DIR="$BUILD_DIR/kreekt-tools"
+APP_DIR="$BUILD_DIR/materia-tools"
 mkdir -p "$APP_DIR/bin"
 mkdir -p "$APP_DIR/lib"
 mkdir -p "$APP_DIR/resources"
@@ -74,7 +74,7 @@ cp -R "$BUILD_DIR/jre" "$APP_DIR/"
 cp "$BUILD_DIR"/*.jar "$APP_DIR/lib/"
 
 # Create launcher scripts
-cat > "$APP_DIR/bin/kreekt-tools" << 'EOF'
+cat > "$APP_DIR/bin/materia-tools" << 'EOF'
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -86,7 +86,7 @@ exec "$JAVA_HOME/bin/java" \
     -Xmx2g \
     -Djava.awt.headless=false \
     -Dsun.java2d.opengl=true \
-    -jar "$APP_ROOT/lib/kreekt-api-server.jar" \
+    -jar "$APP_ROOT/lib/materia-api-server.jar" \
     "$@"
 EOF
 
@@ -119,23 +119,23 @@ EOF
 chmod +x "$APP_DIR/bin/"*
 
 # Create desktop entry
-cat > "$APP_DIR/share/applications/kreekt-tools.desktop" << EOF
+cat > "$APP_DIR/share/applications/materia-tools.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=$APP_NAME
 Comment=3D graphics development tools for Kotlin Multiplatform
-Icon=kreekt-tools
-Exec=kreekt-tools
+Icon=materia-tools
+Exec=materia-tools
 Categories=Development;Graphics;3DGraphics;
 StartupNotify=true
-StartupWMClass=KreeKt Tools
-MimeType=application/x-kreekt-project;
+StartupWMClass=Materia Tools
+MimeType=application/x-materia-project;
 Keywords=3D;graphics;development;kotlin;webgpu;vulkan;
 EOF
 
 # Copy icon if available
 if [ -f "$RESOURCES_DIR/app-icon.png" ]; then
-    cp "$RESOURCES_DIR/app-icon.png" "$APP_DIR/share/icons/hicolor/256x256/apps/kreekt-tools.png"
+    cp "$RESOURCES_DIR/app-icon.png" "$APP_DIR/share/icons/hicolor/256x256/apps/materia-tools.png"
 fi
 
 # Copy resources
@@ -157,19 +157,19 @@ if command -v appimagetool >/dev/null 2>&1; then
     cat > "$APPDIR/AppRun" << 'EOF'
 #!/bin/bash
 APPDIR="$(dirname "$(readlink -f "${0}")")"
-exec "$APPDIR/bin/kreekt-tools" "$@"
+exec "$APPDIR/bin/materia-tools" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"
 
     # Copy desktop file and icon to AppDir root
-    cp "$APP_DIR/share/applications/kreekt-tools.desktop" "$APPDIR/"
-    if [ -f "$APP_DIR/share/icons/hicolor/256x256/apps/kreekt-tools.png" ]; then
-        cp "$APP_DIR/share/icons/hicolor/256x256/apps/kreekt-tools.png" "$APPDIR/"
+    cp "$APP_DIR/share/applications/materia-tools.desktop" "$APPDIR/"
+    if [ -f "$APP_DIR/share/icons/hicolor/256x256/apps/materia-tools.png" ]; then
+        cp "$APP_DIR/share/icons/hicolor/256x256/apps/materia-tools.png" "$APPDIR/"
     fi
 
     # Build AppImage
-    appimagetool "$APPDIR" "$DIST_DIR/KreeKt-Tools-$ARCH.AppImage"
-    chmod +x "$DIST_DIR/KreeKt-Tools-$ARCH.AppImage"
+    appimagetool "$APPDIR" "$DIST_DIR/Materia-Tools-$ARCH.AppImage"
+    chmod +x "$DIST_DIR/Materia-Tools-$ARCH.AppImage"
 
     echo "✓ AppImage created successfully"
 else
@@ -180,55 +180,55 @@ echo "Creating TAR.XZ archive..."
 
 # Create portable TAR.XZ
 cd "$BUILD_DIR"
-tar -cJf "$DIST_DIR/kreekt-tools-linux-$ARCH.tar.xz" kreekt-tools/
+tar -cJf "$DIST_DIR/materia-tools-linux-$ARCH.tar.xz" materia-tools/
 
 echo "Creating DEB package..."
 
 # Create DEB package structure
 DEB_DIR="$BUILD_DIR/deb"
 mkdir -p "$DEB_DIR/DEBIAN"
-mkdir -p "$DEB_DIR/opt/kreekt-tools"
+mkdir -p "$DEB_DIR/opt/materia-tools"
 mkdir -p "$DEB_DIR/usr/share/applications"
 mkdir -p "$DEB_DIR/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$DEB_DIR/usr/bin"
 
 # Copy application to /opt
-cp -R "$APP_DIR"/* "$DEB_DIR/opt/kreekt-tools/"
+cp -R "$APP_DIR"/* "$DEB_DIR/opt/materia-tools/"
 
 # Create system-wide launchers
-cat > "$DEB_DIR/usr/bin/kreekt-tools" << 'EOF'
+cat > "$DEB_DIR/usr/bin/materia-tools" << 'EOF'
 #!/bin/bash
-exec /opt/kreekt-tools/bin/kreekt-tools "$@"
+exec /opt/materia-tools/bin/materia-tools "$@"
 EOF
 
-cat > "$DEB_DIR/usr/bin/kreekt-scene-editor" << 'EOF'
+cat > "$DEB_DIR/usr/bin/materia-scene-editor" << 'EOF'
 #!/bin/bash
-exec /opt/kreekt-tools/bin/scene-editor "$@"
+exec /opt/materia-tools/bin/scene-editor "$@"
 EOF
 
-cat > "$DEB_DIR/usr/bin/kreekt-profiler" << 'EOF'
+cat > "$DEB_DIR/usr/bin/materia-profiler" << 'EOF'
 #!/bin/bash
-exec /opt/kreekt-tools/bin/profiler "$@"
+exec /opt/materia-tools/bin/profiler "$@"
 EOF
 
 chmod +x "$DEB_DIR/usr/bin/"*
 
 # Copy desktop file and icon
-cp "$APP_DIR/share/applications/kreekt-tools.desktop" "$DEB_DIR/usr/share/applications/"
-if [ -f "$APP_DIR/share/icons/hicolor/256x256/apps/kreekt-tools.png" ]; then
-    cp "$APP_DIR/share/icons/hicolor/256x256/apps/kreekt-tools.png" "$DEB_DIR/usr/share/icons/hicolor/256x256/apps/"
+cp "$APP_DIR/share/applications/materia-tools.desktop" "$DEB_DIR/usr/share/applications/"
+if [ -f "$APP_DIR/share/icons/hicolor/256x256/apps/materia-tools.png" ]; then
+    cp "$APP_DIR/share/icons/hicolor/256x256/apps/materia-tools.png" "$DEB_DIR/usr/share/icons/hicolor/256x256/apps/"
 fi
 
 # Create DEBIAN control file
 cat > "$DEB_DIR/DEBIAN/control" << EOF
-Package: kreekt-tools
+Package: materia-tools
 Version: $APP_VERSION
 Section: devel
 Priority: optional
 Architecture: $DEB_ARCH
-Maintainer: KreeKt Project <tools@kreekt.dev>
+Maintainer: Materia Project <tools@materia.dev>
 Description: 3D graphics development tools for Kotlin Multiplatform
- KreeKt Tools provides a comprehensive development environment for 3D graphics
+ Materia Tools provides a comprehensive development environment for 3D graphics
  applications using Kotlin Multiplatform. Features include:
  .
   * Visual scene editor with real-time preview
@@ -241,7 +241,7 @@ Description: 3D graphics development tools for Kotlin Multiplatform
  iOS, and Native platforms.
 Depends: libc6 (>= 2.17), libx11-6, libxext6, libxi6, libxrender1, libxtst6
 Suggests: vulkan-tools, mesa-vulkan-drivers
-Homepage: https://kreekt.dev
+Homepage: https://materia.dev
 EOF
 
 # Create postinst script
@@ -266,7 +266,7 @@ chmod +x "$DEB_DIR/DEBIAN/postinst"
 
 # Build DEB package
 if command -v dpkg-deb >/dev/null 2>&1; then
-    dpkg-deb --build "$DEB_DIR" "$DIST_DIR/kreekt-tools_${APP_VERSION}_${DEB_ARCH}.deb"
+    dpkg-deb --build "$DEB_DIR" "$DIST_DIR/materia-tools_${APP_VERSION}_${DEB_ARCH}.deb"
     echo "✓ DEB package created successfully"
 else
     echo "⚠ dpkg-deb not found. DEB package creation skipped."
@@ -281,16 +281,16 @@ if command -v rpmbuild >/dev/null 2>&1; then
 
     # Create source tarball
     cd "$BUILD_DIR"
-    tar -czf "$RPM_BUILD_DIR/SOURCES/kreekt-tools-$APP_VERSION.tar.gz" kreekt-tools/
+    tar -czf "$RPM_BUILD_DIR/SOURCES/materia-tools-$APP_VERSION.tar.gz" materia-tools/
 
     # Create RPM spec file
-    cat > "$RPM_BUILD_DIR/SPECS/kreekt-tools.spec" << EOF
-Name:           kreekt-tools
+    cat > "$RPM_BUILD_DIR/SPECS/materia-tools.spec" << EOF
+Name:           materia-tools
 Version:        $APP_VERSION
 Release:        1%{?dist}
 Summary:        3D graphics development tools for Kotlin Multiplatform
 License:        Apache-2.0
-URL:            https://kreekt.dev
+URL:            https://materia.dev
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  systemd-rpm-macros
@@ -302,7 +302,7 @@ Requires:       libXrender
 Requires:       libXtst
 
 %description
-KreeKt Tools provides a comprehensive development environment for 3D graphics
+Materia Tools provides a comprehensive development environment for 3D graphics
 applications using Kotlin Multiplatform. Features include visual scene editor,
 material editor with WGSL shader support, animation tools, and performance
 profiler with GPU metrics.
@@ -311,29 +311,29 @@ profiler with GPU metrics.
 %autosetup
 
 %install
-mkdir -p %{buildroot}/opt/kreekt-tools
-cp -R * %{buildroot}/opt/kreekt-tools/
+mkdir -p %{buildroot}/opt/materia-tools
+cp -R * %{buildroot}/opt/materia-tools/
 
 mkdir -p %{buildroot}%{_bindir}
-cat > %{buildroot}%{_bindir}/kreekt-tools << 'LAUNCHER_EOF'
+cat > %{buildroot}%{_bindir}/materia-tools << 'LAUNCHER_EOF'
 #!/bin/bash
-exec /opt/kreekt-tools/bin/kreekt-tools "\$@"
+exec /opt/materia-tools/bin/materia-tools "\$@"
 LAUNCHER_EOF
-chmod +x %{buildroot}%{_bindir}/kreekt-tools
+chmod +x %{buildroot}%{_bindir}/materia-tools
 
 mkdir -p %{buildroot}%{_datadir}/applications
-cp share/applications/kreekt-tools.desktop %{buildroot}%{_datadir}/applications/
+cp share/applications/materia-tools.desktop %{buildroot}%{_datadir}/applications/
 
 mkdir -p %{buildroot}%{_datadir}/icons/hicolor/256x256/apps
-if [ -f share/icons/hicolor/256x256/apps/kreekt-tools.png ]; then
-    cp share/icons/hicolor/256x256/apps/kreekt-tools.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/
+if [ -f share/icons/hicolor/256x256/apps/materia-tools.png ]; then
+    cp share/icons/hicolor/256x256/apps/materia-tools.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/
 fi
 
 %files
-/opt/kreekt-tools/
-%{_bindir}/kreekt-tools
-%{_datadir}/applications/kreekt-tools.desktop
-%{_datadir}/icons/hicolor/256x256/apps/kreekt-tools.png
+/opt/materia-tools/
+%{_bindir}/materia-tools
+%{_datadir}/applications/materia-tools.desktop
+%{_datadir}/icons/hicolor/256x256/apps/materia-tools.png
 
 %post
 update-desktop-database %{_datadir}/applications &> /dev/null || :
@@ -350,13 +350,13 @@ fi
 gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
 
 %changelog
-* $(date +"%%a %%b %%d %%Y") KreeKt Project <tools@kreekt.dev> - $APP_VERSION-1
+* $(date +"%%a %%b %%d %%Y") Materia Project <tools@materia.dev> - $APP_VERSION-1
 - Initial release
 EOF
 
     # Build RPM
-    rpmbuild --define "_topdir $RPM_BUILD_DIR" -ba "$RPM_BUILD_DIR/SPECS/kreekt-tools.spec"
-    cp "$RPM_BUILD_DIR/RPMS/$RPM_ARCH/kreekt-tools-${APP_VERSION}-1."*".rpm" "$DIST_DIR/"
+    rpmbuild --define "_topdir $RPM_BUILD_DIR" -ba "$RPM_BUILD_DIR/SPECS/materia-tools.spec"
+    cp "$RPM_BUILD_DIR/RPMS/$RPM_ARCH/materia-tools-${APP_VERSION}-1."*".rpm" "$DIST_DIR/"
 
     echo "✓ RPM package created successfully"
 else
@@ -366,14 +366,14 @@ fi
 echo "Creating Flatpak manifest..."
 
 # Create Flatpak manifest
-cat > "$DIST_DIR/dev.kreekt.tools.yml" << EOF
-app-id: dev.kreekt.tools
+cat > "$DIST_DIR/dev.materia.tools.yml" << EOF
+app-id: dev.materia.tools
 runtime: org.freedesktop.Platform
 runtime-version: '23.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.openjdk17
-command: kreekt-tools
+command: materia-tools
 finish-args:
   - --share=ipc
   - --socket=x11
@@ -386,7 +386,7 @@ finish-args:
   - --env=JAVA_HOME=/app/jre
 
 modules:
-  - name: kreekt-tools
+  - name: materia-tools
     buildsystem: simple
     build-commands:
       - mkdir -p /app/bin /app/lib /app/jre /app/resources
@@ -394,11 +394,11 @@ modules:
       - cp lib/*.jar /app/lib/
       - cp bin/* /app/bin/
       - chmod +x /app/bin/*
-      - install -Dm644 share/applications/kreekt-tools.desktop /app/share/applications/dev.kreekt.tools.desktop
-      - install -Dm644 share/icons/hicolor/256x256/apps/kreekt-tools.png /app/share/icons/hicolor/256x256/apps/dev.kreekt.tools.png
+      - install -Dm644 share/applications/materia-tools.desktop /app/share/applications/dev.materia.tools.desktop
+      - install -Dm644 share/icons/hicolor/256x256/apps/materia-tools.png /app/share/icons/hicolor/256x256/apps/dev.materia.tools.png
     sources:
       - type: dir
-        path: kreekt-tools
+        path: materia-tools
 EOF
 
 echo
@@ -412,20 +412,20 @@ echo "========================================"
 echo "Installation instructions:"
 echo
 echo "AppImage:"
-echo "  chmod +x KreeKt-Tools-$ARCH.AppImage"
-echo "  ./KreeKt-Tools-$ARCH.AppImage"
+echo "  chmod +x Materia-Tools-$ARCH.AppImage"
+echo "  ./Materia-Tools-$ARCH.AppImage"
 echo
 echo "TAR.XZ:"
-echo "  tar -xJf kreekt-tools-linux-$ARCH.tar.xz"
-echo "  ./kreekt-tools/bin/kreekt-tools"
+echo "  tar -xJf materia-tools-linux-$ARCH.tar.xz"
+echo "  ./materia-tools/bin/materia-tools"
 echo
 echo "DEB (Ubuntu/Debian):"
-echo "  sudo dpkg -i kreekt-tools_${APP_VERSION}_${DEB_ARCH}.deb"
+echo "  sudo dpkg -i materia-tools_${APP_VERSION}_${DEB_ARCH}.deb"
 echo "  sudo apt-get install -f  # if dependencies missing"
 echo
 echo "RPM (Fedora/RHEL):"
-echo "  sudo rpm -i kreekt-tools-${APP_VERSION}-1.*.rpm"
+echo "  sudo rpm -i materia-tools-${APP_VERSION}-1.*.rpm"
 echo
 echo "Flatpak:"
-echo "  flatpak-builder build-dir dev.kreekt.tools.yml"
-echo "  flatpak-builder --user --install build-dir dev.kreekt.tools.yml"
+echo "  flatpak-builder build-dir dev.materia.tools.yml"
+echo "  flatpak-builder --user --install build-dir dev.materia.tools.yml"

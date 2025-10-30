@@ -1,0 +1,314 @@
+package io.materia.texture
+
+import io.materia.core.math.*
+import io.materia.renderer.WebGPURenderer
+import io.materia.scene.Scene
+import kotlin.math.*
+
+/**
+ * Pre-filtered Mipmapped Radiance Environment Map Generator
+ * Generates pre-filtered environment maps for Image-Based Lighting (IBL)
+ *
+ * Based on Three.js PMREMGenerator implementation
+ * Uses importance sampling with GGX distribution
+ */
+class PMREMGenerator(private val renderer: WebGPURenderer) {
+
+    private var _compiledEquirectangularShader = false
+    private var _compiledCubemapShader = false
+    private var _compiledScene = false
+
+    private val _pingPongRenderTarget: WebGPURenderTarget? = null
+    private val _blurMaterial: ShaderMaterial? = null
+    private val _cubemapMaterial: ShaderMaterial? = null
+    private val _equirectMaterial: ShaderMaterial? = null
+
+    companion object {
+        // PMREM constants for different roughness levels
+        private const val LOD_MIN = 4
+        private const val LOD_MAX = 10
+        private const val SIZE_MAX = 512
+
+        // GGX importance sampling constants
+        private const val PHI = (1.0 + sqrt(5.0)) / 2.0
+        private const val INV_PHI = 1.0 / PHI
+
+        // Roughness to mip level mapping
+        private val ROUGHNESS_MIPS = floatArrayOf(
+            0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f
+        )
+    }
+
+    /**
+     * Generate PMREM from an equirectangular texture
+     */
+    fun fromEquirectangular(equirect: Texture, outputEncoding: Int = LinearEncoding): CubeTexture {
+        return _fromTexture(equirect, outputEncoding)
+    }
+
+    /**
+     * Generate PMREM from a scene
+     */
+    fun fromScene(scene: Scene, sigma: Float = 0f, near: Float = 0.1f, far: Float = 100f): CubeTexture {
+        // Render scene to cube render target
+        val cubeCamera = CubeCamera(near, far, SIZE_MAX)
+        cubeCamera.update(renderer, scene)
+
+        return if (sigma > 0) {
+            _blur(cubeCamera.renderTarget.texture, 0f, 0f, sigma)
+        } else {
+            cubeCamera.renderTarget.texture
+        }
+    }
+
+    /**
+     * Generate PMREM from an existing cubemap
+     */
+    fun fromCubemap(cubemap: CubeTexture, outputEncoding: Int = LinearEncoding): CubeTexture {
+        return _fromTexture(cubemap, outputEncoding)
+    }
+
+    /**
+     * Compile the equirectangular shader
+     */
+    fun compileEquirectangularShader() {
+        if (!_compiledEquirectangularShader) {
+            _equirectMaterial?.let { material ->
+                _compileMaterial(material)
+                _compiledEquirectangularShader = true
+            }
+        }
+    }
+
+    /**
+     * Compile the cubemap shader
+     */
+    fun compileCubemapShader() {
+        if (!_compiledCubemapShader) {
+            _cubemapMaterial?.let { material ->
+                _compileMaterial(material)
+                _compiledCubemapShader = true
+            }
+        }
+    }
+
+    /**
+     * Dispose of all resources
+     */
+    fun dispose() {
+        _pingPongRenderTarget?.dispose()
+        _blurMaterial?.dispose()
+        _cubemapMaterial?.dispose()
+        _equirectMaterial?.dispose()
+    }
+
+    private fun _fromTexture(texture: Texture, outputEncoding: Int): CubeTexture {
+        // Create render target for PMREM generation
+        val cubeUVRenderTarget = _getCubeUVRenderTarget(texture)
+
+        // Generate mip levels with pre-filtering
+        val mips = _generateMipMaps(texture, cubeUVRenderTarget)
+
+        // Create final cube texture with mips
+        val outputTexture = CubeTexture(
+            images = mips,
+            mapping = CubeUVReflectionMapping,
+            encoding = outputEncoding
+        )
+
+        outputTexture.minFilter = LinearMipmapLinearFilter
+        outputTexture.magFilter = LinearFilter
+        outputTexture.generateMipmaps = false
+
+        return outputTexture
+    }
+
+    private fun _generateMipMaps(texture: Texture, renderTarget: WebGPURenderTarget): List<Image> {
+        val mips = mutableListOf<Image>()
+        val width = renderTarget.width
+        val height = renderTarget.height
+
+        for (mip in 0 until LOD_MAX - LOD_MIN + 1) {
+            val roughness = ROUGHNESS_MIPS[mip]
+            val sigma = _roughnessToSigma(roughness)
+
+            val blurredTexture = if (mip == 0) {
+                texture
+            } else {
+                _blur(texture, sigma * mip.toFloat(), mip - 1f, sigma)
+            }
+
+            // Extract cube face from blurred texture
+            mips.add(_extractCubeFace(blurredTexture, mip))
+        }
+
+        return mips
+    }
+
+    private fun _roughnessToSigma(roughness: Float): Float {
+        // Convert roughness to blur sigma using GGX distribution
+        val alpha = roughness * roughness
+        return sqrt(2.0f / PI.toFloat()) * alpha / (1.0f - alpha)
+    }
+
+    private fun _blur(
+        texture: Texture,
+        lodIn: Float,
+        lodOut: Float,
+        sigma: Float,
+        poleAxis: Vector3? = null
+    ): Texture {
+        // Apply Gaussian blur for pre-filtering
+        val blurMaterial = _getBlurMaterial()
+        blurMaterial.uniforms["envMap"].value = texture
+        blurMaterial.uniforms["sigma"].value = sigma
+        blurMaterial.uniforms["lodIn"].value = lodIn
+        blurMaterial.uniforms["lodOut"].value = lodOut
+        blurMaterial.uniforms["poleAxis"].value = poleAxis ?: Vector3(0f, 1f, 0f)
+
+        // Render blur pass
+        _renderMaterial(blurMaterial)
+
+        return _pingPongRenderTarget!!.texture
+    }
+
+    private fun _getBlurMaterial(): ShaderMaterial {
+        if (_blurMaterial == null) {
+            _blurMaterial = ShaderMaterial(
+                uniforms = mapOf(
+                    "envMap" to Uniform(null),
+                    "sigma" to Uniform(0f),
+                    "lodIn" to Uniform(0f),
+                    "lodOut" to Uniform(0f),
+                    "poleAxis" to Uniform(Vector3(0f, 1f, 0f))
+                ),
+                vertexShader = _getVertexShader(),
+                fragmentShader = _getBlurFragmentShader()
+            )
+        }
+        return _blurMaterial!!
+    }
+
+    private fun _getCubeUVRenderTarget(texture: Texture): WebGPURenderTarget {
+        val imageHeight = texture.image?.height ?: SIZE_MAX
+        val renderTarget = WebGPURenderTarget(SIZE_MAX, SIZE_MAX, WebGPURenderTargetOptions(
+            type = FloatType,
+            format = RGBAFormat,
+            encoding = LinearEncoding,
+            generateMipmaps = false
+        ))
+        return renderTarget
+    }
+
+    private fun _compileMaterial(material: ShaderMaterial) {
+        // Pre-compile shader
+        renderer.compile(material)
+    }
+
+    private fun _renderMaterial(material: ShaderMaterial) {
+        // Render material to current render target
+        val mesh = Mesh(PlaneGeometry(2f, 2f), material)
+        renderer.render(Scene().apply { add(mesh) }, OrthographicCamera(-1f, 1f, 1f, -1f, 0f, 1f))
+    }
+
+    private fun _extractCubeFace(texture: Texture, mip: Int): Image {
+        // Extract cube face data for mip level
+        // This would interface with the WebGPU backend to extract texture data
+        return Image(
+            width = SIZE_MAX shr mip,
+            height = SIZE_MAX shr mip,
+            data = ByteArray(0) // Actual data extraction would happen here
+        )
+    }
+
+    private fun _getVertexShader(): String {
+        return """
+            attribute vec3 position;
+            attribute vec2 uv;
+            varying vec2 vUv;
+
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        """
+    }
+
+    private fun _getBlurFragmentShader(): String {
+        return """
+            uniform samplerCube envMap;
+            uniform float sigma;
+            uniform float lodIn;
+            uniform float lodOut;
+            uniform vec3 poleAxis;
+
+            varying vec2 vUv;
+
+            #define SAMPLES 20
+
+            vec3 importanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+                float a = roughness * roughness;
+                float phi = 2.0 * PI * Xi.x;
+                float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+                float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+                vec3 H;
+                H.x = cos(phi) * sinTheta;
+                H.y = sin(phi) * sinTheta;
+                H.z = cosTheta;
+
+                vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+                vec3 tangent = normalize(cross(up, N));
+                vec3 bitangent = cross(N, tangent);
+
+                vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+                return normalize(sampleVec);
+            }
+
+            void main() {
+                vec3 N = normalize(vUv.x * 2.0 - 1.0, vUv.y * 2.0 - 1.0, 1.0);
+                vec3 color = vec3(0.0);
+                float totalWeight = 0.0;
+
+                for(int i = 0; i < SAMPLES; i++) {
+                    vec2 Xi = hammersley(i, SAMPLES);
+                    vec3 H = importanceSampleGGX(Xi, N, sigma);
+                    vec3 L = normalize(2.0 * dot(N, H) * H - N);
+
+                    float NdotL = max(dot(N, L), 0.0);
+                    if(NdotL > 0.0) {
+                        color += textureLod(envMap, L, lodIn).rgb * NdotL;
+                        totalWeight += NdotL;
+                    }
+                }
+
+                gl_FragColor = vec4(color / totalWeight, 1.0);
+            }
+        """
+    }
+}
+
+// Supporting classes that would be defined elsewhere
+expect class WebGPURenderTarget
+expect class ShaderMaterial
+expect class Uniform
+expect class CubeCamera
+expect class Mesh
+expect class PlaneGeometry
+expect class OrthographicCamera
+expect class Image
+
+// Encoding constants
+const val LinearEncoding = 3000
+const val CubeUVReflectionMapping = 306
+const val LinearMipmapLinearFilter = 1008
+const val LinearFilter = 1006
+const val FloatType = 1015
+const val RGBAFormat = 1023
+
+data class WebGPURenderTargetOptions(
+    val type: Int,
+    val format: Int,
+    val encoding: Int,
+    val generateMipmaps: Boolean
+)

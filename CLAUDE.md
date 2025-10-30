@@ -1,4 +1,4 @@
-# Claude Code Instructions: KreeKt Library
+# Claude Code Instructions: Materia Library
 
 ## Project Overview
 This is a Kotlin Multiplatform library providing Three.js-equivalent 3D graphics capabilities using WebGPU/Vulkan rendering backends. The library enables developers to write 3D applications once and deploy across JVM, Web, Android, iOS, and Native platforms.
@@ -6,17 +6,18 @@ This is a Kotlin Multiplatform library providing Three.js-equivalent 3D graphics
 ## Architecture
 
 ### Core Modules
-- **kreekt-core**: Math primitives (Vector3, Matrix4, Quaternion), utilities
-- **kreekt-renderer**: WebGPU/Vulkan abstraction layer with platform-specific implementations
-- **kreekt-scene**: Scene graph system (Object3D, Scene, Camera, lights)
-- **kreekt-geometry**: Geometry classes and primitive generation
-- **kreekt-material**: Material system and shader management
-- **kreekt-animation**: Animation clips, mixers, and interpolation
-- **kreekt-loader**: Asset loading for GLTF, OBJ, FBX formats
-- **kreekt-controls**: Camera controls and user interaction
-- **kreekt-physics**: Physics engine integration (Rapier primary)
-- **kreekt-xr**: VR/AR support via WebXR and native APIs
-- **kreekt-postprocess**: Post-processing effects pipeline
+
+- **materia-core**: Math primitives (Vector3, Matrix4, Quaternion), utilities
+- **materia-renderer**: WebGPU/Vulkan abstraction layer with platform-specific implementations
+- **materia-scene**: Scene graph system (Object3D, Scene, Camera, lights)
+- **materia-geometry**: Geometry classes and primitive generation
+- **materia-material**: Material system and shader management
+- **materia-animation**: Animation clips, mixers, and interpolation
+- **materia-loader**: Asset loading for GLTF, OBJ, FBX formats
+- **materia-controls**: Camera controls and user interaction
+- **materia-physics**: Physics engine integration (Rapier primary)
+- **materia-xr**: VR/AR support via WebXR and native APIs
+- **materia-postprocess**: Post-processing effects pipeline
 
 ### Platform Strategy
 - **Common**: Shared API definitions using expect/actual pattern
@@ -203,7 +204,7 @@ LWJGL:3.3.3 (JVM)
 
 ### Comprehensive Validation Framework
 
-KreeKt includes a complete production readiness audit system that validates:
+Materia includes a complete production readiness audit system that validates:
 
 #### Constitutional Compliance Validation
 
@@ -233,7 +234,7 @@ KreeKt includes a complete production readiness audit system that validates:
 ```kotlin
 val checker = DefaultProductionReadinessChecker()
 val result = checker.validateProductionReadiness(
-    projectRoot = "/path/to/kreekt",
+    projectRoot = "/path/to/materia",
     config = ValidationConfiguration.strict()
 )
 
@@ -360,7 +361,8 @@ The validation system provides real-time feedback during development through IDE
 **Platforms**: JavaScript (WebGL2), JVM (LWJGL/OpenGL)
 **Status**: Multiplatform (Specs: 014-create-a-basic, 018-optimize-voxelcraft-rendering)
 
-A fully functional creative-mode voxel building game demonstrating KreeKt's multiplatform capabilities:
+A fully functional creative-mode voxel building game demonstrating Materia's multiplatform
+capabilities:
 
 **Features**:
 
@@ -378,7 +380,7 @@ A fully functional creative-mode voxel building game demonstrating KreeKt's mult
 **Technical Highlights**:
 
 - **Multiplatform Architecture**: Shared game logic in commonMain with platform-specific implementations
-- Demonstrates KreeKt scene graph, cameras, and geometries
+- Demonstrates Materia scene graph, cameras, and geometries
 - Advanced mesh generation (face culling, greedy meshing)
 - Terrain generation with natural features (trees, caves)
 - Platform-specific input handling (browser Pointer Lock API, LWJGL keyboard/mouse)
@@ -427,7 +429,7 @@ A fully functional creative-mode voxel building game demonstrating KreeKt's mult
   - Implemented LWJGL-based JVM main with full game loop
   - Added keyboard/mouse input handling for JVM platform
   - Game now runs on both JS (browser) and JVM (native) platforms
-  - This demonstrates KreeKt is truly a multiplatform library
+  - This demonstrates Materia is truly a multiplatform library
 
 - **2025-10-07**: Fixed VoxelCraft rendering issues (017-in-voxelcraft-example)
   - Root cause: Player falling during async terrain/mesh generation
@@ -493,7 +495,7 @@ A fully functional creative-mode voxel building game demonstrating KreeKt's mult
 ### Documentation System
 - **API Reference**: Dokka-generated with enhanced navigation
 - **Interactive Examples**: Live code samples with WebGPU execution
-- **Migration Guides**: Automated Three.js to KreeKt conversion
+- **Migration Guides**: Automated Three.js to Materia conversion
 - **Platform Guides**: Setup instructions for each target platform
 
 ### CI/CD Pipeline

@@ -1,18 +1,18 @@
 #!/bin/bash
-# KreeKt Tools - macOS Desktop Packaging Script
+# Materia Tools - macOS Desktop Packaging Script
 # Creates macOS app bundle and DMG installer
 
 set -e
 
 echo "========================================"
-echo "KreeKt Tools - macOS Packaging"
+echo "Materia Tools - macOS Packaging"
 echo "========================================"
 
 # Configuration
-APP_NAME="KreeKt Tools"
-APP_BUNDLE_NAME="KreeKt-Tools.app"
+APP_NAME="Materia Tools"
+APP_BUNDLE_NAME="Materia-Tools.app"
 APP_VERSION="1.0.0"
-BUNDLE_ID="dev.kreekt.tools"
+BUNDLE_ID="dev.materia.tools"
 JAVA_VERSION="17"
 BUILD_DIR="$(pwd)/build"
 DIST_DIR="$(pwd)/dist"
@@ -37,7 +37,7 @@ echo "Build completed successfully."
 # Copy application JARs
 cp tools/editor/desktop/build/libs/*.jar "$BUILD_DIR/"
 cp tools/profiler/desktop/build/libs/*.jar "$BUILD_DIR/"
-cp tools/api-server/build/libs/*-all.jar "$BUILD_DIR/kreekt-api-server.jar"
+cp tools/api-server/build/libs/*-all.jar "$BUILD_DIR/materia-api-server.jar"
 
 echo "Creating custom JRE with jlink..."
 
@@ -86,7 +86,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleExecutable</key>
-    <string>kreekt-tools</string>
+    <string>materia-tools</string>
     <key>CFBundleIconFile</key>
     <string>app-icon.icns</string>
     <key>NSPrincipalClass</key>
@@ -96,7 +96,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>NSRequiresAquaSystemAppearance</key>
     <false/>
     <key>NSHumanReadableCopyright</key>
-    <string>© 2025 KreeKt Project</string>
+    <string>© 2025 Materia Project</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -106,7 +106,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 EOF
 
 # Create launcher script
-cat > "$APP_BUNDLE/Contents/MacOS/kreekt-tools" << 'EOF'
+cat > "$APP_BUNDLE/Contents/MacOS/materia-tools" << 'EOF'
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$SCRIPT_DIR/.."
@@ -118,14 +118,14 @@ cd "$APP_ROOT/Resources"
 # Launch the application
 exec "$JAVA_HOME/bin/java" \
     -Xmx2g \
-    -Dapple.awt.application.name="KreeKt Tools" \
+    -Dapple.awt.application.name="Materia Tools" \
     -Dcom.apple.macos.useScreenMenuBar=true \
     -Dapple.laf.useScreenMenuBar=true \
-    -jar "$APP_ROOT/lib/kreekt-api-server.jar" \
+    -jar "$APP_ROOT/lib/materia-api-server.jar" \
     "$@"
 EOF
 
-chmod +x "$APP_BUNDLE/Contents/MacOS/kreekt-tools"
+chmod +x "$APP_BUNDLE/Contents/MacOS/materia-tools"
 
 # Copy resources and icon
 if [ -f "$RESOURCES_DIR/app-icon.icns" ]; then
@@ -189,7 +189,7 @@ if [ -f "$RESOURCES_DIR/dmg-background.png" ]; then
 fi
 
 # Create DMG
-DMG_NAME="KreeKt-Tools-macOS.dmg"
+DMG_NAME="Materia-Tools-macOS.dmg"
 hdiutil create -volname "$APP_NAME" \
     -srcfolder "$DMG_TEMP" \
     -ov \
@@ -226,7 +226,7 @@ echo "Creating ZIP archive for distribution..."
 
 # Create ZIP for easy distribution
 cd "$BUILD_DIR"
-zip -r "$DIST_DIR/KreeKt-Tools-macOS.zip" "$APP_BUNDLE_NAME"
+zip -r "$DIST_DIR/Materia-Tools-macOS.zip" "$APP_BUNDLE_NAME"
 
 echo
 echo "========================================"
@@ -234,12 +234,12 @@ echo "macOS Packaging completed!"
 echo "========================================"
 echo "App Bundle: $BUILD_DIR/$APP_BUNDLE_NAME"
 echo "DMG Installer: $DIST_DIR/$DMG_NAME"
-echo "ZIP Archive: $DIST_DIR/KreeKt-Tools-macOS.zip"
+echo "ZIP Archive: $DIST_DIR/Materia-Tools-macOS.zip"
 echo "========================================"
 
 # Verify the app bundle
 echo "Verifying app bundle..."
-if [ -x "$APP_BUNDLE/Contents/MacOS/kreekt-tools" ]; then
+if [ -x "$APP_BUNDLE/Contents/MacOS/materia-tools" ]; then
     echo "✓ Main executable is present and executable"
 else
     echo "✗ Main executable missing or not executable"

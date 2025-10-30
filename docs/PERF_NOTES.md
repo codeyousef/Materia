@@ -1,6 +1,7 @@
 # Performance Notes
 
-KreeKt targets **60 FPS** on desktop and **45 FPS** on Web with instanced scenes up to ~20k elements. The shortcuts below summarise proven tactics for keeping frame times predictable.
+Materia targets **60 FPS** on desktop and **45 FPS** on Web with instanced scenes up to ~20k
+elements. The shortcuts below summarise proven tactics for keeping frame times predictable.
 
 ---
 
@@ -34,4 +35,5 @@ KreeKt targets **60 FPS** on desktop and **45 FPS** on Web with instanced scenes
 - Instrument frame times using Kotlin’s `TimeSource` reports; feed numbers into the in-engine HUD.
 - Track arena usage (`FrameArena.used`) to ensure headroom. Spikes often signal hidden allocations.
 
-Following these patterns keeps hot loops predictable and makes it easier to scale KreeKt scenes across the supported platforms.
+Following these patterns keeps hot loops predictable and makes it easier to scale Materia scenes
+across the supported platforms.

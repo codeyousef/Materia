@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KreeKt Triangle Example</title>
+    <title>Materia Triangle Example</title>
     <style>
         body {
             margin: 0;
@@ -13,7 +13,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        #kreekt-canvas {
+        #materia-canvas {
             display: block;
             width: 100vw;
             height: 100vh;
@@ -107,10 +107,10 @@
     </style>
 </head>
 <body>
-<canvas id="kreekt-canvas"></canvas>
+<canvas id="materia-canvas"></canvas>
 
 <div class="info-overlay">
-    <h3>🚀 KreeKt 3D Engine</h3>
+    <h3>🚀 Materia 3D Engine</h3>
     <div><strong>Controls:</strong></div>
     <div class="controls">
         <div>WASD - Move camera</div>
@@ -181,7 +181,7 @@
 </script>
 
 <script>
-    const canvas = document.getElementById('kreekt-canvas');
+    const canvas = document.getElementById('materia-canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
 
     if (gl) {

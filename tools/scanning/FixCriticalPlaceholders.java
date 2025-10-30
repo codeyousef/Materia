@@ -223,7 +223,7 @@ public class FixCriticalPlaceholders {
         String projectRoot = args.length > 0 ? args[0] : System.getProperty("user.dir");
         boolean dryRun = args.length > 1 && "true".equals(args[1]);
 
-        System.out.println("🔧 KreeKt Critical Placeholder Fixer");
+        System.out.println("🔧 Materia Critical Placeholder Fixer");
         System.out.println("====================================");
         System.out.println("📁 Project root: " + projectRoot);
         System.out.println("🧪 Dry run: " + dryRun);

@@ -6,7 +6,9 @@ Replace all JVM Vulkan placeholders so desktop examples render real frames throu
 ## Step Breakdown
 
 1. **Audit Vulkan Renderer Capabilities**
-   - Catalogue the existing low-level Vulkan utilities (`src/jvmMain/kotlin/io/kreekt/renderer/vulkan`) and document reusable pieces for command buffers, swapchains, and pipeline setup.
+    - Catalogue the existing low-level Vulkan utilities (
+      `src/jvmMain/kotlin/io/materia/renderer/vulkan`) and document reusable pieces for command
+      buffers, swapchains, and pipeline setup.
      - `VulkanRenderer` already owns swapchain creation, command pools/buffers, render pass begin/end helpers, and per-frame loop logic.
      - `VulkanEnvironmentManager`, `VulkanSwapchain`, and `VulkanSurface` contain window/surface bootstrap, command pool allocation, and single-use command submission utilities.
      - `VulkanPipeline`, `VulkanBufferManager`, and `VulkanMaterialTextureManager` manage pipeline creation and resource uploads (texture staging, descriptor sets) outside the new abstraction.
@@ -14,7 +16,7 @@ Replace all JVM Vulkan placeholders so desktop examples render real frames throu
      - Only `.spv` artifacts exist under `src/jvmMain/resources/shaders/`; WGSL isn’t auto-translated today.
      - Need build-time or precompiled SPIR-V path for `GpuShaderModule` to consume.
 
-2. **Expand `io.kreekt.renderer.gpu` JVM Actuals**
+2. **Expand `io.materia.renderer.gpu` JVM Actuals**
    - Implement `GpuDevice.createCommandEncoder`, `createTexture`, `createSampler`, `createBindGroup*`, `createPipelineLayout`.
    - Implement `GpuQueue.submit` with real `VkSubmitInfo`.
    - Introduce Vulkan-backed `GpuCommandEncoder/Buffer/RenderPassEncoder` and wire render-pass begin/end.
@@ -23,7 +25,7 @@ Replace all JVM Vulkan placeholders so desktop examples render real frames throu
      - Expose swapchain/surface attachments through reusable render-pass descriptors so the encoder can target the current framebuffer.
      - Map WebGPU-style bind group abstractions to Vulkan descriptor set layouts (can leverage `VulkanMaterialTextureManager` patterns).
 
-3. **Bridge `kreekt-gpu` JVM Actuals**
+3. **Bridge `materia-gpu` JVM Actuals**
    - Update `GpuSurface` to wrap the renderer swapchain (acquire/present real images).
    - Ensure `GpuBuffer`, `GpuTexture`, and `GpuCommandEncoder` attach renderer handles and expose lifecycles.
 
@@ -44,7 +46,8 @@ Replace all JVM Vulkan placeholders so desktop examples render real frames throu
 
 ## Validation Checklist
 
-- `./gradlew :kreekt-gpu:compileKotlinJs`, `:examples:triangle:compileKotlinJs`, and JVM builds succeed.
+- `./gradlew :materia-gpu:compileKotlinJs`, `:examples:triangle:compileKotlinJs`, and JVM builds
+  succeed.
 - `./gradlew :examples:triangle:run` renders via Vulkan without placeholder logs.
 - No remaining placeholder references in core modules or examples.
 - Documentation reflects the new cross-platform state.

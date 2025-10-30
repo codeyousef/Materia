@@ -1,11 +1,11 @@
 #!/bin/bash
-# KreeKt Tools - Multi-Platform Build Script
+# Materia Tools - Multi-Platform Build Script
 # Builds and tests across all supported platforms
 
 set -e
 
 echo "========================================"
-echo "KreeKt Tools - Multi-Platform Build"
+echo "Materia Tools - Multi-Platform Build"
 echo "========================================"
 
 # Configuration

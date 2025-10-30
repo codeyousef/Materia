@@ -1,6 +1,6 @@
-package io.kreekt.tools.api.plugins
+package io.materia.tools.api.plugins
 
-import io.kreekt.tools.api.routes.*
+import io.materia.tools.api.routes.*
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 

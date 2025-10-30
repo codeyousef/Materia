@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -382,9 +382,9 @@ class MaterialEditorIntegrationTest {
                 MaterialExportOptions(includeTextures = true)
             )
 
-            val kreektExport = materialEditor.exportMaterial(
+            val materiaExport = materialEditor.exportMaterial(
                 material,
-                MaterialExportFormat.KREEKT_NATIVE,
+                MaterialExportFormat.MATERIA_NATIVE,
                 MaterialExportOptions(compress = true)
             )
 
@@ -396,7 +396,7 @@ class MaterialEditorIntegrationTest {
 
             // Import material back
             val importedMaterial = materialEditor.importMaterial(
-                kreektExport,
+                materiaExport,
                 MaterialImportOptions(validateShaders = true)
             )
 
@@ -506,7 +506,7 @@ enum class NodeType { TEXTURE_SAMPLE, NOISE, MIX, MATERIAL_OUTPUT, MATH, VECTOR 
 enum class ShaderTarget { WGSL, GLSL, SPIRV }
 enum class AnimationInterpolation { LINEAR, SMOOTH, STEP }
 enum class ValidationErrorType { SHADER_COMPILATION, UNIFORM_TYPE_MISMATCH, TEXTURE_FORMAT, PERFORMANCE_WARNING }
-enum class MaterialExportFormat { GLTF, KREEKT_NATIVE, JSON }
+enum class MaterialExportFormat { GLTF, MATERIA_NATIVE, JSON }
 enum class RenderTarget { WEB_GPU, VULKAN, OPENGL }
 enum class GeometryComplexity { LOW, MEDIUM, HIGH }
 

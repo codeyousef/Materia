@@ -5,7 +5,7 @@
         android:label="Triangle (Android)"
         android:supportsRtl="true">
         <activity
-            android:name="io.kreekt.examples.triangle.android.TriangleActivity"
+            android:name="io.materia.examples.triangle.android.TriangleActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape">
             <intent-filter>

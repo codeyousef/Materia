@@ -98,7 +98,7 @@ tasks.register("runJvm", JavaExec::class) {
     mainClass.set("MainKt")
 
     doFirst {
-        println("🎮 Starting KreeKt Basic Scene Example (JVM)")
+        println("🎮 Starting Materia Basic Scene Example (JVM)")
         println("This will demonstrate 3D scene creation with LWJGL backend")
     }
 }
@@ -113,7 +113,7 @@ tasks.register("runSimple", JavaExec::class) {
     mainClass.set("SimpleMainKt")
 
     doFirst {
-        println("🚀 Starting KreeKt Simple Launcher")
+        println("🚀 Starting Materia Simple Launcher")
         println("This demonstrates core library functionality")
     }
 }
@@ -125,7 +125,7 @@ tasks.register("runJs") {
     dependsOn("jsBrowserDevelopmentRun")
 
     doFirst {
-        println("🌐 Starting KreeKt Basic Scene Example (JavaScript)")
+        println("🌐 Starting Materia Basic Scene Example (JavaScript)")
         println("This will open the example in your default browser")
     }
 }

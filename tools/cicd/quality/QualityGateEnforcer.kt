@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Quality Gate Enforcement
+ * Materia Tools - Quality Gate Enforcement
  * Enforces quality standards and blocks releases if criteria are not met
  */
 
-package io.kreekt.tools.cicd.quality
+package io.materia.tools.cicd.quality
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable

@@ -1,4 +1,4 @@
-package io.kreekt.tests.contract
+package io.materia.tests.contract
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -58,7 +58,7 @@ class DocumentationApiContractTest {
         // This test will FAIL until migration guide generation is implemented
         assertFailsWith<NotImplementedError> {
             val api = DocumentationAPI()
-            api.getMigrationGuide("threejs", "kreekt")
+            api.getMigrationGuide("threejs", "materia")
         }
     }
 
@@ -143,9 +143,9 @@ class DocumentationApiContractTest {
         assertFailsWith<NotImplementedError> {
             val api = DocumentationAPI()
             val request = TutorialRequest(
-                title = "Getting Started with KreeKt",
+                title = "Getting Started with Materia",
                 sections = listOf(
-                    TutorialSection("Setup", "Install and configure KreeKt"),
+                    TutorialSection("Setup", "Install and configure Materia"),
                     TutorialSection("First Scene", "Create your first 3D scene")
                 ),
                 difficulty = TutorialDifficulty.BEGINNER

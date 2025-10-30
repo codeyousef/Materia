@@ -1,4 +1,4 @@
-package io.kreekt.tests.contract
+package io.materia.tests.contract
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -182,7 +182,7 @@ class CicdApiContractTest {
             val notification = NotificationConfig(
                 channels = listOf(NotificationChannel.EMAIL, NotificationChannel.SLACK),
                 events = listOf(BuildEvent.FAILURE, BuildEvent.SUCCESS),
-                recipients = listOf("team@kreekt.dev")
+                recipients = listOf("team@materia.dev")
             )
             api.configureNotifications("project-id", notification)
         }

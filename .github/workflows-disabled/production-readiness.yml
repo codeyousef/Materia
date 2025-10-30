@@ -57,7 +57,7 @@ jobs:
 
       - name: 🔍 Run Production Readiness Validation
         run: |
-          ./gradlew :kreekt-validation:validateProductionReadiness \
+          ./gradlew :materia-validation:validateProductionReadiness \
             -PvalidationConfig=${{ github.event.inputs.config || 'strict' }}
         env:
           GRADLE_OPTS: -Xmx4g -XX:+HeapDumpOnOutOfMemoryError
@@ -68,7 +68,7 @@ jobs:
         with:
           name: validation-reports-java${{ matrix.java-version }}
           path: |
-            kreekt-validation/build/validation-reports/
+            materia-validation/build/validation-reports/
             build/reports/
 
       - name: 📈 Publish Test Results
@@ -85,7 +85,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const reportPath = 'kreekt-validation/build/validation-reports/report.json';
+            const reportPath = 'materia-validation/build/validation-reports/report.json';
 
             if (fs.existsSync(reportPath)) {
               const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
@@ -120,7 +120,7 @@ jobs:
 
       - name: 🚨 Check Production Ready Status
         run: |
-          REPORT_FILE="kreekt-validation/build/validation-reports/report.json"
+          REPORT_FILE="materia-validation/build/validation-reports/report.json"
           if [ -f "$REPORT_FILE" ]; then
             STATUS=$(jq -r '.overallStatus' $REPORT_FILE)
             SCORE=$(jq -r '.overallScore' $REPORT_FILE)
@@ -163,23 +163,23 @@ jobs:
 
       - name: 🏗️ Compile All Platforms
         run: |
-          ./gradlew :kreekt-validation:compileKotlinJvm
-          ./gradlew :kreekt-validation:compileKotlinJs
-          ./gradlew :kreekt-validation:compileKotlinNative
+          ./gradlew :materia-validation:compileKotlinJvm
+          ./gradlew :materia-validation:compileKotlinJs
+          ./gradlew :materia-validation:compileKotlinNative
 
       - name: 🧪 Run Tests
         run: |
-          ./gradlew :kreekt-validation:allTests
+          ./gradlew :materia-validation:allTests
 
       - name: 📊 Generate Coverage Report
         run: |
-          ./gradlew :kreekt-validation:koverHtmlReport
-          ./gradlew :kreekt-validation:koverVerify
+          ./gradlew :materia-validation:koverHtmlReport
+          ./gradlew :materia-validation:koverVerify
 
       - name: 📈 Upload Coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: ./kreekt-validation/build/reports/kover/report.xml
+          files: ./materia-validation/build/reports/kover/report.xml
           flags: unittests
           name: codecov-${{ matrix.os }}
 
@@ -200,13 +200,13 @@ jobs:
 
       - name: 🏃 Run Performance Benchmarks
         run: |
-          ./gradlew :kreekt-validation:benchmark
+          ./gradlew :materia-validation:benchmark
 
       - name: 📊 Store Benchmark Results
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'customBiggerIsBetter'
-          output-file-path: kreekt-validation/build/reports/benchmark/results.json
+          output-file-path: materia-validation/build/reports/benchmark/results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-on-alert: true

@@ -11,7 +11,7 @@ import tools.tests.visual.*
 import tools.tests.performance.*
 
 /**
- * Cross-platform test execution runner for KreeKt testing infrastructure.
+ * Cross-platform test execution runner for Materia testing infrastructure.
  * Orchestrates test execution across JVM, JS, Android, iOS, and Native platforms.
  */
 @Serializable

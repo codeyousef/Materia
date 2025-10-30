@@ -13,7 +13,7 @@ import java.time.format.DateTimeFormatter
 /**
  * T030: Comprehensive Codebase Scan for Placeholder Patterns
  *
- * This script executes a comprehensive scan of the entire KreeKt project
+ * This script executes a comprehensive scan of the entire Materia project
  * to identify all placeholder patterns that need to be replaced with
  * production-ready implementations.
  *

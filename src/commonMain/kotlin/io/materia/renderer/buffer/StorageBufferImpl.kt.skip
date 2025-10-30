@@ -1,0 +1,97 @@
+package io.materia.renderer.buffer
+
+import io.materia.renderer.RendererException
+import io.materia.renderer.RendererResult
+
+/**
+ * Default storage buffer implementation
+ */
+internal class DefaultStorageBuffer(
+    override val id: Int,
+    override val size: Long,
+    override val usage: BufferUsage,
+    override val binding: Int
+) : StorageBuffer {
+
+    override val type: BufferType = BufferType.STORAGE
+    override val access: BufferAccess = BufferAccess.READ_WRITE
+    override var needsUpdate: Boolean = false
+
+    private var data: ByteArray = ByteArray(size.toInt())
+    private var isMapped = false
+
+    override fun uploadData(data: ByteArray, offset: Long): RendererResult<Unit> {
+        return try {
+            data.copyInto(this.data, offset.toInt())
+            needsUpdate = true
+            RendererResult.Success(Unit)
+        } catch (e: Exception) {
+            RendererResult.Error(RendererException.ResourceCreationFailed("Upload failed", e))
+        }
+    }
+
+    override fun uploadFloatData(data: FloatArray, offset: Long): RendererResult<Unit> {
+        return RendererResult.Success(Unit)
+    }
+
+    override fun uploadIntData(data: IntArray, offset: Long): RendererResult<Unit> {
+        return RendererResult.Success(Unit)
+    }
+
+    override fun map(access: BufferAccess): ByteArray? {
+        if (isMapped) return null
+        isMapped = true
+        return data.copyOf()
+    }
+
+    override fun unmap() {
+        isMapped = false
+    }
+
+    override fun copyFrom(source: Buffer, srcOffset: Long, dstOffset: Long, size: Long): RendererResult<Unit> {
+        return try {
+            val sourceData = source.map(BufferAccess.READ_ONLY)
+                ?: return RendererResult.Error(RendererException.InvalidState("Source buffer has no data or cannot be mapped"))
+
+            val actualSize = if (size == -1L) {
+                (sourceData.size - srcOffset).coerceAtLeast(0)
+            } else {
+                size
+            }
+
+            if (srcOffset < 0 || dstOffset < 0 || actualSize < 0) {
+                return RendererResult.Error(RendererException.InvalidState("Invalid offset or size parameters"))
+            }
+
+            if (srcOffset + actualSize > sourceData.size) {
+                return RendererResult.Error(RendererException.InvalidState("Source copy bounds exceed buffer size"))
+            }
+
+            if (dstOffset + actualSize > this.size) {
+                return RendererResult.Error(RendererException.InvalidState("Destination copy bounds exceed buffer size"))
+            }
+
+            sourceData.copyInto(
+                destination = this.data,
+                destinationOffset = dstOffset.toInt(),
+                startIndex = srcOffset.toInt(),
+                endIndex = (srcOffset + actualSize).toInt()
+            )
+
+            needsUpdate = true
+            source.unmap()
+
+            RendererResult.Success(Unit)
+        } catch (e: Exception) {
+            RendererResult.Error(RendererException.InvalidState("Buffer copy failed: ${e.message}"))
+        }
+    }
+
+    override fun bind(bindingPoint: Int): RendererResult<Unit> {
+        return RendererResult.Success(Unit)
+    }
+
+    override fun dispose() {
+        isMapped = false
+    }
+}

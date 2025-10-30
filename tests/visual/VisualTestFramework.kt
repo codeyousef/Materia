@@ -1,10 +1,10 @@
-package io.kreekt.tests.visual
+package io.materia.tests.visual
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * Visual Regression Test Framework for KreeKt
+ * Visual Regression Test Framework for Materia
  *
  * This framework provides tools for capturing, comparing, and managing visual test screenshots
  * across different platforms and browsers to detect rendering regressions.

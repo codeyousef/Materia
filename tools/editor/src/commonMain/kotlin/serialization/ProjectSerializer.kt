@@ -1,8 +1,8 @@
 @file:OptIn(kotlin.time.ExperimentalTime::class, kotlin.io.encoding.ExperimentalEncodingApi::class)
 
-package io.kreekt.tools.editor.serialization
+package io.materia.tools.editor.serialization
 
-import io.kreekt.tools.editor.data.*
+import io.materia.tools.editor.data.*
 import kotlinx.datetime.Instant
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
@@ -45,7 +45,7 @@ class ProjectSerializer {
     companion object {
         const val CURRENT_VERSION = "1.0.0"
         const val MIN_SUPPORTED_VERSION = "1.0.0"
-        const val MAGIC_HEADER = "KREEKT_PROJECT"
+        const val MAGIC_HEADER = "MATERIA_PROJECT"
         const val SCHEMA_VERSION_KEY = "schemaVersion"
         const val COMPRESSED_KEY = "compressed"
         const val ENCRYPTED_KEY = "encrypted"
@@ -65,7 +65,7 @@ class ProjectSerializer {
             if (includeMetadata) {
                 val wrapper = ProjectWrapper(
                     schemaVersion = CURRENT_VERSION,
-                    createdBy = "KreeKt Scene Editor",
+                    createdBy = "Materia Scene Editor",
                     exportedAt = kotlinx.datetime.Clock.System.now(),
                     project = project
                 )
@@ -339,7 +339,7 @@ class ProjectSerializer {
                     format = if (options.compressOutput) ExportFormat.BINARY else ExportFormat.JSON,
                     metadata = ExportMetadata(
                         exportedAt = kotlinx.datetime.Clock.System.now(),
-                        exportedBy = "KreeKt Scene Editor",
+                        exportedBy = "Materia Scene Editor",
                         originalVersion = project.version,
                         assetCount = assets.size
                     )

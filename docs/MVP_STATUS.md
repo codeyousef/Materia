@@ -10,7 +10,8 @@ This file mirrors the high-level items from `mvp-plan.md` so stakeholders can se
 - [ ] Render-pass encoding, pipeline creation, texture/bind-group plumbing
 - [x] Shader module + pipeline descriptors shared across targets
 - [x] Command encoding with submit path + minimal sync primitives
-- [ ] Delegate `:kreekt-gpu` implementations to renderer backends (`VulkanRenderer`, `WebGPURenderer`)
+- [ ] Delegate `:materia-gpu` implementations to renderer backends (`VulkanRenderer`,
+  `WebGPURenderer`)
 
 ## Rendering Engine
 

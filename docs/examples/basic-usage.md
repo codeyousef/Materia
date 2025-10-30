@@ -1,6 +1,6 @@
 # Basic Usage Examples
 
-This document provides practical code examples for common KreeKt usage patterns.
+This document provides practical code examples for common Materia usage patterns.
 
 ## Table of Contents
 
@@ -18,12 +18,12 @@ This document provides practical code examples for common KreeKt usage patterns.
 ### Minimal Example
 
 ```kotlin
-import io.kreekt.core.scene.*
-import io.kreekt.core.math.*
-import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.geometry.BoxGeometry
-import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.mesh.Mesh
+import io.materia.core.scene.*
+import io.materia.core.math.*
+import io.materia.camera.PerspectiveCamera
+import io.materia.geometry.BoxGeometry
+import io.materia.material.MeshBasicMaterial
+import io.materia.mesh.Mesh
 
 fun main() {
     // Create scene
@@ -64,7 +64,7 @@ fun main() {
 ### With Lighting
 
 ```kotlin
-import io.kreekt.light.*
+import io.materia.light.*
 
 // Create scene with lighting
 val scene = Scene().apply {
@@ -102,7 +102,7 @@ renderer.shadowMap.type = ShadowMapType.PCFSoftShadowMap
 ### Primitive Geometries
 
 ```kotlin
-import io.kreekt.geometry.*
+import io.materia.geometry.*
 
 // Box/Cube
 val box = BoxGeometry(
@@ -161,8 +161,8 @@ val torus = TorusGeometry(
 ### Custom BufferGeometry
 
 ```kotlin
-import io.kreekt.geometry.BufferGeometry
-import io.kreekt.geometry.BufferAttribute
+import io.materia.geometry.BufferGeometry
+import io.materia.geometry.BufferAttribute
 
 // Create custom triangle
 val geometry = BufferGeometry()
@@ -196,8 +196,8 @@ geometry.computeBoundingSphere()
 ### Procedural Geometry
 
 ```kotlin
-import io.kreekt.geometry.ExtrudeGeometry
-import io.kreekt.shape.Shape
+import io.materia.geometry.ExtrudeGeometry
+import io.materia.shape.Shape
 
 // Create a star shape
 val shape = Shape()
@@ -235,7 +235,7 @@ val geometry = ExtrudeGeometry(shape, extrudeSettings)
 ### Basic Materials
 
 ```kotlin
-import io.kreekt.material.*
+import io.materia.material.*
 
 // Basic unlit material
 val basicMaterial = MeshBasicMaterial().apply {
@@ -286,7 +286,7 @@ val physicalMaterial = MeshPhysicalMaterial().apply {
 ### Textured Materials
 
 ```kotlin
-import io.kreekt.texture.TextureLoader
+import io.materia.texture.TextureLoader
 
 val textureLoader = TextureLoader()
 
@@ -427,7 +427,7 @@ scene.environmentIntensity = 1f
 ### Simple Animation
 
 ```kotlin
-import io.kreekt.animation.*
+import io.materia.animation.*
 
 // Animate properties manually
 fun animate(deltaTime: Float) {
@@ -482,7 +482,7 @@ fun animate(deltaTime: Float) {
 ### Skeletal Animation
 
 ```kotlin
-import io.kreekt.animation.SkeletalAnimationSystem
+import io.materia.animation.SkeletalAnimationSystem
 
 // Load model with skeleton
 val loader = GLTFLoader()
@@ -509,7 +509,7 @@ loader.load("character.gltf") { gltf ->
 ### Orbit Controls
 
 ```kotlin
-import io.kreekt.controls.OrbitControls
+import io.materia.controls.OrbitControls
 
 val controls = OrbitControls(camera, renderer.domElement).apply {
     enableDamping = true
@@ -529,7 +529,7 @@ fun animate() {
 ### First Person Controls
 
 ```kotlin
-import io.kreekt.controls.FirstPersonControls
+import io.materia.controls.FirstPersonControls
 
 val controls = FirstPersonControls(camera, renderer.domElement).apply {
     movementSpeed = 5f
@@ -548,7 +548,7 @@ fun animate(deltaTime: Float) {
 ### GLTF Loader
 
 ```kotlin
-import io.kreekt.loader.GLTFLoader
+import io.materia.loader.GLTFLoader
 
 val loader = GLTFLoader()
 
@@ -588,7 +588,7 @@ loader.load("animated-character.gltf") { gltf ->
 ### OBJ Loader
 
 ```kotlin
-import io.kreekt.loader.OBJLoader
+import io.materia.loader.OBJLoader
 
 val objLoader = OBJLoader()
 objLoader.load("model.obj") { group ->
@@ -596,7 +596,7 @@ objLoader.load("model.obj") { group ->
 }
 
 // With MTL materials
-import io.kreekt.loader.MTLLoader
+import io.materia.loader.MTLLoader
 
 val mtlLoader = MTLLoader()
 mtlLoader.load("model.mtl") { materials ->
@@ -612,7 +612,7 @@ mtlLoader.load("model.mtl") { materials ->
 ### Level of Detail (LOD)
 
 ```kotlin
-import io.kreekt.lod.LOD
+import io.materia.lod.LOD
 
 val lod = LOD()
 
@@ -633,7 +633,7 @@ fun animate() {
 ### Instancing
 
 ```kotlin
-import io.kreekt.instancing.InstancedMesh
+import io.materia.instancing.InstancedMesh
 
 val count = 1000
 val instancedMesh = InstancedMesh(geometry, material, count)

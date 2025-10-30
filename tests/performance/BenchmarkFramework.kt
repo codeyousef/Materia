@@ -1,10 +1,10 @@
-package io.kreekt.tests.performance
+package io.materia.tests.performance
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * Performance Benchmark Framework for KreeKt
+ * Performance Benchmark Framework for Materia
  *
  * This framework provides tools for measuring, tracking, and analyzing performance
  * across different platforms, scenes, and rendering configurations.

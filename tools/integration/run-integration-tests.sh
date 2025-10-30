@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# KreeKt Tool Integration Test Runner
-# Comprehensive testing script for validating the complete KreeKt tooling ecosystem
+# Materia Tool Integration Test Runner
+# Comprehensive testing script for validating the complete Materia tooling ecosystem
 
 set -e
 
@@ -22,7 +22,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 mkdir -p "$LOGS_DIR"
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}                KreeKt Tool Integration Test Suite${NC}"
+echo -e "${BLUE}                Materia Tool Integration Test Suite${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "🚀 Starting comprehensive integration testing..."
@@ -605,7 +605,7 @@ generate_report() {
     log ""
 
     if [ "$success_rate" -ge 90 ]; then
-        log "🎉 RESULT: EXCELLENT - KreeKt tooling ecosystem is production-ready!"
+        log "🎉 RESULT: EXCELLENT - Materia tooling ecosystem is production-ready!"
     elif [ "$success_rate" -ge 75 ]; then
         log "✅ RESULT: GOOD - Minor issues detected, but overall healthy"
     elif [ "$success_rate" -ge 50 ]; then

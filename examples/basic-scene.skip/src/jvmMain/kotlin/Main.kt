@@ -19,7 +19,7 @@ data class CameraState(
 )
 
 fun main() {
-    println("🚀 KreeKt Basic Scene Example (LWJGL)")
+    println("🚀 Materia Basic Scene Example (LWJGL)")
     println("======================================")
 
     // Initialize GLFW
@@ -35,7 +35,7 @@ fun main() {
     // Don't request core profile so we can use immediate mode for demo
 
     // Create the window
-    val window = glfwCreateWindow(1280, 720, "KreeKt 3D Engine - Basic Scene Example", NULL, NULL)
+    val window = glfwCreateWindow(1280, 720, "Materia 3D Engine - Basic Scene Example", NULL, NULL)
     if (window == NULL) {
         glfwTerminate()
         throw RuntimeException("Failed to create the GLFW window")
@@ -188,7 +188,7 @@ fun main() {
                 // Draw a simple animated scene with camera
                 drawSceneWithCamera(currentTime.toFloat(), camera)
 
-                // Handle input for KreeKt example
+                // Handle input for Materia example
                 val input = getCurrentInput(window)
                 example.handleInput(input)
 
@@ -204,7 +204,7 @@ fun main() {
                 fpsTimer += deltaTime.toDouble()
                 if (fpsTimer >= 1.0) {
                     val fps = frameCount / fpsTimer
-                    glfwSetWindowTitle(window, "KreeKt 3D Engine - FPS: ${fps.toInt()}")
+                    glfwSetWindowTitle(window, "Materia 3D Engine - FPS: ${fps.toInt()}")
                     frameCount = 0
                     fpsTimer = 0.0
                 }

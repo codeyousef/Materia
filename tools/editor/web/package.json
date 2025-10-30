@@ -1,7 +1,7 @@
 {
-  "name": "@kreekt/scene-editor",
+  "name": "@materia/scene-editor",
   "version": "1.0.0",
-  "description": "KreeKt Scene Editor - Web Components",
+  "description": "Materia Scene Editor - Web Components",
   "main": "scene-editor.js",
   "type": "module",
   "scripts": {
@@ -35,6 +35,6 @@
     "scene-editor",
     "web-components"
   ],
-  "author": "KreeKt Development Team",
+  "author": "Materia Development Team",
   "license": "MIT"
 }

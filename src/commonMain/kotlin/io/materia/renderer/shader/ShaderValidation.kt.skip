@@ -1,0 +1,262 @@
+/**
+ * Shader validation utilities
+ * Validates shader source code for syntax and structural correctness
+ */
+package io.materia.renderer.shader
+
+import io.materia.renderer.*
+
+/**
+ * Shader source validation utilities
+ */
+object ShaderValidation {
+
+    /**
+     * Validate shader source for common issues
+     */
+    fun validateShaderSource(source: ShaderSource): List<String> {
+        val issues = mutableListOf<String>()
+
+        if (source.source.isBlank()) {
+            issues.add("Shader source is empty")
+        }
+
+        if (source.type == ShaderType.VERTEX && !source.source.contains("@vertex")) {
+            issues.add("Vertex shader missing @vertex entry point")
+        }
+
+        if (source.type == ShaderType.FRAGMENT && !source.source.contains("@fragment")) {
+            issues.add("Fragment shader missing @fragment entry point")
+        }
+
+        if (source.type == ShaderType.COMPUTE && !source.source.contains("@compute")) {
+            issues.add("Compute shader missing @compute entry point")
+        }
+
+        return issues
+    }
+
+    /**
+     * Validate shader syntax based on language
+     */
+    fun validateShaderSyntax(source: String, language: ShaderLanguage, type: ShaderType): List<String> {
+        val errors = mutableListOf<String>()
+
+        when (language) {
+            ShaderLanguage.WGSL -> {
+                // WGSL-specific syntax validation
+                if (!source.contains("fn ${getExpectedEntryPoint(type)}(")) {
+                    errors.add("Missing entry point function '${getExpectedEntryPoint(type)}'")
+                }
+
+                // Check for required stage annotations
+                when (type) {
+                    ShaderType.VERTEX -> if (!source.contains("@vertex")) errors.add("Missing @vertex annotation")
+                    ShaderType.FRAGMENT -> if (!source.contains("@fragment")) errors.add("Missing @fragment annotation")
+                    ShaderType.COMPUTE -> if (!source.contains("@compute")) errors.add("Missing @compute annotation")
+                    else -> {} // Other types may not require annotations
+                }
+
+                // Basic bracket matching
+                val openBraces = source.count { it == '{' }
+                val closeBraces = source.count { it == '}' }
+                if (openBraces != closeBraces) {
+                    errors.add("Mismatched braces: $openBraces open, $closeBraces close")
+                }
+            }
+
+            ShaderLanguage.GLSL -> {
+                // GLSL-specific validation
+                if (!source.contains("#version")) {
+                    errors.add("Missing #version directive")
+                }
+                if (!source.contains("void main(")) {
+                    errors.add("Missing main() function")
+                }
+            }
+
+            ShaderLanguage.HLSL -> {
+                // HLSL-specific validation
+                val entryPoint = getExpectedEntryPoint(type)
+                if (!source.contains("$entryPoint(") && !source.contains("void $entryPoint(")) {
+                    errors.add("Missing entry point function '$entryPoint'")
+                }
+            }
+
+            ShaderLanguage.SPIRV -> {
+                // SPIR-V is binary, basic validation only
+                if (source.isBlank()) {
+                    errors.add("SPIR-V binary data is empty")
+                }
+            }
+        }
+
+        return errors
+    }
+
+    /**
+     * Validate shader type specific requirements
+     */
+    fun validateShaderTypeRequirements(
+        source: String,
+        type: ShaderType,
+        language: ShaderLanguage,
+        capabilities: RendererCapabilities
+    ): List<String> {
+        val errors = mutableListOf<String>()
+
+        when (type) {
+            ShaderType.VERTEX -> {
+                if (language == ShaderLanguage.WGSL && !source.contains("@builtin(position)")) {
+                    errors.add("Vertex shader must output position via @builtin(position)")
+                }
+            }
+
+            ShaderType.FRAGMENT -> {
+                if (language == ShaderLanguage.WGSL && !source.contains("@location(0)") && !source.contains("-> @location(0)")) {
+                    errors.add("Fragment shader must output to @location(0)")
+                }
+            }
+
+            ShaderType.COMPUTE -> {
+                if (language == ShaderLanguage.WGSL && !source.contains("@workgroup_size(")) {
+                    errors.add("Compute shader must specify @workgroup_size")
+                }
+            }
+
+            ShaderType.GEOMETRY -> {
+                if (!capabilities.geometryShaders) {
+                    errors.add("Geometry shaders not supported on this platform")
+                }
+            }
+
+            ShaderType.TESSELLATION_CONTROL, ShaderType.TESSELLATION_EVALUATION -> {
+                if (!capabilities.tessellation) {
+                    errors.add("Tessellation shaders not supported on this platform")
+                }
+            }
+        }
+
+        return errors
+    }
+
+    /**
+     * Validate compatibility between vertex and fragment shaders
+     */
+    fun validateShaderCompatibility(
+        vertexShader: CompiledShader,
+        fragmentShader: CompiledShader
+    ): List<String> {
+        val errors = mutableListOf<String>()
+
+        // Basic compatibility checks
+        if (vertexShader.source.language != fragmentShader.source.language) {
+            errors.add("Vertex and fragment shaders must use the same language")
+        }
+
+        // For WGSL, check that vertex outputs match fragment inputs
+        if (vertexShader.source.language == ShaderLanguage.WGSL) {
+            val vertexOutputs = extractWGSLOutputs(vertexShader.source.getProcessedSource())
+            val fragmentInputs = extractWGSLInputs(fragmentShader.source.getProcessedSource())
+
+            // Check that all fragment inputs have corresponding vertex outputs
+            fragmentInputs.forEach { input ->
+                if (!vertexOutputs.contains(input)) {
+                    errors.add("Fragment shader input '@location($input)' has no corresponding vertex output")
+                }
+            }
+        }
+
+        return errors
+    }
+
+    /**
+     * Validate geometry shader compatibility
+     */
+    fun validateGeometryShaderCompatibility(
+        vertexShader: CompiledShader?,
+        geometryShader: CompiledShader
+    ): List<String> {
+        val errors = mutableListOf<String>()
+
+        if (vertexShader != null && vertexShader.source.language != geometryShader.source.language) {
+            errors.add("Vertex and geometry shaders must use the same language")
+        }
+
+        return errors
+    }
+
+    /**
+     * Get expected entry point name for shader type
+     */
+    fun getExpectedEntryPoint(type: ShaderType): String {
+        return when (type) {
+            ShaderType.VERTEX -> "vs_main"
+            ShaderType.FRAGMENT -> "fs_main"
+            ShaderType.COMPUTE -> "cs_main"
+            ShaderType.GEOMETRY -> "gs_main"
+            ShaderType.TESSELLATION_CONTROL -> "tcs_main"
+            ShaderType.TESSELLATION_EVALUATION -> "tes_main"
+        }
+    }
+
+    /**
+     * Extract WGSL output location indices from shader source
+     */
+    fun extractWGSLOutputs(source: String): Set<Int> {
+        val outputs = mutableSetOf<Int>()
+        val regex = Regex("""@location\((\d+)\)""")
+
+        // Look for outputs in struct definitions and return statements
+        regex.findAll(source).forEach { match ->
+            val location = match.groupValues[1].toIntOrNull()
+            if (location != null) {
+                outputs.add(location)
+            }
+        }
+
+        return outputs
+    }
+
+    /**
+     * Extract WGSL input location indices from shader source
+     */
+    fun extractWGSLInputs(source: String): Set<Int> {
+        val inputs = mutableSetOf<Int>()
+        val regex = Regex("""@location\((\d+)\)""")
+
+        // Look for inputs in struct definitions and function parameters
+        regex.findAll(source).forEach { match ->
+            val location = match.groupValues[1].toIntOrNull()
+            if (location != null) {
+                inputs.add(location)
+            }
+        }
+
+        return inputs
+    }
+
+    /**
+     * Check if a shader language is supported
+     */
+    fun isShaderLanguageSupported(language: ShaderLanguage, capabilities: RendererCapabilities): Boolean {
+        return when (language) {
+            ShaderLanguage.WGSL -> true // Primary target
+            ShaderLanguage.GLSL -> capabilities.extensions.contains("GLSL")
+            ShaderLanguage.HLSL -> capabilities.extensions.contains("HLSL")
+            ShaderLanguage.SPIRV -> capabilities.extensions.contains("SPIRV")
+        }
+    }
+
+    /**
+     * Check if a shader type is supported
+     */
+    fun isShaderTypeSupported(type: ShaderType, capabilities: RendererCapabilities): Boolean {
+        return when (type) {
+            ShaderType.VERTEX, ShaderType.FRAGMENT -> true
+            ShaderType.COMPUTE -> capabilities.computeShaders
+            ShaderType.GEOMETRY -> capabilities.geometryShaders
+            ShaderType.TESSELLATION_CONTROL, ShaderType.TESSELLATION_EVALUATION -> capabilities.tessellation
+        }
+    }
+}

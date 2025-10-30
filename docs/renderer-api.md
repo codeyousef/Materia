@@ -2,7 +2,9 @@
 
 ## Overview
 
-The WebGPU renderer is a modern, high-performance graphics backend for KreeKt that leverages the WebGPU API for hardware-accelerated 3D rendering in browsers. It provides feature parity with the WebGL renderer while offering significant performance improvements.
+The WebGPU renderer is a modern, high-performance graphics backend for Materia that leverages the
+WebGPU API for hardware-accelerated 3D rendering in browsers. It provides feature parity with the
+WebGL renderer while offering significant performance improvements.
 
 **Key Features:**
 - 60 FPS at 1,000,000 triangles @ 1920x1080
@@ -25,9 +27,9 @@ The WebGPU renderer is a modern, high-performance graphics backend for KreeKt th
 ### Basic Usage
 
 ```kotlin
-import io.kreekt.renderer.webgpu.WebGPURendererFactory
-import io.kreekt.core.scene.Scene
-import io.kreekt.camera.PerspectiveCamera
+import io.materia.renderer.webgpu.WebGPURendererFactory
+import io.materia.core.scene.Scene
+import io.materia.camera.PerspectiveCamera
 import org.w3c.dom.HTMLCanvasElement
 
 // Get canvas element
@@ -66,8 +68,8 @@ animate()
 ### Advanced Usage with Statistics
 
 ```kotlin
-import io.kreekt.renderer.webgpu.WebGPURenderer
-import io.kreekt.renderer.RendererResult
+import io.materia.renderer.webgpu.WebGPURenderer
+import io.materia.renderer.RendererResult
 
 val canvas = document.getElementById("canvas") as HTMLCanvasElement
 val renderer = WebGPURenderer(canvas)
@@ -396,7 +398,7 @@ renderer.addEventListener("contextrestored", {
 Check WebGPU availability before creating renderer:
 
 ```kotlin
-import io.kreekt.renderer.webgpu.WebGPUDetector
+import io.materia.renderer.webgpu.WebGPUDetector
 
 if (WebGPUDetector.isSupported()) {
     console.log("WebGPU is supported")

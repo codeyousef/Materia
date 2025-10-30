@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the KreeKt library will be documented in this file.
+All notable changes to the Materia library will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -78,5 +78,6 @@ The WebGPU renderer is API-compatible with the existing Renderer interface, requ
 - Basic geometry classes (Box, Sphere, Plane)
 - WebGL renderer implementation (baseline)
 
-[Unreleased]: https://github.com/yousef/KreeKt/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/yousef/KreeKt/releases/tag/v0.1.0
+[Unreleased]: https://github.com/yousef/Materia/compare/v0.1.0...HEAD
+
+[0.1.0]: https://github.com/yousef/Materia/releases/tag/v0.1.0

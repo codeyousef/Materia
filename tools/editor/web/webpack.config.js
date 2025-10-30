@@ -7,7 +7,7 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     filename: 'scene-editor.js',
     library: {
-      name: 'KreeKtSceneEditor',
+      name: 'MateriaSceneEditor',
       type: 'umd'
     },
     clean: true
@@ -33,7 +33,7 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/index.html',
-      title: 'KreeKt Scene Editor'
+      title: 'Materia Scene Editor'
     })
   ],
   devServer: {

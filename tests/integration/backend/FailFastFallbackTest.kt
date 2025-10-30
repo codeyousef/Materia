@@ -1,4 +1,4 @@
-package io.kreekt.integration.backend
+package io.materia.integration.backend
 
 import kotlin.test.Test
 import kotlin.test.fail

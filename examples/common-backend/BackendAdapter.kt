@@ -1,16 +1,16 @@
-﻿package io.kreekt.examples.backend
+﻿package io.materia.examples.backend
 
-import io.kreekt.renderer.BackendType
-import io.kreekt.renderer.RenderSurface
-import io.kreekt.renderer.Renderer
-import io.kreekt.renderer.RendererConfig
-import io.kreekt.renderer.RendererFactory
+import io.materia.renderer.BackendType
+import io.materia.renderer.RenderSurface
+import io.materia.renderer.Renderer
+import io.materia.renderer.RendererConfig
+import io.materia.renderer.RendererFactory
 import kotlinx.coroutines.delay
 
 /**
  * Minimal backend integration helper used by examples.
  *
- * The concrete backend detection and renderer creation live in the KreeKt core
+ * The concrete backend detection and renderer creation live in the Materia core
  * (see [RendererFactory]). This adapter keeps the examples focused on scenario
  * logic by surfacing a tiny summary model and delegating the heavy lifting to
  * the library.

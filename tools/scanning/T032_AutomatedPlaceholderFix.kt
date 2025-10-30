@@ -533,7 +533,7 @@ ${signature.replace("expect", "actual")} {
     private fun extractPackageFromPath(filePath: String): String {
         // Extract package name from file path
         val kotlinIndex = filePath.indexOf("/kotlin/")
-        if (kotlinIndex == -1) return "io.kreekt"
+        if (kotlinIndex == -1) return "io.materia"
 
         val packagePath = filePath.substring(kotlinIndex + 8, filePath.lastIndexOf("/"))
         return packagePath.replace("/", ".")
@@ -792,7 +792,7 @@ suspend fun main(args: Array<String>) {
     when (summary.testSuiteStatus) {
         TestStatus.PASSED -> {
             println("\n🎉 ALL TESTS PASS - PRODUCTION READY!")
-            println("📦 KreeKt library is now ready for deployment")
+            println("📦 Materia library is now ready for deployment")
             println("🚀 JavaScript renderer black screen issue addressed")
         }
 

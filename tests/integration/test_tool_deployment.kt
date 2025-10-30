@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -24,7 +24,7 @@ class ToolDeploymentIntegrationTest {
                 target = DeploymentTarget.GITHUB_PAGES,
                 tools = listOf("scene-editor", "material-editor", "performance-monitor"),
                 configuration = WebDeploymentConfig(
-                    domain = "tools.kreekt.dev",
+                    domain = "tools.materia.dev",
                     enableCDN = true,
                     enableSSL = true
                 )
@@ -41,7 +41,7 @@ class ToolDeploymentIntegrationTest {
                 configuration = APIServerConfig(
                     port = 8080,
                     corsEnabled = true,
-                    allowedOrigins = listOf("https://tools.kreekt.dev", "http://localhost:3000"),
+                    allowedOrigins = listOf("https://tools.materia.dev", "http://localhost:3000"),
                     authentication = AuthConfig.API_KEY,
                     rateLimit = RateLimit(1000, "hour")
                 )

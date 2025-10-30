@@ -1,4 +1,4 @@
-package io.kreekt.performance
+package io.materia.performance
 
 import kotlin.test.Test
 import kotlin.test.fail

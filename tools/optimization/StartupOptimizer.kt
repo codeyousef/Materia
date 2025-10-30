@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Startup Optimization
+ * Materia Tools - Startup Optimization
  * Optimizes application startup time and tool initialization
  */
 
-package io.kreekt.tools.optimization
+package io.materia.tools.optimization
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
@@ -288,11 +288,11 @@ class StartupOptimizer {
 
         // Identify and preload critical classes
         val criticalClasses = listOf(
-            "io.kreekt.tools.editor.SceneEditor",
-            "io.kreekt.tools.profiler.PerformanceProfiler",
-            "io.kreekt.renderer.WebGPURenderer",
-            "io.kreekt.scene.Scene",
-            "io.kreekt.math.Vector3"
+            "io.materia.tools.editor.SceneEditor",
+            "io.materia.tools.profiler.PerformanceProfiler",
+            "io.materia.renderer.WebGPURenderer",
+            "io.materia.scene.Scene",
+            "io.materia.math.Vector3"
         )
 
         criticalClasses.forEach { className ->

@@ -1,9 +1,9 @@
-package io.kreekt.examples.backend
+package io.materia.examples.backend
 
-import io.kreekt.core.scene.Scene
-import io.kreekt.lighting.DefaultLightingSystem
-import io.kreekt.lighting.applyEnvironmentToScene
-import io.kreekt.texture.CubeTexture
+import io.materia.core.scene.Scene
+import io.materia.lighting.DefaultLightingSystem
+import io.materia.lighting.applyEnvironmentToScene
+import io.materia.texture.CubeTexture
 
 /**
  * Minimal helper used by integration examples to attach an image-based lighting

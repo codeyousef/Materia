@@ -1,6 +1,6 @@
-import io.kreekt.renderer.Renderer
-import io.kreekt.renderer.RenderSurface
-import io.kreekt.renderer.WebGPURenderSurface
+import io.materia.renderer.Renderer
+import io.materia.renderer.RenderSurface
+import io.materia.renderer.WebGPURenderSurface
 import kotlinx.browser.document
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.js.Date

@@ -1,5 +1,5 @@
 /**
- * Basic Scene Example - Demonstrates KreeKt 3D Library Core Functionality
+ * Basic Scene Example - Demonstrates Materia 3D Library Core Functionality
  *
  * This example shows how to create a simple 3D scene with:
  * - Basic geometries (cube, sphere, plane)
@@ -9,24 +9,24 @@
  * - Animation loop
  */
 
-import io.kreekt.animation.AnimationMixer
-import io.kreekt.animation.DefaultAnimationMixer
-import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.core.math.Color
-import io.kreekt.core.math.Vector3
-import io.kreekt.core.scene.Background
-import io.kreekt.core.scene.Mesh
-import io.kreekt.core.scene.Scene
-import io.kreekt.geometry.primitives.BoxGeometry
-import io.kreekt.geometry.primitives.PlaneGeometry
-import io.kreekt.geometry.primitives.SphereGeometry
-import io.kreekt.material.SimpleMaterial
-import io.kreekt.renderer.Renderer
-import io.kreekt.renderer.RenderSurface
-import io.kreekt.lighting.IBLConfig
-import io.kreekt.lighting.IBLProcessorImpl
-import io.kreekt.lighting.IBLResult
-import io.kreekt.lighting.processEnvironmentForScene
+import io.materia.animation.AnimationMixer
+import io.materia.animation.DefaultAnimationMixer
+import io.materia.camera.PerspectiveCamera
+import io.materia.core.math.Color
+import io.materia.core.math.Vector3
+import io.materia.core.scene.Background
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Scene
+import io.materia.geometry.primitives.BoxGeometry
+import io.materia.geometry.primitives.PlaneGeometry
+import io.materia.geometry.primitives.SphereGeometry
+import io.materia.material.SimpleMaterial
+import io.materia.renderer.Renderer
+import io.materia.renderer.RenderSurface
+import io.materia.lighting.IBLConfig
+import io.materia.lighting.IBLProcessorImpl
+import io.materia.lighting.IBLResult
+import io.materia.lighting.processEnvironmentForScene
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
@@ -67,7 +67,7 @@ class BasicSceneExample {
     private var time = 0.0f
 
     suspend fun initialize() {
-        println("🚀 Initializing KreeKt Basic Scene Example...")
+        println("🚀 Initializing Materia Basic Scene Example...")
         println("📊 Using new WebGPU/Vulkan backend system")
 
         // Create scene
@@ -295,7 +295,7 @@ class BasicSceneExample {
     }
 
     fun dispose() {
-        println("🧹 Cleaning up KreeKt Basic Scene Example...")
+        println("🧹 Cleaning up Materia Basic Scene Example...")
         renderer.dispose()
         // Dispose geometries and materials
         scene.traverse { obj ->

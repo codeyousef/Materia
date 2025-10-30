@@ -1,7 +1,7 @@
-package io.kreekt.tools.profiler.analysis
+package io.materia.tools.profiler.analysis
 
-import io.kreekt.tools.profiler.data.*
-import io.kreekt.tools.profiler.metrics.*
+import io.materia.tools.profiler.data.*
+import io.materia.tools.profiler.metrics.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock

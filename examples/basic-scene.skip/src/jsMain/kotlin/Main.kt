@@ -4,7 +4,7 @@ import kotlinx.coroutines.*
 import org.w3c.dom.HTMLCanvasElement
 
 fun main() {
-    println("🚀 KreeKt Basic Scene Example (WebGPU)")
+    println("🚀 Materia Basic Scene Example (WebGPU)")
     println("======================================")
 
     // Create canvas if it doesn't exist

@@ -1,6 +1,6 @@
-package io.kreekt.examples.voxelcraft.tests
+package io.materia.examples.voxelcraft.tests
 
-import io.kreekt.examples.voxelcraft.*
+import io.materia.examples.voxelcraft.*
 import kotlin.test.*
 
 /**

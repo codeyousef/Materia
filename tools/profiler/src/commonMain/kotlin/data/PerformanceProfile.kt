@@ -1,4 +1,4 @@
-package io.kreekt.tools.profiler.data
+package io.materia.tools.profiler.data
 
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable

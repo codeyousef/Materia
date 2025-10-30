@@ -10,7 +10,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Duration
 
 /**
- * Advanced search index builder for KreeKt documentation.
+ * Advanced search index builder for Materia documentation.
  * Creates searchable indices with full-text search, semantic matching, and intelligent ranking.
  */
 @OptIn(ExperimentalTime::class)

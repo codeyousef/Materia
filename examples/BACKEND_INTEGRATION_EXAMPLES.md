@@ -1,8 +1,9 @@
-# KreeKt Examples - Backend Integration Update
+# Materia Examples - Backend Integration Update
 
 ## Summary
 
-All KreeKt examples have been updated to demonstrate the new WebGPU/Vulkan backend negotiation system. The examples now showcase:
+All Materia examples have been updated to demonstrate the new WebGPU/Vulkan backend negotiation
+system. The examples now showcase:
 
 1. **Automatic Backend Selection**: Platform-appropriate backend (WebGPU for web, Vulkan for desktop)
 2. **Telemetry and Diagnostics**: Backend initialization metrics and feature parity reporting
@@ -25,7 +26,7 @@ All KreeKt examples have been updated to demonstrate the new WebGPU/Vulkan backe
 ```kotlin
 // Common initialization pattern
 suspend fun initialize() {
-    println("🚀 Initializing KreeKt Basic Scene Example...")
+    println("🚀 Initializing Materia Basic Scene Example...")
     println("📊 Using new WebGPU/Vulkan backend system")
 
     val surface = createPlatformSurface()
@@ -71,7 +72,8 @@ actual suspend fun initializeRendererWithBackend(surface: RenderSurface): Render
 ### 2. VoxelCraft Example (`examples/voxelcraft/`)
 
 **Files Modified:**
-- `src/jsMain/kotlin/io/kreekt/examples/voxelcraft/Main.kt` - WebGPU integration
+
+- `src/jsMain/kotlin/io/materia/examples/voxelcraft/Main.kt` - WebGPU integration
 
 **Key Changes:**
 
@@ -169,9 +171,9 @@ val renderer = createRendererFromBackend(backendHandle)
 
 ### JVM/Desktop (Vulkan)
 ```
-🚀 KreeKt Basic Scene Example (LWJGL)
+🚀 Materia Basic Scene Example (LWJGL)
 ======================================
-🚀 Initializing KreeKt Basic Scene Example...
+🚀 Initializing Materia Basic Scene Example...
 📊 Using new WebGPU/Vulkan backend system
 🔧 Creating platform-specific render surface...
 🔧 Initializing backend negotiation...
@@ -193,7 +195,7 @@ val renderer = createRendererFromBackend(backendHandle)
 
 ### Web/Browser (WebGPU)
 ```
-🚀 KreeKt Basic Scene Example (WebGPU)
+🚀 Materia Basic Scene Example (WebGPU)
 ======================================
 🔧 Initializing WebGPU backend for Web...
 📊 Backend Negotiation:
@@ -225,7 +227,8 @@ val renderer = createRendererFromBackend(backendHandle)
 
 ## Integration with BackendIntegration.kt
 
-The examples demonstrate usage of the core `BackendIntegration` class from `src/commonMain/kotlin/io/kreekt/renderer/backend/BackendIntegration.kt`:
+The examples demonstrate usage of the core `BackendIntegration` class from
+`src/commonMain/kotlin/io/materia/renderer/backend/BackendIntegration.kt`:
 
 ```kotlin
 val backendIntegration = BackendIntegration(
@@ -272,8 +275,9 @@ when (result) {
 The examples are ready for the new backend system. Once the core library compilation issues are resolved (duplicate definitions in backend types), the examples will compile and demonstrate the full backend negotiation flow.
 
 Key files that need compilation fixes in core:
-- `src/commonMain/kotlin/io/kreekt/renderer/backend/FeatureParityMatrix.kt`
-- `src/commonMain/kotlin/io/kreekt/renderer/backend/RenderSurfaceDescriptor.kt`
-- `src/commonMain/kotlin/io/kreekt/renderer/backend/RenderingBackendProfile.kt`
+
+- `src/commonMain/kotlin/io/materia/renderer/backend/FeatureParityMatrix.kt`
+- `src/commonMain/kotlin/io/materia/renderer/backend/RenderSurfaceDescriptor.kt`
+- `src/commonMain/kotlin/io/materia/renderer/backend/RenderingBackendProfile.kt`
 
 The examples themselves are correctly structured to use the new backend system.

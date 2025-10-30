@@ -1,4 +1,4 @@
-# KreeKt — MVP STATUS ✅
+# Materia — MVP STATUS ✅
 
 **Targets:** Web (WebGPU), Desktop (Vulkan), Mobile (Android Vulkan, iOS/macOS via MoltenVK)  
 **Goal:** Shortest path from *discover → run → customize → share*, with a single Kotlin‑first API across all KMP
@@ -15,7 +15,8 @@ targets.
 
 ## 🔜 Remaining Work Snapshot
 
-1. **GPU layer unification** – consolidate legacy `io.kreekt.renderer.gpu.*` wrappers onto the new `:kreekt-gpu`
+1. **GPU layer unification** – consolidate legacy `io.materia.renderer.gpu.*` wrappers onto the new
+   `:materia-gpu`
    expect/actuals and delegate surface/pipeline creation to the modern path.
 2. **Triangle smoke via RendererFactory** – swap the demo to the new engine renderer (and regenerate `build/js/yarn.lock`)
    so Vulkan/WebGPU backends drive the same codepath across targets.
@@ -58,7 +59,7 @@ Keep this list in sync as tasks complete; the detailed checklist below mirrors t
 
 ```bash
 ./gradlew :examples:triangle:installDebug
-adb shell am start -n com.kreekt.examples.triangle/.MainActivity
+adb shell am start -n com.materia.examples.triangle/.MainActivity
 ```
 
 * Similar tasks for other examples.
@@ -89,8 +90,8 @@ adb shell am start -n com.kreekt.examples.triangle/.MainActivity
 ## 🧱 Project Layout (Codex should scaffold)
 
 ```
-:kreekt-gpu/          # expect/actual GPU layer (WebGPU semantics)
-:kreekt-engine/       # scene graph, geometry, materials, instancing, renderer
+:materia-gpu/          # expect/actual GPU layer (WebGPU semantics)
+:materia-engine/       # scene graph, geometry, materials, instancing, renderer
 :examples:triangle/
 :examples:embedding-galaxy/
 :examples:force-graph/
@@ -138,8 +139,10 @@ resources/shaders/*.wgsl
 * [x] `GpuCommandEncoder` → `beginRenderPass`/`beginComputePass` → `finish`
 * [x] `GpuCommandBuffer`, `GpuQueue.submit()`
 * [x] Minimal hidden sync (fences/events on Vulkan/MVK)
-* [x] Consolidate legacy `io.kreekt.renderer.gpu.*` with `:kreekt-gpu` expect/actuals (typealiases or wrappers)
-* [x] Delegate `:kreekt-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer` command paths
+* [x] Consolidate legacy `io.materia.renderer.gpu.*` with `:materia-gpu` expect/actuals (typealiases
+  or wrappers)
+* [x] Delegate `:materia-gpu` Vulkan/WebGPU implementations to `VulkanRenderer` / `WebGPURenderer`
+  command paths
 * [x] Provide shared swapchain/surface factory bridging `RenderSurface` → `GpuSurface`
 
 ### 2) Rendering Engine (common)
@@ -233,7 +236,8 @@ resources/shaders/*.wgsl
 * [x] GPU: attribute stride/offset validation for **InstancedPoints** (WebGPU & Vulkan)
 * [x] Layout: force layout determinism on tiny graph (seeded)
 
-> Pending follow-up: rerun `./gradlew :kreekt-engine:jvmTest` once the SSL trust store issue is resolved so the new
+> Pending follow-up: rerun `./gradlew :materia-engine:jvmTest` once the SSL trust store issue is
+> resolved so the new
 > math/scene tests can execute on CI.
 
 ### 10) Docs (minimum)

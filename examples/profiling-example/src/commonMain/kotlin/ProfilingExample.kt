@@ -1,18 +1,18 @@
-package io.kreekt.examples.profiling
+package io.materia.examples.profiling
 
-import io.kreekt.core.math.Vector3
-import io.kreekt.core.scene.Scene
-import io.kreekt.core.scene.Mesh
-import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.geometry.primitives.BoxGeometry
-import io.kreekt.geometry.primitives.SphereGeometry
-import io.kreekt.material.MeshBasicMaterial
-import io.kreekt.profiling.*
-import io.kreekt.renderer.*
-import io.kreekt.lighting.IBLConfig
-import io.kreekt.lighting.IBLProcessorImpl
-import io.kreekt.lighting.IBLResult
-import io.kreekt.lighting.processEnvironmentForScene
+import io.materia.core.math.Vector3
+import io.materia.core.scene.Scene
+import io.materia.core.scene.Mesh
+import io.materia.camera.PerspectiveCamera
+import io.materia.geometry.primitives.BoxGeometry
+import io.materia.geometry.primitives.SphereGeometry
+import io.materia.material.MeshBasicMaterial
+import io.materia.profiling.*
+import io.materia.renderer.*
+import io.materia.lighting.IBLConfig
+import io.materia.lighting.IBLProcessorImpl
+import io.materia.lighting.IBLResult
+import io.materia.lighting.processEnvironmentForScene
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -38,7 +38,7 @@ class ProfilingExample {
     )
 
     fun run() {
-        println("KreeKt Profiling Example")
+        println("Materia Profiling Example")
         println("=" .repeat(80))
         println()
 

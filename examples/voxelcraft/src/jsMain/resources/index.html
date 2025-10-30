@@ -19,7 +19,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        #kreekt-canvas {
+        #materia-canvas {
             display: block;
             width: 100vw;
             height: 100vh;
@@ -272,7 +272,7 @@
 </head>
 <body>
 <!-- Canvas for 3D rendering -->
-<canvas id="kreekt-canvas"></canvas>
+<canvas id="materia-canvas"></canvas>
 
 <!-- Crosshair -->
 <div class="crosshair"></div>
@@ -399,7 +399,7 @@
 <script>
     // Handle canvas resize
     function resizeCanvas() {
-        const canvas = document.getElementById('kreekt-canvas');
+        const canvas = document.getElementById('materia-canvas');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
@@ -442,7 +442,7 @@
     let gameStarted = false;
 
     function lockChangeAlert() {
-        const canvas = document.getElementById('kreekt-canvas');
+        const canvas = document.getElementById('materia-canvas');
         const overlay = document.getElementById('controls-overlay');
 
         if (document.pointerLockElement === canvas ||

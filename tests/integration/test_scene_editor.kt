@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -290,7 +290,7 @@ class SceneEditorIntegrationTest {
 
             val nativeData = sceneEditor.exportScene(
                 project,
-                ExportFormat.KREEKT_NATIVE,
+                ExportFormat.MATERIA_NATIVE,
                 ExportOptions(compress = true)
             )
 
@@ -451,7 +451,7 @@ enum class LightType { DIRECTIONAL, POINT, SPOT, AREA }
 enum class CameraType { PERSPECTIVE, ORTHOGRAPHIC }
 enum class SkyboxType { COLOR, GRADIENT, HDRI, CUBEMAP }
 enum class RenderMode { WIREFRAME, LIT, UNLIT, MATERIAL_PREVIEW }
-enum class ExportFormat { GLTF, OBJ, FBX, KREEKT_NATIVE }
+enum class ExportFormat { GLTF, OBJ, FBX, MATERIA_NATIVE }
 
 data class Color(val r: Float, val g: Float, val b: Float, val a: Float = 1.0f) {
     companion object {

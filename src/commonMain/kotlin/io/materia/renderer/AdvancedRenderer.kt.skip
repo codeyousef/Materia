@@ -1,0 +1,577 @@
+package io.materia.renderer
+
+import io.materia.camera.Camera
+import io.materia.core.math.Color
+import io.materia.core.math.Matrix4
+import io.materia.core.math.Vector3
+import io.materia.core.scene.Material
+import io.materia.core.scene.Mesh
+import io.materia.core.scene.Object3D
+import io.materia.core.scene.Scene
+import io.materia.geometry.BufferGeometry
+import io.materia.lighting.*
+
+/**
+ * Advanced renderer implementation with modern graphics features
+ * T119-T125 - Advanced rendering techniques and optimizations
+ */
+
+/**
+ * Advanced renderer with modern features
+ */
+class AdvancedRenderer(
+    private val baseRenderer: Renderer,
+    private val config: AdvancedRendererConfig = AdvancedRendererConfig()
+) : Renderer by baseRenderer {
+
+    private val shaderManager = DefaultShaderManager(baseRenderer.capabilities)
+    private val bufferManager = DefaultBufferManager(baseRenderer.capabilities)
+    private val passManager = RenderPassManager()
+    private val cullingSystem = FrustumCulling()
+    private val batchingSystem = RenderBatching()
+    private val lightingSystem = LightingSystem()
+
+    private var currentFrameNumber = 0
+    private val renderQueue = RenderQueue()
+
+    override suspend fun initialize(surface: RenderSurface): RendererResult<Unit> {
+        val result = baseRenderer.initialize(surface)
+        if (result is RendererResult.Success) {
+            setupRenderPasses()
+            return RendererResult.Success(Unit)
+        }
+        return result
+    }
+
+    override fun render(scene: Scene, camera: Camera): RendererResult<Unit> {
+        try {
+            currentFrameNumber++
+
+            // Clear render queue
+            renderQueue.clear()
+
+            // Update camera matrices
+            camera.updateMatrixWorld()
+            camera.updateProjectionMatrix()
+
+            // Perform frustum culling
+            val visibleObjects = cullingSystem.cull(scene, camera)
+
+            // Collect lights from scene
+            val lights = lightingSystem.collectLights(scene)
+
+            // Sort and batch render objects
+            val batches = batchingSystem.createBatches(visibleObjects, camera)
+
+            // Setup lighting uniforms
+            lightingSystem.setupLightingUniforms(lights)
+
+            // Execute render passes
+            return executeRenderPasses(scene, camera, batches, lights)
+
+        } catch (e: Exception) {
+            return RendererResult.Error(RendererException.RenderingFailed("Advanced rendering failed", e))
+        }
+    }
+
+    private fun setupRenderPasses() {
+        if (config.enableShadowMapping) {
+            // Shadow passes will be added dynamically based on lights
+        }
+
+        // Main forward rendering pass
+        val forwardPass = ForwardRenderPass()
+        passManager.addPass(forwardPass)
+
+        // Post-processing passes
+        if (config.enablePostProcessing) {
+            setupPostProcessingPasses()
+        }
+    }
+
+    private fun setupPostProcessingPasses() {
+        // HDR tone mapping pass
+        if (config.enableHDR) {
+            val toneMappingMaterial = createToneMappingMaterial()
+            val toneMappingPass = PostProcessPass(toneMappingMaterial)
+            passManager.addPass(toneMappingPass)
+        }
+
+        // Anti-aliasing pass
+        if (config.enableFXAA) {
+            val fxaaMaterial = createFXAAMaterial()
+            val fxaaPass = PostProcessPass(fxaaMaterial)
+            passManager.addPass(fxaaPass)
+        }
+    }
+
+    private fun executeRenderPasses(
+        scene: Scene,
+        camera: Camera,
+        batches: List<RenderBatch>,
+        lights: List<Light>
+    ): RendererResult<Unit> {
+        // Add shadow passes for shadow-casting lights
+        val shadowPasses = mutableListOf<ShadowMapPass>()
+        for (light in lights.filter { it.castShadow }) {
+            val shadowPass = ShadowMapPass(light)
+            shadowPasses.add(shadowPass)
+            passManager.addPass(shadowPass)
+        }
+
+        // Execute all passes
+        val result = passManager.execute(baseRenderer, scene, camera)
+
+        // Cleanup shadow passes for next frame
+        shadowPasses.forEach { passManager.removePass(it) }
+
+        return result
+    }
+
+    private fun createToneMappingMaterial(): Material {
+        // Create tone mapping material with appropriate shader
+        return object : Material {
+            override val id = 999999
+            override var name = "ToneMapping"
+            override var needsUpdate = true
+            override var visible = true
+        }
+    }
+
+    private fun createFXAAMaterial(): Material {
+        // Create FXAA anti-aliasing material
+        return object : Material {
+            override val id = 999998
+            override var name = "FXAA"
+            override var needsUpdate = true
+            override var visible = true
+        }
+    }
+
+    override fun dispose(): RendererResult<Unit> {
+        shaderManager.dispose()
+        bufferManager.dispose()
+        passManager.dispose()
+        return baseRenderer.dispose()
+    }
+}
+
+/**
+ * Configuration for advanced renderer features
+ */
+data class AdvancedRendererConfig(
+    val enableShadowMapping: Boolean = true,
+    val enablePostProcessing: Boolean = true,
+    val enableHDR: Boolean = true,
+    val enableFXAA: Boolean = true,
+    val enableInstancing: Boolean = true,
+    val enableFrustumCulling: Boolean = true,
+    val enableOcclusionCulling: Boolean = false,
+    val maxShadowCascades: Int = 4,
+    val shadowMapSize: Int = 2048,
+    val maxPointLights: Int = 8,
+    val maxSpotLights: Int = 8,
+    val maxDirectionalLights: Int = 4
+)
+
+/**
+ * Frustum culling system
+ */
+class FrustumCulling {
+    fun cull(scene: Scene, camera: Camera): List<Object3D> {
+        val visibleObjects = mutableListOf<Object3D>()
+
+        // Extract frustum planes from camera
+        val frustum = extractFrustum(camera)
+
+        // Test each object against frustum
+        scene.traverse { obj ->
+            if (obj.visible && isInFrustum(obj, frustum)) {
+                visibleObjects.add(obj)
+            }
+        }
+
+        return visibleObjects
+    }
+
+    private fun extractFrustum(camera: Camera): Frustum {
+        // Extract frustum planes from view-projection matrix
+        val viewProjection = camera.projectionMatrix.clone().multiply(camera.matrixWorldInverse)
+        return Frustum().setFromProjectionMatrix(viewProjection)
+    }
+
+    private fun isInFrustum(obj: Object3D, frustum: Frustum): Boolean {
+        // Test object bounding sphere/box against frustum
+        // Simplified implementation - would use actual geometry bounds
+        return true // Always visible
+    }
+}
+
+/**
+ * Frustum implementation for culling
+ */
+class Frustum {
+    private val planes = Array(6) { io.materia.core.math.Plane() }
+
+    fun setFromProjectionMatrix(matrix: Matrix4): Frustum {
+        val m = matrix.elements
+
+        // Extract frustum planes from projection matrix
+        // Left plane
+        planes[0].setComponents(m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12])
+        // Right plane
+        planes[1].setComponents(m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12])
+        // Bottom plane
+        planes[2].setComponents(m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13])
+        // Top plane
+        planes[3].setComponents(m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13])
+        // Near plane
+        planes[4].setComponents(m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14])
+        // Far plane
+        planes[5].setComponents(m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14])
+
+        // Normalize planes
+        for (plane in planes) {
+            plane.normalize()
+        }
+
+        return this
+    }
+
+    fun containsPoint(point: Vector3): Boolean {
+        for (plane in planes) {
+            if (plane.distanceToPoint(point) < 0) {
+                return false
+            }
+        }
+        return true
+    }
+
+    fun intersectsSphere(center: Vector3, radius: Float): Boolean {
+        for (plane in planes) {
+            if (plane.distanceToPoint(center) < -radius) {
+                return false
+            }
+        }
+        return true
+    }
+}
+
+/**
+ * Render batching system for efficient rendering
+ */
+class RenderBatching {
+    fun createBatches(objects: List<Object3D>, camera: Camera): List<RenderBatch> {
+        val batches = mutableListOf<RenderBatch>()
+
+        // Group objects by material and geometry for batching
+        val materialGroups = objects.filterIsInstance<Mesh>()
+            .groupBy { "${it.material?.let { m -> m::class.simpleName }}_${it.geometry?.let { g -> g::class.simpleName }}" }
+
+        for ((key, meshes) in materialGroups) {
+            // Sort by distance for transparency
+            val sortedMeshes = meshes.sortedBy {
+                it.position.distanceTo(camera.position)
+            }
+
+            // Create batch
+            val batch = RenderBatch(
+                meshes = sortedMeshes,
+                material = meshes.first().material,
+                geometry = meshes.first().geometry,
+                instanceCount = meshes.size
+            )
+            batches.add(batch)
+        }
+
+        return batches
+    }
+}
+
+/**
+ * Render batch for grouped objects
+ */
+data class RenderBatch(
+    val meshes: List<Mesh>,
+    val material: Material?,
+    val geometry: BufferGeometry?,
+    val instanceCount: Int,
+    val transparent: Boolean = false
+)
+
+/**
+ * Lighting system for advanced lighting features
+ */
+class LightingSystem {
+    private val lightUniforms = mutableMapOf<String, Any>()
+
+    fun collectLights(scene: Scene): List<Light> {
+        val lights = mutableListOf<Light>()
+
+        scene.traverse { obj ->
+            if (obj is Light && obj.visible) {
+                lights.add(obj)
+            }
+        }
+
+        return lights
+    }
+
+    fun setupLightingUniforms(lights: List<Light>) {
+        lightUniforms.clear()
+
+        // Separate lights by type
+        val directionalLights = lights.filterIsInstance<DirectionalLight>().take(4)
+        val pointLights = lights.filterIsInstance<PointLight>().take(8)
+        val spotLights = lights.filterIsInstance<SpotLight>().take(8)
+        val ambientLights = lights.filterIsInstance<AmbientLight>()
+
+        // Set up uniform data
+        lightUniforms["numDirectionalLights"] = directionalLights.size
+        lightUniforms["numPointLights"] = pointLights.size
+        lightUniforms["numSpotLights"] = spotLights.size
+
+        // Pack light data into arrays for shader uniforms
+        lightUniforms["directionalLights"] = packDirectionalLights(directionalLights)
+        lightUniforms["pointLights"] = packPointLights(pointLights)
+        lightUniforms["spotLights"] = packSpotLights(spotLights)
+
+        // Calculate ambient contribution
+        val ambientColor = calculateAmbientColor(ambientLights)
+        lightUniforms["ambientLight"] = ambientColor
+    }
+
+    private fun packDirectionalLights(lights: List<DirectionalLight>): FloatArray {
+        // Pack directional light data for shader
+        val data = FloatArray(lights.size * 16) // 16 floats per light
+        for (i in lights.indices) {
+            val light = lights[i]
+            val offset = i * 16
+
+            // Direction (3 floats)
+            data[offset] = light.direction.x
+            data[offset + 1] = light.direction.y
+            data[offset + 2] = light.direction.z
+            data[offset + 3] = 0f // padding
+
+            // Color * intensity (3 floats)
+            data[offset + 4] = light.color.r * light.intensity
+            data[offset + 5] = light.color.g * light.intensity
+            data[offset + 6] = light.color.b * light.intensity
+            data[offset + 7] = 0f // padding
+
+            // Shadow parameters (4 floats)
+            data[offset + 8] = if (light.castShadow) 1f else 0f
+            data[offset + 9] = light.shadowBias
+            data[offset + 10] = light.shadowNormalBias
+            data[offset + 11] = light.shadowRadius
+
+            // Reserved (4 floats)
+            data[offset + 12] = 0f
+            data[offset + 13] = 0f
+            data[offset + 14] = 0f
+            data[offset + 15] = 0f
+        }
+        return data
+    }
+
+    private fun packPointLights(lights: List<PointLight>): FloatArray {
+        // Pack point light data for shader
+        val data = FloatArray(lights.size * 16) // 16 floats per light
+        for (i in lights.indices) {
+            val light = lights[i]
+            val offset = i * 16
+
+            // Position (3 floats)
+            data[offset] = light.position.x
+            data[offset + 1] = light.position.y
+            data[offset + 2] = light.position.z
+            data[offset + 3] = 0f // padding
+
+            // Color * intensity (3 floats)
+            data[offset + 4] = light.color.r * light.intensity
+            data[offset + 5] = light.color.g * light.intensity
+            data[offset + 6] = light.color.b * light.intensity
+            data[offset + 7] = 0f // padding
+
+            // Attenuation parameters (4 floats)
+            data[offset + 8] = light.distance
+            data[offset + 9] = light.decay
+            data[offset + 10] = if (light.castShadow) 1f else 0f
+            data[offset + 11] = 0f // padding
+
+            // Reserved (4 floats)
+            data[offset + 12] = 0f
+            data[offset + 13] = 0f
+            data[offset + 14] = 0f
+            data[offset + 15] = 0f
+        }
+        return data
+    }
+
+    private fun packSpotLights(lights: List<SpotLight>): FloatArray {
+        // Pack spot light data for shader
+        val data = FloatArray(lights.size * 20) // 20 floats per light
+        for (i in lights.indices) {
+            val light = lights[i]
+            val offset = i * 20
+
+            // Position (3 floats)
+            data[offset] = light.position.x
+            data[offset + 1] = light.position.y
+            data[offset + 2] = light.position.z
+            data[offset + 3] = 0f // padding
+
+            // Direction (3 floats)
+            data[offset + 4] = light.direction.x
+            data[offset + 5] = light.direction.y
+            data[offset + 6] = light.direction.z
+            data[offset + 7] = 0f // padding
+
+            // Color * intensity (3 floats)
+            data[offset + 8] = light.color.r * light.intensity
+            data[offset + 9] = light.color.g * light.intensity
+            data[offset + 10] = light.color.b * light.intensity
+            data[offset + 11] = 0f // padding
+
+            // Cone parameters (4 floats)
+            data[offset + 12] = kotlin.math.cos(light.angle)
+            data[offset + 13] = kotlin.math.cos(light.angle * (1f - light.penumbra))
+            data[offset + 14] = light.distance
+            data[offset + 15] = light.decay
+
+            // Shadow parameters (4 floats)
+            data[offset + 16] = if (light.castShadow) 1f else 0f
+            data[offset + 17] = light.shadowBias
+            data[offset + 18] = light.shadowNormalBias
+            data[offset + 19] = light.shadowRadius
+        }
+        return data
+    }
+
+    private fun calculateAmbientColor(lights: List<AmbientLight>): Color {
+        val result = Color.BLACK
+        for (light in lights) {
+            val contribution = light.color.clone().multiplyScalar(light.intensity)
+            result.add(contribution)
+        }
+        return result
+    }
+}
+
+/**
+ * Render queue for sorting and managing draw calls
+ */
+class RenderQueue {
+    private val opaqueQueue = mutableListOf<RenderItem>()
+    private val transparentQueue = mutableListOf<RenderItem>()
+
+    fun clear() {
+        opaqueQueue.clear()
+        transparentQueue.clear()
+    }
+
+    fun push(
+        object3d: Object3D,
+        geometry: BufferGeometry?,
+        material: Material?,
+        groupOrder: Int,
+        z: Float
+    ) {
+        val item = RenderItem(object3d, geometry, material, groupOrder, z)
+
+        if (material?.let { isTransparent(it) } == true) {
+            transparentQueue.add(item)
+        } else {
+            opaqueQueue.add(item)
+        }
+    }
+
+    fun sort() {
+        // Sort opaque objects front-to-back for early Z rejection
+        opaqueQueue.sortWith(compareBy({ it.groupOrder }, { it.z }))
+
+        // Sort transparent objects back-to-front for proper blending
+        transparentQueue.sortWith(compareBy({ it.groupOrder }, { -it.z }))
+    }
+
+    fun getOpaqueItems(): List<RenderItem> = opaqueQueue
+    fun getTransparentItems(): List<RenderItem> = transparentQueue
+
+    private fun isTransparent(material: Material): Boolean {
+        // Check if material requires transparency
+        return false // Simplified implementation
+    }
+}
+
+/**
+ * Render item for render queue
+ */
+data class RenderItem(
+    val object3d: Object3D,
+    val geometry: BufferGeometry?,
+    val material: Material?,
+    val groupOrder: Int,
+    val z: Float
+)
+
+/**
+ * Factory for creating advanced renderers
+ */
+object AdvancedRendererFactory {
+
+    /**
+     * Create an advanced renderer with default configuration
+     */
+    suspend fun createAdvancedRenderer(
+        baseRenderer: Renderer,
+        config: AdvancedRendererConfig = AdvancedRendererConfig()
+    ): RendererResult<AdvancedRenderer> {
+        return try {
+            val advancedRenderer = AdvancedRenderer(baseRenderer, config)
+            RendererResult.Success(advancedRenderer)
+        } catch (e: Exception) {
+            RendererResult.Error(RendererException.InitializationFailed("Failed to create advanced renderer", e))
+        }
+    }
+
+    /**
+     * Create an advanced renderer with high-quality settings
+     */
+    suspend fun createHighQualityRenderer(baseRenderer: Renderer): RendererResult<AdvancedRenderer> {
+        val config = AdvancedRendererConfig(
+            enableShadowMapping = true,
+            enablePostProcessing = true,
+            enableHDR = true,
+            enableFXAA = true,
+            enableInstancing = true,
+            enableFrustumCulling = true,
+            maxShadowCascades = 4,
+            shadowMapSize = 4096,
+            maxPointLights = 16,
+            maxSpotLights = 16,
+            maxDirectionalLights = 8
+        )
+        return createAdvancedRenderer(baseRenderer, config)
+    }
+
+    /**
+     * Create an advanced renderer with performance-optimized settings
+     */
+    suspend fun createPerformanceRenderer(baseRenderer: Renderer): RendererResult<AdvancedRenderer> {
+        val config = AdvancedRendererConfig(
+            enableShadowMapping = true,
+            enablePostProcessing = false,
+            enableHDR = false,
+            enableFXAA = false,
+            enableInstancing = true,
+            enableFrustumCulling = true,
+            maxShadowCascades = 2,
+            shadowMapSize = 1024,
+            maxPointLights = 4,
+            maxSpotLights = 4,
+            maxDirectionalLights = 2
+        )
+        return createAdvancedRenderer(baseRenderer, config)
+    }
+}

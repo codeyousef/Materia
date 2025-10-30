@@ -1,6 +1,7 @@
-# KreeKt API Style Guide
+# Materia API Style Guide
 
-This document captures the conventions we follow while building the public KreeKt API. The goals are:
+This document captures the conventions we follow while building the public Materia API. The goals
+are:
 
 - Kotlin-first ergonomics with explicit intent.
 - Predictable naming across multiplatform boundaries.
@@ -12,8 +13,8 @@ The checklist below doubles as a review reference when adding APIs or porting co
 
 ## Naming & Structure
 
-- **Modules** use `kebab-case` (e.g. `kreekt-engine`, `kreekt-gpu`).
-- **Packages** are `io.kreekt.<feature>` with two levels preferred (`io.kreekt.engine.camera`).
+- **Modules** use `kebab-case` (e.g. `materia-engine`, `materia-gpu`).
+- **Packages** are `io.materia.<feature>` with two levels preferred (`io.materia.engine.camera`).
 - **Types** are `UpperCamelCase`; **members** and **functions** use `lowerCamelCase`.
 - **Constants** live inside a companion object or top-level object and use `UpperCamelCase`.
 - Prefer *one* public entry point per feature (e.g. `RendererFactory.create`).
@@ -36,7 +37,7 @@ The checklist below doubles as a review reference when adding APIs or porting co
 
 - Use `Result<T>` for recoverable failures (adapter/device selection, IO).
 - Throw only for programming errors (`IllegalArgumentException`, `IllegalStateException`).
-- Report GPU or platform faults with domain-specific exceptions under `io.kreekt.renderer`.
+- Report GPU or platform faults with domain-specific exceptions under `io.materia.renderer`.
 
 ## Concurrency
 
@@ -55,4 +56,5 @@ The checklist below doubles as a review reference when adding APIs or porting co
 - Every public symbol lives behind `@PublishedApi` helpers or extension functions. Keep `internal` APIs for experimentation.
 - Guard new inline classes with tests covering copying and conversion to avoid ABI drift.
 
-Keeping to these rules makes KreeKt’s API predictable across Web, JVM, and native targets while staying idiomatic to Kotlin developers.
+Keeping to these rules makes Materia’s API predictable across Web, JVM, and native targets while
+staying idiomatic to Kotlin developers.

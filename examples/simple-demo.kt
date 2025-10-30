@@ -1,9 +1,9 @@
 #!/usr/bin/env kotlin
 
 /**
- * Simple KreeKt Library Demo
+ * Simple Materia Library Demo
  *
- * This standalone Kotlin script demonstrates the core functionality of the KreeKt 3D library
+ * This standalone Kotlin script demonstrates the core functionality of the Materia 3D library
  * without requiring complex build setup. You can run this directly with:
  *
  *   kotlinc -script simple-demo.kt
@@ -390,7 +390,7 @@ class AnimationMixer {
 // ============================================================================
 
 fun main() {
-    println("🚀 KreeKt 3D Library Demo")
+    println("🚀 Materia 3D Library Demo")
     println("=" .repeat(50))
 
     // Core Math Demo
@@ -515,8 +515,8 @@ fun main() {
     println("  Camera: ${camera.name} (FOV: ${camera.fov}°)")
     println("  Background: ${scene.background.toHex()}")
 
-    println("\n✅ KreeKt Demo Complete!")
-    println("\nThis demonstrates the core functionality of the KreeKt 3D library:")
+    println("\n✅ Materia Demo Complete!")
+    println("\nThis demonstrates the core functionality of the Materia 3D library:")
     println("• Math primitives (Vector3, Matrix4, Color)")
     println("• Scene graph system (Object3D hierarchy)")
     println("• Geometry generation (Box, Sphere)")

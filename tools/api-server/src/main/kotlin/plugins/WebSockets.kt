@@ -1,4 +1,4 @@
-package io.kreekt.tools.api.plugins
+package io.materia.tools.api.plugins
 
 import io.ktor.serialization.kotlinx.*
 import io.ktor.server.application.*

@@ -6,7 +6,8 @@
 
 ## Overview
 
-KreeKt now features a fully functional WebGPU/Vulkan rendering backend that automatically selects the optimal graphics API based on platform and device capabilities. This beta release includes:
+Materia now features a fully functional WebGPU/Vulkan rendering backend that automatically selects
+the optimal graphics API based on platform and device capabilities. This beta release includes:
 
 - ✅ **Automatic Backend Selection**: Detects and selects WebGPU (web) or Vulkan (desktop/mobile)
 - ✅ **Feature Parity**: Compute shaders, ray tracing, XR surface support
@@ -30,7 +31,7 @@ KreeKt now features a fully functional WebGPU/Vulkan rendering backend that auto
 
 ### Integrated GPU Baseline
 
-KreeKt is optimized for integrated GPUs and meets constitutional performance requirements:
+Materia is optimized for integrated GPUs and meets constitutional performance requirements:
 
 - **Apple M1**: 60 FPS avg, <2.5s init (via MoltenVK)
 - **Intel Iris Xe**: 60 FPS avg, <3s init (Vulkan 1.3)
@@ -52,8 +53,8 @@ KreeKt is optimized for integrated GPUs and meets constitutional performance req
 ### Basic Usage
 
 ```kotlin
-import io.kreekt.renderer.*
-import io.kreekt.renderer.backend.*
+import io.materia.renderer.*
+import io.materia.renderer.backend.*
 
 // Create renderer with automatic backend selection
 val rendererFactory = createRendererFactory()
@@ -121,7 +122,7 @@ when (initResult) {
 
 ### Constitutional Requirements
 
-KreeKt enforces these performance requirements:
+Materia enforces these performance requirements:
 
 - **Target FPS**: ≥60 FPS average
 - **Minimum FPS**: ≥30 FPS floor
@@ -247,9 +248,9 @@ val config = RendererConfig(debug = true)
 
 ## Feedback & Support
 
-- **Issues**: https://github.com/kreekt/kreekt/issues
-- **Discussions**: https://github.com/kreekt/kreekt/discussions
-- **Documentation**: https://kreekt.io/docs
+- **Issues**: https://github.com/materia/materia/issues
+- **Discussions**: https://github.com/materia/materia/discussions
+- **Documentation**: https://materia.io/docs
 
 ---
 

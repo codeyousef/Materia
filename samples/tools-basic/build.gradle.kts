@@ -28,15 +28,15 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                // KreeKt Core
-                implementation(project(":kreekt-core"))
-                implementation(project(":kreekt-renderer"))
-                implementation(project(":kreekt-scene"))
-                implementation(project(":kreekt-geometry"))
-                implementation(project(":kreekt-material"))
-                implementation(project(":kreekt-animation"))
+                // Materia Core
+                implementation(project(":materia-core"))
+                implementation(project(":materia-renderer"))
+                implementation(project(":materia-scene"))
+                implementation(project(":materia-geometry"))
+                implementation(project(":materia-material"))
+                implementation(project(":materia-animation"))
 
-                // KreeKt Tools Integration
+                // Materia Tools Integration
                 implementation(project(":tools:editor"))
                 implementation(project(":tools:profiler"))
 
@@ -86,7 +86,7 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "io.kreekt.samples.basic.DesktopAppKt"
+        mainClass = "io.materia.samples.basic.DesktopAppKt"
 
         nativeDistributions {
             targetFormats(
@@ -95,11 +95,11 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
             )
 
-            packageName = "KreeKt-Tools-Basic-Example"
+            packageName = "Materia-Tools-Basic-Example"
             packageVersion = "1.0.0"
-            description = "Basic usage example for KreeKt development tools"
-            copyright = "© 2025 KreeKt Project"
-            vendor = "KreeKt Project"
+            description = "Basic usage example for Materia development tools"
+            copyright = "© 2025 Materia Project"
+            vendor = "Materia Project"
 
             windows {
                 iconFile.set(project.file("src/jvmMain/resources/icon.ico"))
@@ -110,7 +110,7 @@ compose.desktop {
 
             macOS {
                 iconFile.set(project.file("src/jvmMain/resources/icon.icns"))
-                bundleID = "io.kreekt.samples.basic"
+                bundleID = "io.materia.samples.basic"
                 appCategory = "public.app-category.developer-tools"
                 entitlementsFile.set(project.file("src/jvmMain/resources/entitlements.plist"))
             }
@@ -118,7 +118,7 @@ compose.desktop {
             linux {
                 iconFile.set(project.file("src/jvmMain/resources/icon.png"))
                 appCategory = "Development"
-                debMaintainer = "tools@kreekt.dev"
+                debMaintainer = "tools@materia.dev"
                 menuGroup = "Development"
             }
         }
@@ -127,35 +127,35 @@ compose.desktop {
 
 // Tasks for launching tools
 tasks.register("launchSceneEditor", JavaExec::class) {
-    group = "kreekt-tools"
+    group = "materia-tools"
     description = "Launch the Scene Editor"
     classpath = sourceSets["jvmMain"].runtimeClasspath
-    mainClass.set("io.kreekt.tools.editor.SceneEditorKt")
+    mainClass.set("io.materia.tools.editor.SceneEditorKt")
     args = listOf("--project", project.projectDir.absolutePath)
 }
 
 tasks.register("launchMaterialEditor", JavaExec::class) {
-    group = "kreekt-tools"
+    group = "materia-tools"
     description = "Launch the Material Editor"
     classpath = sourceSets["jvmMain"].runtimeClasspath
-    mainClass.set("io.kreekt.tools.editor.MaterialEditorKt")
+    mainClass.set("io.materia.tools.editor.MaterialEditorKt")
     args = listOf("--project", project.projectDir.absolutePath)
 }
 
 tasks.register("launchProfiler", JavaExec::class) {
-    group = "kreekt-tools"
+    group = "materia-tools"
     description = "Launch the Performance Profiler"
     classpath = sourceSets["jvmMain"].runtimeClasspath
-    mainClass.set("io.kreekt.tools.profiler.ProfilerKt")
+    mainClass.set("io.materia.tools.profiler.ProfilerKt")
     args = listOf("--project", project.projectDir.absolutePath)
 }
 
 tasks.register("launchWebTools", Exec::class) {
-    group = "kreekt-tools"
+    group = "materia-tools"
     description = "Launch web-based development tools"
     commandLine("node", project.rootProject.file("tools/web-host/server.js"))
     doFirst {
-        println("Starting KreeKt web tools at http://localhost:3000")
+        println("Starting Materia web tools at http://localhost:3000")
     }
 }
 
@@ -164,11 +164,11 @@ tasks.register("runExample", JavaExec::class) {
     group = "application"
     description = "Run the basic tools example"
     classpath = sourceSets["jvmMain"].runtimeClasspath
-    mainClass.set("io.kreekt.samples.basic.DesktopAppKt")
+    mainClass.set("io.materia.samples.basic.DesktopAppKt")
 }
 
 tasks.register("generateSceneFile") {
-    group = "kreekt-tools"
+    group = "materia-tools"
     description = "Generate example scene file"
     doLast {
         val sceneDir = file("scenes")
@@ -240,7 +240,7 @@ tasks.register("generateSceneFile") {
         }
         """.trimIndent()
 
-        file("scenes/basic-scene.kreekt").writeText(sceneContent)
+        file("scenes/basic-scene.materia").writeText(sceneContent)
 
         val materialsContent = """
         {
@@ -270,7 +270,7 @@ tasks.register("generateSceneFile") {
         file("scenes/materials.json").writeText(materialsContent)
 
         println("Generated example scene files:")
-        println("- scenes/basic-scene.kreekt")
+        println("- scenes/basic-scene.materia")
         println("- scenes/materials.json")
     }
 }

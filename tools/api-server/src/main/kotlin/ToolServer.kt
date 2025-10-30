@@ -1,9 +1,9 @@
-package io.kreekt.tools.api
+package io.materia.tools.api
 
-import io.kreekt.tools.api.config.configureDatabase
-import io.kreekt.tools.api.config.configureSecurity
-import io.kreekt.tools.api.config.configureSerialization
-import io.kreekt.tools.api.plugins.*
+import io.materia.tools.api.config.configureDatabase
+import io.materia.tools.api.config.configureSecurity
+import io.materia.tools.api.config.configureSerialization
+import io.materia.tools.api.plugins.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -11,7 +11,7 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
 /**
- * KreeKt Tools API Server
+ * Materia Tools API Server
  *
  * Provides REST API and WebSocket endpoints for all development tools:
  * - Scene Editor API
@@ -30,7 +30,7 @@ fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val host = System.getenv("HOST") ?: "0.0.0.0"
 
-    logger.info("Starting KreeKt Tools API Server...")
+    logger.info("Starting Materia Tools API Server...")
     logger.info("Host: $host, Port: $port")
 
     embeddedServer(
@@ -55,7 +55,7 @@ fun Application.module() {
         configureDatabase()
     }
 
-    logger.info("KreeKt Tools API Server started successfully")
+    logger.info("Materia Tools API Server started successfully")
 }
 
 /**

@@ -1,6 +1,7 @@
 # Geometry API Reference
 
-Geometries define the shape of 3D objects. KreeKt provides a comprehensive set of primitive and advanced geometries.
+Geometries define the shape of 3D objects. Materia provides a comprehensive set of primitive and
+advanced geometries.
 
 ## Table of Contents
 
@@ -621,7 +622,7 @@ val font = fontLoader.load("fonts/helvetiker_regular.typeface.json")
 
 // Simple text
 val simpleText = TextGeometry(
-    text = "KreeKt",
+    text = "Materia",
     parameters = TextGeometryParameters(
         font = font,
         size = 2f,
@@ -830,7 +831,7 @@ println("Center: ${sphere.center}, Radius: ${sphere.radius}")
 
 ## See Also
 
-- [BufferGeometry Source](../../../src/commonMain/kotlin/io/kreekt/geometry/BufferGeometry.kt)
-- [Primitives Source](../../../src/commonMain/kotlin/io/kreekt/geometry/primitives/)
+- [BufferGeometry Source](../../../src/commonMain/kotlin/io/materia/geometry/BufferGeometry.kt)
+- [Primitives Source](../../../src/commonMain/kotlin/io/materia/geometry/primitives/)
 - [Materials](../material/materials.md)
 - [Mesh](../scene/scene-graph.md#mesh)

@@ -1,18 +1,18 @@
 @file:OptIn(kotlin.time.ExperimentalTime::class)
 
-package io.kreekt.tools.editor
+package io.materia.tools.editor
 
-import io.kreekt.tools.editor.data.SceneEditorProject
-import io.kreekt.tools.editor.data.EditorAction
-import io.kreekt.tools.editor.data.Vector3
-import io.kreekt.tools.editor.data.SerializedObject3D
+import io.materia.tools.editor.data.SceneEditorProject
+import io.materia.tools.editor.data.EditorAction
+import io.materia.tools.editor.data.Vector3
+import io.materia.tools.editor.data.SerializedObject3D
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.Instant
 
 /**
  * SceneEditor - Main interface for the scene editor implementation
  *
- * This interface defines the core functionality of the KreeKt scene editor,
+ * This interface defines the core functionality of the Materia scene editor,
  * including project management, object manipulation, camera controls, and
  * real-time collaboration features.
  *
@@ -361,7 +361,7 @@ enum class ExportFormat {
     GLTF,       // glTF 2.0 (recommended)
     OBJ,        // Wavefront OBJ
     FBX,        // Autodesk FBX
-    JSON,       // KreeKt JSON format
+    JSON,       // Materia JSON format
     PLY,        // Stanford PLY
     STL         // STereoLithography
 }
@@ -454,7 +454,7 @@ data class CameraTransform(
  * Light properties for configuration
  */
 data class LightProperties(
-    val color: io.kreekt.tools.editor.data.Color,
+    val color: io.materia.tools.editor.data.Color,
     val intensity: Float,
     val range: Float? = null,          // For point/spot lights
     val angle: Float? = null,          // For spot lights (degrees)
@@ -543,7 +543,7 @@ enum class AssetType {
  * Environment settings for scene appearance
  */
 data class EnvironmentSettings(
-    val skyboxType: io.kreekt.tools.editor.data.SkyboxType,
+    val skyboxType: io.materia.tools.editor.data.SkyboxType,
     val skyboxData: String? = null,     // File path or color hex
     val ambientIntensity: Float = 0.3f,
     val environmentMap: String? = null,  // HDR environment map
@@ -556,8 +556,8 @@ data class EnvironmentSettings(
  * Fog settings for atmospheric effects
  */
 data class FogSettings(
-    val type: io.kreekt.tools.editor.data.FogType,
-    val color: io.kreekt.tools.editor.data.Color,
+    val type: io.materia.tools.editor.data.FogType,
+    val color: io.materia.tools.editor.data.Color,
     val near: Float,
     val far: Float,
     val density: Float = 0.001f
@@ -583,23 +583,23 @@ object SceneEditorDefaults {
     /**
      * Create default viewport settings
      */
-    fun defaultViewportSettings() = io.kreekt.tools.editor.data.ViewportSettings.default()
+    fun defaultViewportSettings() = io.materia.tools.editor.data.ViewportSettings.default()
 
     /**
      * Create default camera settings
      */
-    fun defaultCameraSettings() = io.kreekt.tools.editor.data.CameraSettings.default()
+    fun defaultCameraSettings() = io.materia.tools.editor.data.CameraSettings.default()
 
     /**
      * Create default tool settings
      */
-    fun defaultToolSettings() = io.kreekt.tools.editor.data.ToolSettings.default()
+    fun defaultToolSettings() = io.materia.tools.editor.data.ToolSettings.default()
 
     /**
      * Create default environment
      */
     fun defaultEnvironment() = EnvironmentSettings(
-        skyboxType = io.kreekt.tools.editor.data.SkyboxType.COLOR,
+        skyboxType = io.materia.tools.editor.data.SkyboxType.COLOR,
         skyboxData = "#87CEEB", // Sky blue
         ambientIntensity = 0.3f
     )

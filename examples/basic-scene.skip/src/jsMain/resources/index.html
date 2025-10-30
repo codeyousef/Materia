@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KreeKt Basic Scene Example</title>
+    <title>Materia Basic Scene Example</title>
     <style>
         body {
             margin: 0;
@@ -13,7 +13,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        #kreekt-canvas {
+        #materia-canvas {
             display: block;
             width: 100vw;
             height: 100vh;
@@ -108,11 +108,11 @@
 </head>
 <body>
 <!-- Canvas for 3D rendering -->
-<canvas id="kreekt-canvas"></canvas>
+<canvas id="materia-canvas"></canvas>
 
 <!-- Info overlay -->
 <div class="info-overlay">
-    <h3>🚀 KreeKt 3D Engine</h3>
+    <h3>🚀 Materia 3D Engine</h3>
     <div><strong>Controls:</strong></div>
     <div class="controls">
         <div>WASD - Move camera</div>
@@ -128,7 +128,7 @@
 
 <!-- Loading indicator -->
 <div id="loading" class="loading">
-    <h2>Loading KreeKt</h2>
+    <h2>Loading Materia</h2>
     <div class="spinner"></div>
     <div>Initializing 3D engine...</div>
 </div>
@@ -147,7 +147,7 @@
 
     // Handle canvas resize
     function resizeCanvas() {
-        const canvas = document.getElementById('kreekt-canvas');
+        const canvas = document.getElementById('materia-canvas');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
@@ -191,7 +191,7 @@
     updateFPS();
 
     // WebGL Demo - Render a rotating cube
-    const canvas = document.getElementById('kreekt-canvas');
+    const canvas = document.getElementById('materia-canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 
     if (gl) {

@@ -1,15 +1,15 @@
 @echo off
-REM KreeKt Tools - Windows Desktop Packaging Script
+REM Materia Tools - Windows Desktop Packaging Script
 REM Creates Windows installer and portable packages
 
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo KreeKt Tools - Windows Packaging
+echo Materia Tools - Windows Packaging
 echo ========================================
 
 REM Configuration
-set APP_NAME=KreeKt-Tools
+set APP_NAME=Materia-Tools
 set APP_VERSION=1.0.0
 set JAVA_VERSION=17
 set BUILD_DIR=%cd%\build
@@ -40,7 +40,7 @@ echo Build completed successfully.
 REM Copy application JARs
 copy "tools\editor\desktop\build\libs\*.jar" "%BUILD_DIR%\"
 copy "tools\profiler\desktop\build\libs\*.jar" "%BUILD_DIR%\"
-copy "tools\api-server\build\libs\*-all.jar" "%BUILD_DIR%\kreekt-api-server.jar"
+copy "tools\api-server\build\libs\*-all.jar" "%BUILD_DIR%\materia-api-server.jar"
 
 echo Creating JRE bundle with jlink...
 
@@ -69,9 +69,9 @@ REM Copy JARs to lib directory
 copy "%BUILD_DIR%\*.jar" "%BUILD_DIR%\app\lib\"
 
 REM Create launcher scripts
-echo @echo off > "%BUILD_DIR%\app\bin\kreekt-tools.bat"
-echo cd /d "%%~dp0\.." >> "%BUILD_DIR%\app\bin\kreekt-tools.bat"
-echo jre\bin\java -jar lib\kreekt-api-server.jar %%* >> "%BUILD_DIR%\app\bin\kreekt-tools.bat"
+echo @echo off > "%BUILD_DIR%\app\bin\materia-tools.bat"
+echo cd /d "%%~dp0\.." >> "%BUILD_DIR%\app\bin\materia-tools.bat"
+echo jre\bin\java -jar lib\materia-api-server.jar %%* >> "%BUILD_DIR%\app\bin\materia-tools.bat"
 
 echo @echo off > "%BUILD_DIR%\app\bin\scene-editor.bat"
 echo cd /d "%%~dp0\.." >> "%BUILD_DIR%\app\bin\scene-editor.bat"
@@ -147,7 +147,7 @@ goto :eof
 :GenerateWixSource
 echo ^<?xml version="1.0" encoding="UTF-8"?^> > "%BUILD_DIR%\installer.wxs"
 echo ^<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"^> >> "%BUILD_DIR%\installer.wxs"
-echo   ^<Product Id="*" Name="%APP_NAME%" Language="1033" Version="%APP_VERSION%" Manufacturer="KreeKt Project" UpgradeCode="{12345678-1234-1234-1234-123456789012}"^> >> "%BUILD_DIR%\installer.wxs"
+echo   ^<Product Id="*" Name="%APP_NAME%" Language="1033" Version="%APP_VERSION%" Manufacturer="Materia Project" UpgradeCode="{12345678-1234-1234-1234-123456789012}"^> >> "%BUILD_DIR%\installer.wxs"
 echo     ^<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" /^> >> "%BUILD_DIR%\installer.wxs"
 echo     ^<Media Id="1" Cabinet="app.cab" EmbedCab="yes" /^> >> "%BUILD_DIR%\installer.wxs"
 echo     ^<Directory Id="TARGETDIR" Name="SourceDir"^> >> "%BUILD_DIR%\installer.wxs"
@@ -171,6 +171,6 @@ echo InstallDir "$PROGRAMFILES\${APP_NAME}" >> "%BUILD_DIR%\installer.nsi"
 echo Section "Install" >> "%BUILD_DIR%\installer.nsi"
 echo   SetOutPath "$INSTDIR" >> "%BUILD_DIR%\installer.nsi"
 echo   File /r "%BUILD_DIR%\app\*" >> "%BUILD_DIR%\installer.nsi"
-echo   CreateShortCut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\bin\kreekt-tools.bat" >> "%BUILD_DIR%\installer.nsi"
+echo   CreateShortCut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\bin\materia-tools.bat" >> "%BUILD_DIR%\installer.nsi"
 echo SectionEnd >> "%BUILD_DIR%\installer.nsi"
 goto :eof

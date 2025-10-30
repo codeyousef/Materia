@@ -1,6 +1,7 @@
 # Material API Reference
 
-Materials define how objects appear when rendered. KreeKt provides a comprehensive material system compatible with
+Materials define how objects appear when rendered. Materia provides a comprehensive material system
+compatible with
 Three.js patterns.
 
 ## Table of Contents
@@ -832,7 +833,7 @@ fun animate(deltaTime: Float) {
 
 ## See Also
 
-- [Material Source](../../../src/commonMain/kotlin/io/kreekt/material/Material.kt)
+- [Material Source](../../../src/commonMain/kotlin/io/materia/material/Material.kt)
 - [Textures](../texture/textures.md)
 - [Shaders](shader-programming.md)
 - [Lighting](../lights/lighting.md)

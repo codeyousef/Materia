@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Performance Regression Detection
+ * Materia Tools - Performance Regression Detection
  * Detects performance regressions by comparing current metrics with historical baselines
  */
 
-package io.kreekt.tools.cicd.performance
+package io.materia.tools.cicd.performance
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable

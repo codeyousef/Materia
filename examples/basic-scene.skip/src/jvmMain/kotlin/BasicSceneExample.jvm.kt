@@ -3,10 +3,10 @@
  * Uses Vulkan backend via LWJGL
  */
 
-import io.kreekt.renderer.Renderer
-import io.kreekt.renderer.RenderSurface
-import io.kreekt.renderer.RendererResult
-import io.kreekt.renderer.VulkanRenderSurface
+import io.materia.renderer.Renderer
+import io.materia.renderer.RenderSurface
+import io.materia.renderer.RendererResult
+import io.materia.renderer.VulkanRenderSurface
 import org.lwjgl.glfw.GLFW.*
 
 // Global window handle that will be set by Main.kt
@@ -148,31 +148,34 @@ fun getCurrentInput(window: Long): InputState {
  * with Vulkan support is planned for Phase 3+ (see CLAUDE.md)
  */
 class OpenGLDesktopRenderer : Renderer {
-    override val capabilities = io.kreekt.renderer.RendererCapabilities(
+    override val capabilities = io.materia.renderer.RendererCapabilities(
         maxTextureSize = 4096,
         vendor = "LWJGL",
         renderer = "OpenGL Desktop Renderer",
         version = "3.3"
     )
 
-    override var renderTarget: io.kreekt.renderer.RenderTarget? = null
+    override var renderTarget: io.materia.renderer.RenderTarget? = null
     override var autoClear = true
     override var autoClearColor = true
     override var autoClearDepth = true
     override var autoClearStencil = false
-    override var clearColor = io.kreekt.core.math.Color(0.05f, 0.05f, 0.1f)
+    override var clearColor = io.materia.core.math.Color(0.05f, 0.05f, 0.1f)
     override var clearAlpha = 1.0f
-    override var shadowMap = io.kreekt.renderer.ShadowMapSettings()
-    override var toneMapping = io.kreekt.renderer.ToneMapping.NONE
+    override var shadowMap = io.materia.renderer.ShadowMapSettings()
+    override var toneMapping = io.materia.renderer.ToneMapping.NONE
     override var toneMappingExposure = 1.0f
-    override var outputColorSpace = io.kreekt.renderer.ColorSpace.sRGB
+    override var outputColorSpace = io.materia.renderer.ColorSpace.sRGB
     override var physicallyCorrectLights = false
 
-    override suspend fun initialize(surface: io.kreekt.renderer.RenderSurface): RendererResult<Unit> {
+    override suspend fun initialize(surface: io.materia.renderer.RenderSurface): RendererResult<Unit> {
         return RendererResult.Success(Unit)
     }
 
-    override fun render(scene: io.kreekt.core.scene.Scene, camera: io.kreekt.camera.Camera): RendererResult<Unit> {
+    override fun render(
+        scene: io.materia.core.scene.Scene,
+        camera: io.materia.camera.Camera
+    ): RendererResult<Unit> {
         // OpenGL rendering implementation - basic scene traversal and rendering
         // Full implementation would traverse scene graph and render meshes with materials
         return RendererResult.Success(Unit)
@@ -190,7 +193,7 @@ class OpenGLDesktopRenderer : Renderer {
         return RendererResult.Success(Unit)
     }
 
-    override fun getViewport() = io.kreekt.camera.Viewport(0, 0, 1920, 1080)
+    override fun getViewport() = io.materia.camera.Viewport(0, 0, 1920, 1080)
 
     override fun setScissorTest(enable: Boolean): RendererResult<Unit> {
         return RendererResult.Success(Unit)
@@ -212,7 +215,10 @@ class OpenGLDesktopRenderer : Renderer {
         return RendererResult.Success(Unit)
     }
 
-    override fun compile(scene: io.kreekt.core.scene.Scene, camera: io.kreekt.camera.Camera): RendererResult<Unit> {
+    override fun compile(
+        scene: io.materia.core.scene.Scene,
+        camera: io.materia.camera.Camera
+    ): RendererResult<Unit> {
         return RendererResult.Success(Unit)
     }
 
@@ -226,7 +232,7 @@ class OpenGLDesktopRenderer : Renderer {
 
     override fun isContextLost() = false
 
-    override fun getStats() = io.kreekt.renderer.RenderStats(
+    override fun getStats() = io.materia.renderer.RenderStats(
         frame = 0,
         calls = 0,
         triangles = 0,

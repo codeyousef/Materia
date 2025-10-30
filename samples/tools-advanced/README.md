@@ -1,6 +1,8 @@
-# KreeKt Tools - Advanced Workflow Example
+# Materia Tools - Advanced Workflow Example
 
-This sample demonstrates advanced workflows using KreeKt development tools for creating complex 3D applications with multiple scenes, advanced materials, complex animations, and performance optimization.
+This sample demonstrates advanced workflows using Materia development tools for creating complex 3D
+applications with multiple scenes, advanced materials, complex animations, and performance
+optimization.
 
 ## Overview
 
@@ -16,7 +18,7 @@ This example shows how to:
 
 - Java 17 or later
 - Node.js 18 or later (for web tools)
-- KreeKt Tools installed
+- Materia Tools installed
 - Basic understanding of 3D graphics concepts
 - Familiarity with WGSL shader language
 
@@ -68,9 +70,9 @@ samples/tools-advanced/
 │       ├── character-walk.fbx
 │       └── camera-sequences.json
 ├── scenes/
-│   ├── menu-scene.kreekt
-│   ├── game-scene.kreekt
-│   └── settings-scene.kreekt
+│   ├── menu-scene.materia
+│   ├── game-scene.materia
+│   └── settings-scene.materia
 ├── materials/
 │   ├── advanced-materials.json
 │   └── shader-presets.json
@@ -528,4 +530,4 @@ echo "QA validation complete"
 
 ## License
 
-This example is licensed under the same terms as the KreeKt project.
+This example is licensed under the same terms as the Materia project.

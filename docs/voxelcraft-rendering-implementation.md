@@ -14,7 +14,8 @@ Successfully implemented the core rendering system for VoxelCraft, including:
 
 ### T033: ChunkMeshGenerator
 
-**File**: `examples/voxelcraft/src/jsMain/kotlin/io/kreekt/examples/voxelcraft/ChunkMeshGenerator.kt`
+**File**:
+`examples/voxelcraft/src/jsMain/kotlin/io/materia/examples/voxelcraft/ChunkMeshGenerator.kt`
 
 **Features Implemented**:
 
@@ -54,7 +55,7 @@ For each of 6 directions:
 
 ### T034: TextureAtlas
 
-**File**: `examples/voxelcraft/src/jsMain/kotlin/io/kreekt/examples/voxelcraft/TextureAtlas.kt`
+**File**: `examples/voxelcraft/src/jsMain/kotlin/io/materia/examples/voxelcraft/TextureAtlas.kt`
 
 **Features Implemented**:
 

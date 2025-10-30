@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -23,7 +23,7 @@ class TestingPipelineIntegrationTest {
 
             // Configure test suite
             val testSuite = testPipeline.createTestSuite(
-                name = "KreeKt Core Tests",
+                name = "Materia Core Tests",
                 configuration = TestSuiteConfig(
                     platforms = listOf(Platform.JVM, Platform.JS, Platform.ANDROID, Platform.IOS),
                     testTypes = listOf(TestType.UNIT, TestType.INTEGRATION, TestType.VISUAL),
@@ -65,8 +65,12 @@ class TestingPipelineIntegrationTest {
 
             // Configure coverage collection
             val coverageConfig = CoverageConfig(
-                includePackages = listOf("io.kreekt.core", "io.kreekt.renderer", "io.kreekt.scene"),
-                excludePackages = listOf("io.kreekt.test", "io.kreekt.examples"),
+                includePackages = listOf(
+                    "io.materia.core",
+                    "io.materia.renderer",
+                    "io.materia.scene"
+                ),
+                excludePackages = listOf("io.materia.test", "io.materia.examples"),
                 reportFormats = listOf(CoverageFormat.HTML, CoverageFormat.XML, CoverageFormat.JSON),
                 thresholds = CoverageThresholds(
                     line = 80.0f,

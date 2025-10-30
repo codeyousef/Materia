@@ -1,8 +1,8 @@
 @file:OptIn(kotlin.time.ExperimentalTime::class)
 
-package io.kreekt.tools.editor.animation
+package io.materia.tools.editor.animation
 
-import io.kreekt.tools.editor.data.*
+import io.materia.tools.editor.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.math.*

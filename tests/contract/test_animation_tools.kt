@@ -1,4 +1,4 @@
-package io.kreekt.tests.contract
+package io.materia.tests.contract
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith

@@ -1,6 +1,7 @@
 # Core Math API Reference
 
-The KreeKt math library provides fundamental mathematical primitives for 3D graphics programming. All math classes are
+The Materia math library provides fundamental mathematical primitives for 3D graphics programming.
+All math classes are
 designed for performance with operator overloading, method chaining, and careful memory management.
 
 ## Table of Contents
@@ -907,7 +908,7 @@ plane.intersectLine(line, target)
 
 ## Coordinate System
 
-KreeKt uses a **right-handed coordinate system**:
+Materia uses a **right-handed coordinate system**:
 
 - **+X**: Right
 - **+Y**: Up

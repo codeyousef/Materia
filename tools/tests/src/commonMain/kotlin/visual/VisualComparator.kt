@@ -1,6 +1,6 @@
-package io.kreekt.tools.tests.visual
+package io.materia.tools.tests.visual
 
-import io.kreekt.tools.tests.data.*
+import io.materia.tools.tests.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock

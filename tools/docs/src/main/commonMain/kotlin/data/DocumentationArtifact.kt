@@ -1,4 +1,4 @@
-package io.kreekt.tools.docs.data
+package io.materia.tools.docs.data
 
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
@@ -231,7 +231,7 @@ data class DocumentationArtifact @OptIn(ExperimentalUuidApi::class) constructor(
                     title = "$moduleName Documentation",
                     description = "Generated documentation for $moduleName",
                     author = "System",
-                    generator = "KreeKt Docs",
+                    generator = "Materia Docs",
                     generatorVersion = "1.0.0",
                     sourceCommit = "unknown",
                     buildNumber = 1
@@ -259,10 +259,10 @@ data class DocumentationArtifact @OptIn(ExperimentalUuidApi::class) constructor(
                 searchIndex = searchIndex,
                 assets = assets,
                 metadata = DocumentationMetadata(
-                    title = "KreeKt Library Documentation",
-                    description = "Complete API documentation for KreeKt 3D graphics library",
-                    author = "KreeKt Team",
-                    generator = "KreeKt Docs",
+                    title = "Materia Library Documentation",
+                    description = "Complete API documentation for Materia 3D graphics library",
+                    author = "Materia Team",
+                    generator = "Materia Docs",
                     generatorVersion = "1.0.0",
                     sourceCommit = "latest",
                     buildNumber = 1

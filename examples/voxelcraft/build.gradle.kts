@@ -140,7 +140,7 @@ tasks.register<JavaExec>("runJvm") {
     classpath = kotlin.jvm().compilations.getByName("main").output.allOutputs +
             kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles
 
-    mainClass.set("io.kreekt.examples.voxelcraft.MainJvmKt")
+    mainClass.set("io.materia.examples.voxelcraft.MainJvmKt")
 
     // Add JVM args for LWJGL native access on Java 17+
     jvmArgs = listOf(

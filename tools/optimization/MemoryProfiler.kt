@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Memory Usage Profiler
+ * Materia Tools - Memory Usage Profiler
  * Profiles memory usage patterns and identifies optimization opportunities
  */
 
-package io.kreekt.tools.optimization
+package io.materia.tools.optimization
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable

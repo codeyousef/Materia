@@ -1,4 +1,4 @@
-package io.kreekt.tools.tests.data
+package io.materia.tools.tests.data
 
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable

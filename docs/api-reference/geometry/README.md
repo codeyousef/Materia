@@ -4,7 +4,8 @@ The geometry module provides classes for defining 3D shapes and procedural geome
 
 ## Overview
 
-Geometries in KreeKt define the shape and structure of 3D objects through vertex positions, normals, UVs, and indices.
+Geometries in Materia define the shape and structure of 3D objects through vertex positions,
+normals, UVs, and indices.
 All geometries extend `BufferGeometry`, which stores attributes in GPU-friendly buffers.
 
 ## Primitive Geometries
@@ -981,6 +982,6 @@ GeometryMerger.merge(merged, geometries)
 
 ---
 
-**Module**: `io.kreekt.geometry`
+**Module**: `io.materia.geometry`
 **Since**: 1.0.0
 **Status**: ✅ Stable

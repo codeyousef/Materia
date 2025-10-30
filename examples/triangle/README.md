@@ -6,11 +6,11 @@ The triangle example is the fast path validation that our GPU layer boots end-to
 
 ## Targets & Launch Commands
 
-| Platform | Command | Notes |
-|----------|---------|-------|
-| Web (wasmJs + WebGPU) | `./gradlew :examples:triangle:wasmJsBrowserRun` | Opens a dev server with hot reload. Requires a WebGPU-capable browser. |
-| Desktop (JVM Vulkan) | `./gradlew :examples:triangle:run` | Launches a GLFW window with vsync enabled. |
-| Android (Vulkan) | `./gradlew :examples:triangle:installDebug` then `adb shell am start -n com.kreekt.examples.triangle/.MainActivity` | Uses the same renderer path as desktop. |
+| Platform              | Command                                                                                                              | Notes                                                                  |
+|-----------------------|----------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| Web (wasmJs + WebGPU) | `./gradlew :examples:triangle:wasmJsBrowserRun`                                                                      | Opens a dev server with hot reload. Requires a WebGPU-capable browser. |
+| Desktop (JVM Vulkan)  | `./gradlew :examples:triangle:run`                                                                                   | Launches a GLFW window with vsync enabled.                             |
+| Android (Vulkan)      | `./gradlew :examples:triangle:installDebug` then `adb shell am start -n com.materia.examples.triangle/.MainActivity` | Uses the same renderer path as desktop.                                |
 
 iOS/macOS MoltenVK targets will reuse the desktop scene once the native launcher is wired up.
 

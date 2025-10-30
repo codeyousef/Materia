@@ -8,7 +8,7 @@ import java.io.File
 import kotlin.time.ExperimentalTime
 
 /**
- * Interactive example generator for KreeKt documentation.
+ * Interactive example generator for Materia documentation.
  * Creates runnable, testable, and interactive code examples with live previews.
  */
 @OptIn(ExperimentalTime::class)
@@ -152,14 +152,14 @@ class ExampleGenerator {
             ignoreUnknownKeys = true
         }
 
-        // Standard KreeKt imports for examples
+        // Standard Materia imports for examples
         private val standardImports = listOf(
-            "kreekt.core.*",
-            "kreekt.scene.*",
-            "kreekt.geometry.*",
-            "kreekt.material.*",
-            "kreekt.renderer.*",
-            "kreekt.math.*",
+            "materia.core.*",
+            "materia.scene.*",
+            "materia.geometry.*",
+            "materia.material.*",
+            "materia.renderer.*",
+            "materia.math.*",
             "kotlinx.coroutines.*"
         )
 
@@ -358,7 +358,7 @@ class ExampleGenerator {
             val previewCode = generatePreviewCode(example, width, height)
             val result = executeSandboxedCode(
                 code = previewCode,
-                imports = standardImports + listOf("kreekt.preview.*"),
+                imports = standardImports + listOf("materia.preview.*"),
                 timeoutMs = 10_000
             )
 
@@ -438,9 +438,9 @@ class ExampleGenerator {
     private fun generateBasicUsageExamples(): List<InteractiveExample> {
         return listOf(
             InteractiveExample(
-                id = "hello-kreekt",
-                title = "Hello KreeKt",
-                description = "Your first KreeKt application - create and render a simple cube",
+                id = "hello-materia",
+                title = "Hello Materia",
+                description = "Your first Materia application - create and render a simple cube",
                 category = ExampleCategory.BASIC_USAGE,
                 difficulty = DifficultyLevel.BEGINNER,
                 tags = listOf("basic", "cube", "rendering", "first-steps"),
@@ -505,13 +505,13 @@ class ExampleGenerator {
                     )
                 ),
                 metadata = ExampleMetadata(
-                    author = "KreeKt Team",
+                    author = "Materia Team",
                     createdDate = "2025-01-01",
                     lastModified = "2025-01-01",
                     version = "1.0",
                     estimatedTime = 15,
                     learningObjectives = listOf(
-                        "Understand basic KreeKt setup",
+                        "Understand basic Materia setup",
                         "Learn scene creation and object management",
                         "Implement simple animation loop"
                     ),
@@ -590,7 +590,7 @@ class ExampleGenerator {
                     )
                 ),
                 metadata = ExampleMetadata(
-                    author = "KreeKt Team",
+                    author = "Materia Team",
                     createdDate = "2025-01-01",
                     lastModified = "2025-01-01",
                     version = "1.0",
@@ -600,8 +600,8 @@ class ExampleGenerator {
                         "Understand positioning and transformations",
                         "Create varied animation patterns"
                     ),
-                    prerequisites = listOf("hello-kreekt"),
-                    relatedExamples = listOf("hello-kreekt", "transformations")
+                    prerequisites = listOf("hello-materia"),
+                    relatedExamples = listOf("hello-materia", "transformations")
                 )
             )
         )
@@ -660,7 +660,7 @@ class ExampleGenerator {
                     )
                 ),
                 metadata = ExampleMetadata(
-                    author = "KreeKt Team",
+                    author = "Materia Team",
                     createdDate = "2025-01-01",
                     lastModified = "2025-01-01",
                     version = "1.0",
@@ -693,7 +693,7 @@ class ExampleGenerator {
             "beginner" to LearningPath(
                 id = "beginner",
                 title = "Beginner's Journey",
-                description = "Start your KreeKt adventure with fundamental concepts",
+                description = "Start your Materia adventure with fundamental concepts",
                 examples = examples.filter { it.difficulty == DifficultyLevel.BEGINNER }.map { it.id },
                 estimatedHours = 4
             ),
@@ -701,7 +701,7 @@ class ExampleGenerator {
                 id = "graphics-fundamentals",
                 title = "Graphics Fundamentals",
                 description = "Learn core 3D graphics concepts",
-                examples = listOf("hello-kreekt", "multiple-objects", "scene-hierarchy"),
+                examples = listOf("hello-materia", "multiple-objects", "scene-hierarchy"),
                 estimatedHours = 6
             )
         )
@@ -805,7 +805,7 @@ class ExampleGenerator {
     // Export methods
     private fun exportToMarkdown(examples: List<InteractiveExample>, outputPath: String) {
         val markdown = buildString {
-            appendLine("# KreeKt Examples")
+            appendLine("# Materia Examples")
             appendLine()
 
             examples.forEach { example ->

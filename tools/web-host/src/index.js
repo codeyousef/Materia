@@ -1,11 +1,11 @@
 /**
- * KreeKt Web Tools - Main Entry Point
+ * Materia Web Tools - Main Entry Point
  * Provides the central hub for all development tools
  */
 
 import './styles/main.css';
 
-class KreeKtWebTools {
+class MateriaWebTools {
   constructor() {
     this.ws = null;
     this.tools = new Map();
@@ -18,9 +18,9 @@ class KreeKtWebTools {
       await this.loadTools();
       this.initializeWebSocket();
       this.setupEventListeners();
-      console.log('KreeKt Web Tools initialized successfully');
+      console.log('Materia Web Tools initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize KreeKt Web Tools:', error);
+      console.error('Failed to initialize Materia Web Tools:', error);
       this.showError('Initialization failed. Please refresh the page.');
     }
   }
@@ -30,7 +30,7 @@ class KreeKtWebTools {
       const response = await fetch('/api/health');
       const config = await response.json();
       this.version = config.version;
-      console.log(`KreeKt Tools v${this.version} starting...`);
+      console.log(`Materia Tools v${this.version} starting...`);
     } catch (error) {
       console.warn('Could not load configuration:', error);
     }
@@ -57,7 +57,7 @@ class KreeKtWebTools {
     this.ws = new WebSocket(`${protocol}//${window.location.host}`);
 
     this.ws.onopen = () => {
-      console.log('WebSocket connected to KreeKt Tools server');
+      console.log('WebSocket connected to Materia Tools server');
       this.sendMessage({
         type: 'client-connect',
         timestamp: new Date().toISOString(),
@@ -104,7 +104,7 @@ class KreeKtWebTools {
     console.log('Tool event received:', event);
 
     // Dispatch custom events for tool communication
-    const customEvent = new CustomEvent('kreekt-tool-event', {
+    const customEvent = new CustomEvent('materia-tool-event', {
       detail: event
     });
     window.dispatchEvent(customEvent);
@@ -163,7 +163,7 @@ class KreeKtWebTools {
     }
 
     // Tool integration events
-    window.addEventListener('kreekt-tool-message', (event) => {
+    window.addEventListener('materia-tool-message', (event) => {
       this.sendMessage({
         type: 'tool-event',
         source: event.detail.source,
@@ -175,7 +175,7 @@ class KreeKtWebTools {
 
   showNotification(message) {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('KreeKt Tools', {
+      new Notification('Materia Tools', {
         body: message,
         icon: '/favicon.ico'
       });
@@ -191,17 +191,17 @@ class KreeKtWebTools {
 
   // Public API for tools to use
   static getInstance() {
-    if (!window.kreeKtTools) {
-      window.kreeKtTools = new KreeKtWebTools();
+    if (!window.materiaTools) {
+      window.materiaTools = new MateriaWebTools();
     }
-    return window.kreeKtTools;
+    return window.materiaTools;
   }
 }
 
 // Initialize the main application
 document.addEventListener('DOMContentLoaded', () => {
-  window.kreeKtTools = KreeKtWebTools.getInstance();
+  window.materiaTools = MateriaWebTools.getInstance();
 });
 
 // Export for use by other tools
-export default KreeKtWebTools;
+export default MateriaWebTools;

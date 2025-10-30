@@ -1,6 +1,7 @@
 # Camera API Reference
 
-Cameras define the viewpoint for rendering 3D scenes. KreeKt provides multiple camera types for different projection and
+Cameras define the viewpoint for rendering 3D scenes. Materia provides multiple camera types for
+different projection and
 rendering needs.
 
 ## Table of Contents
@@ -480,7 +481,7 @@ Camera controls handle user input for navigating the 3D scene.
 Rotate, pan, and zoom around a target point.
 
 ```kotlin
-import io.kreekt.controls.OrbitControls
+import io.materia.controls.OrbitControls
 
 val controls = OrbitControls(camera, canvas).apply {
     target.set(0f, 0f, 0f)  // Look at scene center
@@ -511,7 +512,7 @@ fun animate() {
 Free-flying controls for first-person navigation.
 
 ```kotlin
-import io.kreekt.controls.FlyControls
+import io.materia.controls.FlyControls
 
 val controls = FlyControls(camera, canvas).apply {
     movementSpeed = 10f
@@ -532,7 +533,7 @@ fun animate(deltaTime: Float) {
 First-person controls with ground constraints.
 
 ```kotlin
-import io.kreekt.controls.FirstPersonControls
+import io.materia.controls.FirstPersonControls
 
 val controls = FirstPersonControls(camera, canvas).apply {
     movementSpeed = 10f
@@ -553,7 +554,7 @@ fun animate(deltaTime: Float) {
 Rotation around any axis (like a virtual trackball).
 
 ```kotlin
-import io.kreekt.controls.TrackballControls
+import io.materia.controls.TrackballControls
 
 val controls = TrackballControls(camera, canvas).apply {
     rotateSpeed = 1.0f
@@ -573,7 +574,7 @@ fun animate() {
 Advanced trackball controls with gizmo.
 
 ```kotlin
-import io.kreekt.controls.ArcballControls
+import io.materia.controls.ArcballControls
 
 val controls = ArcballControls(camera, canvas, scene).apply {
     setGizmosVisible(true)
@@ -592,8 +593,8 @@ fun animate() {
 ### Controls Factory
 
 ```kotlin
-import io.kreekt.controls.ControlsFactory
-import io.kreekt.controls.ControlsType
+import io.materia.controls.ControlsFactory
+import io.materia.controls.ControlsType
 
 // Create controls by type
 val controls = ControlsFactory.create(
@@ -721,14 +722,14 @@ renderer.render(scene, mainCamera)
 1. **Update projection only when needed**: Avoid calling `updateProjectionMatrix()` every frame
 2. **Reuse cameras**: Don't create new cameras every frame
 3. **Optimize controls**: Use damping for smoother motion with less updates
-4. **Frustum culling**: KreeKt automatically culls objects outside camera view
+4. **Frustum culling**: Materia automatically culls objects outside camera view
 5. **LOD**: Use LOD (Level of Detail) based on camera distance
 
 ---
 
 ## See Also
 
-- [Controls Source](../../../src/commonMain/kotlin/io/kreekt/controls/)
+- [Controls Source](../../../src/commonMain/kotlin/io/materia/controls/)
 - [Camera Tutorial](../../guides/cameras-guide.md)
 - [Scene Graph](../scene/scene-graph.md)
 - [Rendering](../renderer/renderer.md)

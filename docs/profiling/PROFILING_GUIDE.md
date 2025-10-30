@@ -1,8 +1,9 @@
-# KreeKt Profiling Guide
+# Materia Profiling Guide
 
 ## Overview
 
-KreeKt includes a comprehensive profiling system designed to help you identify performance bottlenecks and optimize your 3D applications. The profiling infrastructure provides:
+Materia includes a comprehensive profiling system designed to help you identify performance
+bottlenecks and optimize your 3D applications. The profiling infrastructure provides:
 
 - **Zero-cost when disabled**: Profiling adds no overhead when turned off
 - **Cross-platform support**: Works on JVM, JS, Native, Android, and iOS
@@ -16,7 +17,7 @@ KreeKt includes a comprehensive profiling system designed to help you identify p
 ### Basic Profiling
 
 ```kotlin
-import io.kreekt.profiling.*
+import io.materia.profiling.*
 
 // Enable profiling
 PerformanceProfiler.configure(ProfilerConfig(enabled = true))
@@ -266,7 +267,7 @@ File("trace.json").writeText(trace)
 
 ### Constitutional Requirements
 
-KreeKt has constitutional performance requirements:
+Materia has constitutional performance requirements:
 
 - **60 FPS**: Must maintain 60 FPS (16.67ms per frame)
 - **5MB Size**: Base library must be under 5MB

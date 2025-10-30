@@ -1,6 +1,7 @@
-# KreeKt Basic Scene Example
+# Materia Basic Scene Example
 
-This example demonstrates the core functionality of the KreeKt 3D library with a simple scene containing:
+This example demonstrates the core functionality of the Materia 3D library with a simple scene
+containing:
 
 - **Rotating cube** with PBR material and emissive properties
 - **Floating sphere** with animated position and pulsing emission
@@ -181,7 +182,7 @@ object.position.y = sin(time * 3.0f) * 0.5f + baseHeight
 
 ## Dependencies
 
-- **KreeKt Core** - 3D math, scene graph, rendering
+- **Materia Core** - 3D math, scene graph, rendering
 - **LWJGL** - Desktop OpenGL/Vulkan bindings
 - **Kotlinx Coroutines** - Async programming
 - **Kotlinx Serialization** - Data serialization
@@ -208,7 +209,7 @@ object.position.y = sin(time * 3.0f) * 0.5f + baseHeight
 
 ## Next Steps
 
-Try these other examples to explore more KreeKt features:
+Try these other examples to explore more Materia features:
 
 - **Material Showcase** - Advanced PBR materials and textures
 - **Animation Demo** - Skeletal animation and morphing
@@ -218,5 +219,6 @@ Try these other examples to explore more KreeKt features:
 
 ---
 
-*This example demonstrates the core capabilities of KreeKt. For more advanced features, see the other examples in
+*This example demonstrates the core capabilities of Materia. For more advanced features, see the
+other examples in
 the `examples/` directory.*

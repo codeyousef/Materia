@@ -73,24 +73,24 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "io.kreekt.tools.editor.desktop.MainKt"
+        mainClass = "io.materia.tools.editor.desktop.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "KreeKt Scene Editor"
+            packageName = "Materia Scene Editor"
             packageVersion = "1.0.0"
 
             windows {
-                menuGroup = "KreeKt Tools"
+                menuGroup = "Materia Tools"
                 upgradeUuid = "a6f2b8c3-d4e5-4f6a-8b9c-1d2e3f4a5b6c"
             }
 
             macOS {
-                bundleID = "io.kreekt.tools.editor"
+                bundleID = "io.materia.tools.editor"
             }
 
             linux {
-                packageName = "kreekt-scene-editor"
+                packageName = "materia-scene-editor"
             }
         }
     }

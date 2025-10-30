@@ -1,6 +1,6 @@
 # Lighting API Reference
 
-Lights illuminate your 3D scenes. KreeKt provides various light types for different effects.
+Lights illuminate your 3D scenes. Materia provides various light types for different effects.
 
 ## Table of Contents
 
@@ -784,7 +784,7 @@ fun updateDayNight(delta: Float) {
 
 ## See Also
 
-- [Lighting Source](../../../src/commonMain/kotlin/io/kreekt/lighting/)
+- [Lighting Source](../../../src/commonMain/kotlin/io/materia/lighting/)
 - [Materials](../material/materials.md)
 - [Shadows Guide](../../guides/shadows-guide.md)
 - [PBR Guide](../../guides/pbr-guide.md)

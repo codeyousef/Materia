@@ -1,6 +1,7 @@
-# KreeKt Profiling Example
+# Materia Profiling Example
 
-This example demonstrates how to use the comprehensive profiling system in KreeKt to identify performance bottlenecks and optimize your 3D application.
+This example demonstrates how to use the comprehensive profiling system in Materia to identify
+performance bottlenecks and optimize your 3D application.
 
 ## Running the Example
 
@@ -91,7 +92,7 @@ When you run this example, you'll see:
 
 ## Performance Targets
 
-The example validates against KreeKt's constitutional requirements:
+The example validates against Materia's constitutional requirements:
 
 - **60 FPS**: Must maintain 60 frames per second
 - **16.67ms frame time**: 95th percentile should be under target

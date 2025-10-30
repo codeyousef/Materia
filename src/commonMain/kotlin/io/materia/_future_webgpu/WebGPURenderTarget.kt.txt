@@ -1,0 +1,454 @@
+package io.materia.rendertarget
+
+import io.materia.core.math.Vector2
+import io.materia.core.math.Vector4
+import io.materia.texture.Texture
+
+/**
+ * Render target for off-screen rendering.
+ * Supports color, depth, and stencil attachments.
+ * Compatible with Three.js WebGLRenderTarget API.
+ */
+expect class WebGPURenderTarget {
+    val width: Int
+    val height: Int
+    var texture: Texture
+    var depthTexture: Texture?
+    var stencilBuffer: Boolean
+    var depthBuffer: Boolean
+    var generateMipmaps: Boolean
+    var samples: Int // For multisampling
+
+    /**
+     * Set the size of the render target.
+     */
+    fun setSize(width: Int, height: Int)
+
+    /**
+     * Dispose of GPU resources.
+     */
+    fun dispose()
+
+    /**
+     * Clone the render target.
+     */
+    fun clone(): WebGPURenderTarget
+}
+
+/**
+ * Common render target implementation.
+ */
+open class BaseRenderTarget(
+    width: Int = 1024,
+    height: Int = 1024,
+    options: RenderTargetOptions = RenderTargetOptions()
+) {
+    var width: Int = width
+        protected set
+
+    var height: Int = height
+        protected set
+
+    val viewport: Vector4 = Vector4(0f, 0f, width.toFloat(), height.toFloat())
+    val scissor: Vector4 = Vector4(0f, 0f, width.toFloat(), height.toFloat())
+
+    var scissorTest: Boolean = false
+
+    var texture: Texture = createTexture(width, height, options)
+    var depthTexture: Texture? = if (options.depthTexture) {
+        createDepthTexture(width, height, options)
+    } else null
+
+    var stencilBuffer: Boolean = options.stencilBuffer
+    var depthBuffer: Boolean = options.depthBuffer
+    var generateMipmaps: Boolean = options.generateMipmaps
+    var samples: Int = options.samples
+
+    protected fun createTexture(width: Int, height: Int, options: RenderTargetOptions): Texture {
+        // Platform-specific texture creation
+        return Texture()
+    }
+
+    protected fun createDepthTexture(width: Int, height: Int, options: RenderTargetOptions): Texture {
+        // Platform-specific depth texture creation
+        return Texture()
+    }
+
+    open fun setSize(width: Int, height: Int) {
+        if (this.width != width || this.height != height) {
+            this.width = width
+            this.height = height
+
+            texture.dispose()
+            depthTexture?.dispose()
+
+            texture = createTexture(width, height, RenderTargetOptions())
+            if (depthBuffer || stencilBuffer) {
+                depthTexture = createDepthTexture(width, height, RenderTargetOptions())
+            }
+
+            viewport.set(0f, 0f, width.toFloat(), height.toFloat())
+            scissor.set(0f, 0f, width.toFloat(), height.toFloat())
+        }
+    }
+
+    open fun clone(): BaseRenderTarget {
+        return BaseRenderTarget(width, height, RenderTargetOptions(
+            stencilBuffer = stencilBuffer,
+            depthBuffer = depthBuffer,
+            depthTexture = depthTexture != null,
+            generateMipmaps = generateMipmaps,
+            samples = samples
+        ))
+    }
+
+    open fun dispose() {
+        texture.dispose()
+        depthTexture?.dispose()
+    }
+}
+
+/**
+ * Options for render target creation.
+ */
+data class RenderTargetOptions(
+    val format: TextureFormat = TextureFormat.RGBA8,
+    val type: TextureType = TextureType.UNSIGNED_BYTE,
+    val anisotropy: Int = 1,
+    val depthBuffer: Boolean = true,
+    val stencilBuffer: Boolean = false,
+    val depthTexture: Boolean = false,
+    val generateMipmaps: Boolean = false,
+    val samples: Int = 0, // 0 = no multisampling
+    val encoding: TextureEncoding = TextureEncoding.LINEAR,
+    val minFilter: TextureFilter = TextureFilter.LINEAR,
+    val magFilter: TextureFilter = TextureFilter.LINEAR,
+    val wrapS: TextureWrap = TextureWrap.CLAMP_TO_EDGE,
+    val wrapT: TextureWrap = TextureWrap.CLAMP_TO_EDGE
+)
+
+/**
+ * Multiple render targets for deferred rendering.
+ */
+class WebGPUMultipleRenderTargets(
+    width: Int = 1024,
+    height: Int = 1024,
+    count: Int = 4,
+    options: RenderTargetOptions = RenderTargetOptions()
+) : BaseRenderTarget(width, height, options) {
+
+    val textures: MutableList<Texture> = mutableListOf()
+
+    init {
+        require(count in 1..8) { "MRT count must be between 1 and 8" }
+
+        // Create multiple color attachments
+        repeat(count) {
+            textures.add(createTexture(width, height, options))
+        }
+    }
+
+    override fun setSize(width: Int, height: Int) {
+        super.setSize(width, height)
+
+        // Resize all textures
+        textures.forEach { it.dispose() }
+        textures.clear()
+
+        repeat(textures.size) {
+            textures.add(createTexture(width, height, RenderTargetOptions()))
+        }
+    }
+
+    override fun dispose() {
+        super.dispose()
+        textures.forEach { it.dispose() }
+    }
+
+    fun getTexture(index: Int): Texture? {
+        return textures.getOrNull(index)
+    }
+}
+
+/**
+ * Cube render target for environment mapping.
+ */
+class WebGPUCubeRenderTarget(
+    size: Int = 512,
+    options: RenderTargetOptions = RenderTargetOptions()
+) : BaseRenderTarget(size, size, options) {
+
+    val activeCubeFace: Int = 0
+    val activeMipMapLevel: Int = 0
+
+    /**
+     * Set which cube face to render to.
+     * 0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z
+     */
+    fun setActiveCubeFace(face: Int) {
+        require(face in 0..5) { "Cube face must be between 0 and 5" }
+        // Platform-specific implementation
+    }
+
+    /**
+     * Set which mipmap level to render to.
+     */
+    fun setActiveMipMapLevel(level: Int) {
+        require(level >= 0) { "Mipmap level must be >= 0" }
+        // Platform-specific implementation
+    }
+
+    /**
+     * Create view matrices for each cube face.
+     */
+    fun getCubeFaceViewMatrices(): List<Matrix4> {
+        val matrices = mutableListOf<Matrix4>()
+
+        // +X face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(1f, 0f, 0f),
+            Vector3(0f, -1f, 0f)
+        ))
+
+        // -X face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(-1f, 0f, 0f),
+            Vector3(0f, -1f, 0f)
+        ))
+
+        // +Y face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(0f, 1f, 0f),
+            Vector3(0f, 0f, 1f)
+        ))
+
+        // -Y face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(0f, -1f, 0f),
+            Vector3(0f, 0f, -1f)
+        ))
+
+        // +Z face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(0f, 0f, 1f),
+            Vector3(0f, -1f, 0f)
+        ))
+
+        // -Z face
+        matrices.add(Matrix4().lookAt(
+            Vector3(0f, 0f, 0f),
+            Vector3(0f, 0f, -1f),
+            Vector3(0f, -1f, 0f)
+        ))
+
+        return matrices
+    }
+}
+
+/**
+ * 3D render target for volume rendering.
+ */
+class WebGPU3DRenderTarget(
+    width: Int = 256,
+    height: Int = 256,
+    depth: Int = 256,
+    options: RenderTargetOptions = RenderTargetOptions()
+) : BaseRenderTarget(width, height, options) {
+
+    var depth: Int = depth
+        private set
+
+    val texture3D: Texture3D = createTexture3D(width, height, depth, options)
+
+    private fun createTexture3D(width: Int, height: Int, depth: Int, options: RenderTargetOptions): Texture3D {
+        // Platform-specific 3D texture creation
+        return Texture3D(width, height, depth)
+    }
+
+    fun setSize(width: Int, height: Int, depth: Int) {
+        if (this.width != width || this.height != height || this.depth != depth) {
+            super.setSize(width, height)
+            this.depth = depth
+
+            texture3D.dispose()
+            // Recreate 3D texture
+        }
+    }
+
+    override fun dispose() {
+        super.dispose()
+        texture3D.dispose()
+    }
+}
+
+/**
+ * Array render target for rendering to texture arrays.
+ */
+class WebGPUArrayRenderTarget(
+    width: Int = 1024,
+    height: Int = 1024,
+    layers: Int = 6,
+    options: RenderTargetOptions = RenderTargetOptions()
+) : BaseRenderTarget(width, height, options) {
+
+    var layers: Int = layers
+        private set
+
+    val textureArray: TextureArray = createTextureArray(width, height, layers, options)
+
+    private fun createTextureArray(width: Int, height: Int, layers: Int, options: RenderTargetOptions): TextureArray {
+        // Platform-specific texture array creation
+        return TextureArray(width, height, layers)
+    }
+
+    fun setSize(width: Int, height: Int, layers: Int) {
+        if (this.width != width || this.height != height || this.layers != layers) {
+            super.setSize(width, height)
+            this.layers = layers
+
+            textureArray.dispose()
+            // Recreate texture array
+        }
+    }
+
+    /**
+     * Set which array layer to render to.
+     */
+    fun setActiveLayer(layer: Int) {
+        require(layer in 0 until layers) { "Layer must be between 0 and ${layers - 1}" }
+        // Platform-specific implementation
+    }
+
+    override fun dispose() {
+        super.dispose()
+        textureArray.dispose()
+    }
+}
+
+/**
+ * Render target pool for efficient resource management.
+ */
+class RenderTargetPool {
+    private data class PoolKey(
+        val width: Int,
+        val height: Int,
+        val samples: Int,
+        val format: TextureFormat
+    )
+
+    private val pool = mutableMapOf<PoolKey, MutableList<WebGPURenderTarget>>()
+    private val inUse = mutableSetOf<WebGPURenderTarget>()
+
+    /**
+     * Acquire a render target from the pool.
+     */
+    fun acquire(
+        width: Int,
+        height: Int,
+        options: RenderTargetOptions = RenderTargetOptions()
+    ): WebGPURenderTarget {
+        val key = PoolKey(width, height, options.samples, options.format)
+
+        val available = pool[key]?.firstOrNull { it !in inUse }
+
+        return if (available != null) {
+            inUse.add(available)
+            available
+        } else {
+            val newTarget = createRenderTarget(width, height, options)
+            pool.getOrPut(key) { mutableListOf() }.add(newTarget)
+            inUse.add(newTarget)
+            newTarget
+        }
+    }
+
+    /**
+     * Release a render target back to the pool.
+     */
+    fun release(target: WebGPURenderTarget) {
+        inUse.remove(target)
+    }
+
+    /**
+     * Dispose of all unused render targets.
+     */
+    fun cleanUp() {
+        pool.forEach { (_, targets) ->
+            targets.filter { it !in inUse }.forEach { it.dispose() }
+            targets.removeAll { it !in inUse }
+        }
+    }
+
+    /**
+     * Dispose of all render targets.
+     */
+    fun dispose() {
+        pool.values.flatten().forEach { it.dispose() }
+        pool.clear()
+        inUse.clear()
+    }
+
+    private fun createRenderTarget(
+        width: Int,
+        height: Int,
+        options: RenderTargetOptions
+    ): WebGPURenderTarget {
+        // Platform-specific render target creation
+        error("Platform-specific implementation is not available in this preview module")
+    }
+}
+
+// 3D and Array textures
+// These types should be moved to dedicated files in the io.materia.texture package
+
+/**
+ * 3D texture for volume rendering
+ */
+abstract class Texture3D(
+    override val width: Int,
+    override val height: Int,
+    val depth: Int
+) : Texture() {
+    override val type: String = "Texture3D"
+}
+
+/**
+ * Texture array for layered textures
+ */
+abstract class TextureArray(
+    override val width: Int,
+    override val height: Int,
+    val layers: Int
+) : Texture() {
+    override val type: String = "TextureArray"
+}
+
+enum class TextureType {
+    UNSIGNED_BYTE, BYTE, SHORT, UNSIGNED_SHORT,
+    INT, UNSIGNED_INT, FLOAT, HALF_FLOAT
+}
+
+enum class TextureEncoding {
+    LINEAR, SRGB, RGBE, RGBM
+}
+
+enum class TextureFilter {
+    NEAREST, LINEAR, NEAREST_MIPMAP_NEAREST,
+    LINEAR_MIPMAP_NEAREST, NEAREST_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_LINEAR
+}
+
+enum class TextureWrap {
+    REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
+}
+
+// Placeholder math imports
+class Vector3(val x: Float = 0f, val y: Float = 0f, val z: Float = 0f)
+class Matrix4 {
+    fun lookAt(eye: Vector3, target: Vector3, up: Vector3): Matrix4 = this
+}

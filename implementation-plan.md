@@ -1,4 +1,4 @@
-# KreeKt Parity Roadmap
+# Materia Parity Roadmap
 
 ## Vision
 Achieve feature and behavioural parity with Three.js while targeting modern GPU backends (WebGPU for JS, Vulkan for JVM/Native) through a clean multiplatform architecture. The end goal is a production-ready renderer, asset pipeline, and tooling stack that behave consistently across all supported targets.
@@ -132,7 +132,8 @@ Achieve feature and behavioural parity with Three.js while targeting modern GPU 
 ### Upcoming Tasks
 - ✅ Update example/demo pipelines to call `processEnvironmentForScene` so scenes automatically receive prefiltered cubes + BRDF LUTs (see `examples/common-backend/EnvironmentScene.kt`).
 - ✅ Capture parity notes (docs + RenderStats) comparing fallback LUT vs generated LUT to guide QA expectations.
-- ✅ Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on both backends (see `src/jvmTest/kotlin/io/kreekt/lighting/HeadsetEnvironmentRegressionTest.kt`).
+- ✅ Add headset/scene regression that exercises the new helper end-to-end (HDR → IBL → render) on
+  both backends (see `src/jvmTest/kotlin/io/materia/lighting/HeadsetEnvironmentRegressionTest.kt`).
 - ✅ Ship showcase examples (`embedding-galaxy`, `force-graph-rerank`) with shared runner utilities, deterministic force-layout baking, and instanced geometry validation tests.
 - ✅ Finalise JS fallback rendering: ensure the WebGL path draws instanced point clouds without relying on WebGPU and add automated coverage so regressions are caught.
 - ✅ Surface Vulkan/WebGPU IBL fallback stats in dashboard tooling (CLI + HUD) so QA can flag parity gaps automatically.

@@ -1,4 +1,4 @@
-#name: KreeKt Tools - Build, Test & Deploy
+#name: Materia Tools - Build, Test & Deploy
 #
 #on:
 #  push:
@@ -375,7 +375,7 @@
 #            repo: context.repo.repo,
 #            deployment_id: context.payload.deployment.id,
 #            state: 'success',
-#            environment_url: 'https://tools.kreekt.dev'
+#            environment_url: 'https://tools.materia.dev'
 #          });
 #
 #  publish-packages:
@@ -451,7 +451,7 @@
 #      with:
 #        github_token: ${{ secrets.GITHUB_TOKEN }}
 #        publish_dir: tools/docs/web/dist
-#        cname: docs.kreekt.dev
+#        cname: docs.materia.dev
 #
 #  # ===========================================
 #  # PHASE 5: Performance & Quality Monitoring
@@ -548,7 +548,7 @@
 #        status: ${{ steps.status.outputs.status }}
 #        color: ${{ steps.status.outputs.color }}
 #        text: |
-#          KreeKt Tools Build ${{ steps.status.outputs.status }}
+#          Materia Tools Build ${{ steps.status.outputs.status }}
 #          Branch: ${{ github.ref }}
 #          Commit: ${{ github.sha }}
 #          Author: ${{ github.actor }}
@@ -568,8 +568,8 @@
 #            sha: context.sha,
 #            state: status,
 #            target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-#            description: `KreeKt Tools CI ${emoji}`,
-#            context: 'ci/kreekt-tools'
+#            description: `Materia Tools CI ${emoji}`,
+#            context: 'ci/materia-tools'
 #          });
 #
 #  cleanup:

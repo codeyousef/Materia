@@ -1,11 +1,13 @@
-# KreeKt Tools - CI/CD Integration Example
+# Materia Tools - CI/CD Integration Example
 
-This sample demonstrates how to integrate KreeKt development tools into continuous integration and deployment pipelines, enabling automated testing, quality assurance, and deployment workflows.
+This sample demonstrates how to integrate Materia development tools into continuous integration and
+deployment pipelines, enabling automated testing, quality assurance, and deployment workflows.
 
 ## Overview
 
 This example shows how to:
-- Set up automated testing with KreeKt tools
+
+- Set up automated testing with Materia tools
 - Integrate visual regression testing
 - Implement performance benchmarking in CI
 - Automate asset validation and optimization
@@ -16,7 +18,7 @@ This example shows how to:
 
 - Docker and Docker Compose
 - Jenkins, GitHub Actions, or GitLab CI
-- KreeKt Tools installed
+- Materia Tools installed
 - Access to target deployment environments
 
 ## Project Structure
@@ -110,7 +112,7 @@ graph TD
 
 ```yaml
 # ci/github-actions/build-and-test.yml
-name: KreeKt Tools CI/CD
+name: Materia Tools CI/CD
 
 on:
   push:
@@ -121,7 +123,7 @@ on:
     - cron: '0 2 * * *'  # Daily builds
 
 env:
-  KREEKT_VERSION: ${{ github.sha }}
+  MATERIA_VERSION: ${{ github.sha }}
   DOCKER_REGISTRY: ghcr.io
   JAVA_VERSION: 17
   NODE_VERSION: 18
@@ -288,7 +290,7 @@ jobs:
 
       - name: Build Docker Images
         run: |
-          docker build -f docker/Dockerfile.tools -t ${{ env.DOCKER_REGISTRY }}/kreekt-tools:${{ github.sha }} .
+          docker build -f docker/Dockerfile.tools -t ${{ env.DOCKER_REGISTRY }}/materia-tools:${{ github.sha }} .
           docker build -f docker/Dockerfile.asset-processor -t ${{ env.DOCKER_REGISTRY }}/asset-processor:${{ github.sha }} .
 
       - name: Deploy to Staging
@@ -359,7 +361,7 @@ EXPOSE 8080 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["java", "-jar", "libs/kreekt-api-server-all.jar"]
+CMD ["java", "-jar", "libs/materia-api-server-all.jar"]
 ```
 
 ```dockerfile
@@ -825,12 +827,12 @@ pipeline {
                 success {
                     slackSend channel: '#deployments',
                               color: 'good',
-                              message: "✅ KreeKt Tools deployed to production successfully!"
+                              message: "✅ Materia Tools deployed to production successfully!"
                 }
                 failure {
                     slackSend channel: '#deployments',
                               color: 'danger',
-                              message: "❌ KreeKt Tools production deployment failed!"
+                              message: "❌ Materia Tools production deployment failed!"
                 }
             }
         }
@@ -945,4 +947,4 @@ docker-compose -f docker/docker-compose.yml up -d
 
 ## License
 
-This example is licensed under the same terms as the KreeKt project.
+This example is licensed under the same terms as the Materia project.

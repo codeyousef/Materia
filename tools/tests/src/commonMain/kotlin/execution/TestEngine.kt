@@ -1,6 +1,6 @@
-package io.kreekt.tools.tests.execution
+package io.materia.tools.tests.execution
 
-import io.kreekt.tools.tests.data.*
+import io.materia.tools.tests.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock
@@ -11,7 +11,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
 /**
- * TestEngine - Comprehensive test execution engine for KreeKt tooling
+ * TestEngine - Comprehensive test execution engine for Materia tooling
  *
  * Provides robust test execution capabilities including:
  * - Cross-platform test execution (JVM, JS, Native, Android, iOS)

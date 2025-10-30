@@ -1,13 +1,13 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * Cross-Platform Testing Matrix for KreeKt
+ * Cross-Platform Testing Matrix for Materia
  *
  * This framework coordinates testing across multiple platforms, browsers, and devices
- * to ensure consistent behavior and performance across the entire KreeKt ecosystem.
+ * to ensure consistent behavior and performance across the entire Materia ecosystem.
  *
  * IMPORTANT: This testing matrix is designed to FAIL initially as part of TDD approach.
  * Tests will pass once the actual cross-platform testing implementation is completed.

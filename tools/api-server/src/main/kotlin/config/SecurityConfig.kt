@@ -1,4 +1,4 @@
-package io.kreekt.tools.api.config
+package io.materia.tools.api.config
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
- * Security configuration for KreeKt Tools API Server
+ * Security configuration for Materia Tools API Server
  * Handles authentication, authorization, CORS, and security headers
  */
 
@@ -35,7 +35,7 @@ fun Application.configureAuthentication() {
 
     install(Authentication) {
         jwt("auth-jwt") {
-            realm = "KreeKt Tools API"
+            realm = "Materia Tools API"
 
             verifier(
                 JWT
@@ -114,12 +114,12 @@ fun Application.configureCORS() {
         }
 
         // Production origins
-        allowHost("tools.kreekt.dev", schemes = listOf("https"))
-        allowHost("kreekt.dev", schemes = listOf("https"))
-        allowHost("app.kreekt.dev", schemes = listOf("https"))
+        allowHost("tools.materia.dev", schemes = listOf("https"))
+        allowHost("materia.dev", schemes = listOf("https"))
+        allowHost("app.materia.dev", schemes = listOf("https"))
 
         // Subdomain support
-        allowHostRegex(Regex(".*\\.kreekt\\.dev"))
+        allowHostRegex(Regex(".*\\.materia\\.dev"))
 
         // Credentials and timing
         allowCredentials = true
@@ -156,7 +156,7 @@ fun Application.configureSecurityHeaders() {
             }
 
             // Custom headers
-            append("X-Powered-By", "KreeKt-Tools-API")
+            append("X-Powered-By", "Materia-Tools-API")
             append("X-API-Version", "1.0.0")
         }
     }
@@ -240,8 +240,8 @@ data class JWTConfig(
         fun fromEnvironment(): JWTConfig {
             return JWTConfig(
                 secret = System.getenv("JWT_SECRET") ?: generateDefaultSecret(),
-                issuer = System.getenv("JWT_ISSUER") ?: "kreekt-tools",
-                audience = System.getenv("JWT_AUDIENCE") ?: "kreekt-tools-api",
+                issuer = System.getenv("JWT_ISSUER") ?: "materia-tools",
+                audience = System.getenv("JWT_AUDIENCE") ?: "materia-tools-api",
                 expirationHours = System.getenv("JWT_EXPIRATION_HOURS")?.toLongOrNull() ?: 24
             )
         }

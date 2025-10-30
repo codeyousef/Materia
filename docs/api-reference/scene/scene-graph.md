@@ -1,6 +1,7 @@
 # Scene Graph API Reference
 
-The scene graph is the hierarchical structure that organizes all 3D objects in KreeKt. It provides transformation,
+The scene graph is the hierarchical structure that organizes all 3D objects in Materia. It provides
+transformation,
 parenting, and rendering management.
 
 ## Table of Contents
@@ -846,7 +847,7 @@ scene.add(lod)
 
 ## See Also
 
-- [Object3D Source](../../../src/commonMain/kotlin/io/kreekt/core/scene/Object3D.kt)
-- [Scene Source](../../../src/commonMain/kotlin/io/kreekt/core/scene/Scene.kt)
+- [Object3D Source](../../../src/commonMain/kotlin/io/materia/core/scene/Object3D.kt)
+- [Scene Source](../../../src/commonMain/kotlin/io/materia/core/scene/Scene.kt)
 - [Transformations Guide](../../guides/transformations-guide.md)
 - [Performance Guide](../../guides/performance-guide.md)

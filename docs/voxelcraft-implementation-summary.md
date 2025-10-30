@@ -2,7 +2,8 @@
 
 ## Overview
 
-Successfully implemented a fully functional Minecraft-style voxel game for the KreeKt library examples. The project
+Successfully implemented a fully functional Minecraft-style voxel game for the Materia library
+examples. The project
 demonstrates procedural world generation, player controls, block interaction, and persistence systems using Kotlin/JS
 and WebGL2.
 
@@ -223,7 +224,7 @@ sealed class BlockType(id: Byte, name: String, isTransparent: Boolean) {
 examples/voxelcraft/
 ├── src/
 │   ├── jsMain/
-│   │   ├── kotlin/io/kreekt/examples/voxelcraft/
+│   │   ├── kotlin/io/materia/examples/voxelcraft/
 │   │   │   ├── Main.kt                   # Entry point, game loop ✅
 │   │   │   ├── VoxelWorld.kt            # World management ✅
 │   │   │   ├── Chunk.kt                 # Chunk entity ✅
@@ -242,7 +243,7 @@ examples/voxelcraft/
 │   │   └── resources/
 │   │       └── index.html               # Game container ✅
 │   └── commonTest/
-│       └── kotlin/io/kreekt/examples/voxelcraft/
+│       └── kotlin/io/materia/examples/voxelcraft/
 │           ├── contract/                # API contract tests ✅
 │           ├── unit/                    # Unit tests ✅
 │           └── integration/             # Integration tests ✅
@@ -312,7 +313,8 @@ examples/voxelcraft/
 ## Deferred Work (Rendering System)
 
 **Why Deferred:**
-ChunkMeshGenerator (T033) and TextureAtlas (T034) require deep integration with KreeKt's WebGPU rendering pipeline. This
+ChunkMeshGenerator (T033) and TextureAtlas (T034) require deep integration with Materia's WebGPU
+rendering pipeline. This
 includes:
 
 - BufferGeometry creation with vertex/index buffers
@@ -440,7 +442,7 @@ missing visual output.
 
 ## Credits
 
-- **KreeKt Library**: Kotlin Multiplatform 3D graphics framework
+- **Materia Library**: Kotlin Multiplatform 3D graphics framework
 - **Simplex Noise**: Stefan Gustavson implementation
 - **Inspired by**: Minecraft by Mojang Studios
 - **Specification**: `/specs/014-create-a-basic/`

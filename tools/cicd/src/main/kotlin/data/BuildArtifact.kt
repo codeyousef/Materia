@@ -1,4 +1,4 @@
-package io.kreekt.tools.cicd.data
+package io.materia.tools.cicd.data
 
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
@@ -387,7 +387,7 @@ data class BuildMetadata(
     val gitBranch: String,
     val buildNumber: Int,
     val releaseNotes: String? = null,
-    val groupId: String = "io.kreekt",
+    val groupId: String = "io.materia",
     val buildTool: String = "Gradle",
     val buildToolVersion: String = "8.0+",
     val kotlinVersion: String = "1.9.0",

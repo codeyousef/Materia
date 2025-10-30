@@ -37,12 +37,12 @@ subprojects {
     apply(plugin = "org.jetbrains.dokka")
 
     if (name.startsWith("tools")) {
-        group = "io.kreekt.tools"
+        group = "io.materia.tools"
         version = rootProject.version
     }
 }
 
-group = "io.kreekt"
+group = "io.materia"
 version = "0.1.0-alpha01"
 
 kotlin {
@@ -234,9 +234,9 @@ kotlin {
                 implementation(libs.androidx.lifecycle.runtime.ktx)
             }
             kotlin.srcDir("src/androidMain/kotlin")
-            kotlin.exclude("io/kreekt/xr/helpers/**")
-            kotlin.exclude("io/kreekt/xr/ARCoreWrappers.kt")
-            kotlin.exclude("io/kreekt/xr/XRSystem.android.kt")
+            kotlin.exclude("io/materia/xr/helpers/**")
+            kotlin.exclude("io/materia/xr/ARCoreWrappers.kt")
+            kotlin.exclude("io/materia/xr/XRSystem.android.kt")
         }
     }
 }
@@ -247,7 +247,7 @@ android {
     val minSdkVersion = libs.versions.androidMinSdk.get().toInt()
 
     compileSdk = compileSdkVersion
-    namespace = "io.kreekt"
+    namespace = "io.materia"
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
 
@@ -435,8 +435,8 @@ val syncAndroidShaders = tasks.register<Sync>("syncAndroidShaders") {
 // ============================================================================
 
 tasks.register("runSimpleDemo", JavaExec::class) {
-    group = "kreekt"
-    description = "Run the simple KreeKt demo script"
+    group = "materia"
+    description = "Run the simple Materia demo script"
 
     dependsOn("jvmMainClasses")
     classpath = files(
@@ -446,19 +446,19 @@ tasks.register("runSimpleDemo", JavaExec::class) {
     mainClass.set("examples.SimpleMainKt")
 
     doFirst {
-        println("🚀 Running KreeKt Simple Demo...")
-        println("This will demonstrate core KreeKt functionality")
+        println("🚀 Running Materia Simple Demo...")
+        println("This will demonstrate core Materia functionality")
     }
 }
 
 tasks.register("listExamples") {
-    group = "kreekt"
-    description = "List all available KreeKt examples"
+    group = "materia"
+    description = "List all available Materia examples"
 
     doLast {
         println(
             """
-🚀 KreeKt Examples Available:
+🚀 Materia Examples Available:
 
 📝 Simple Examples:
   ./gradlew listExamples                       - Show this help
@@ -495,14 +495,14 @@ tasks.register("listExamples") {
 }
 
 tasks.register("quickStart") {
-    group = "kreekt"
+    group = "materia"
     description = "Quick start - build and run basic scene example"
 
     dependsOn("build")
     finalizedBy(":examples:basic-scene:runJvm")
 
     doLast {
-        println("✅ KreeKt Quick Start Complete!")
+        println("✅ Materia Quick Start Complete!")
     }
 }
 

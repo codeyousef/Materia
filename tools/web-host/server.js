@@ -27,7 +27,7 @@ app.use(helmet({
 // CORS configuration
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ['https://tools.kreekt.dev', 'https://kreekt.dev']
+    ? ['https://tools.materia.dev', 'https://materia.dev']
     : ['http://localhost:3000', 'http://localhost:8080'],
   credentials: true
 }));
@@ -125,7 +125,7 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`KreeKt Web Tools server running on port ${PORT}`);
+  console.log(`Materia Web Tools server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 

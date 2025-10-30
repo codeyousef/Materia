@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -23,7 +23,7 @@ class DocumentationGenerationIntegrationTest {
 
             // Configure Dokka for API documentation
             val dokkaConfig = DokkaConfig(
-                moduleName = "KreeKt",
+                moduleName = "Materia",
                 outputDirectory = "docs/api/",
                 format = DocumentationFormat.HTML,
                 includeNonPublic = false,
@@ -33,8 +33,8 @@ class DocumentationGenerationIntegrationTest {
                     SourceSetConfig(
                         sourceRoots = listOf("src/commonMain/kotlin"),
                         platform = Platform.COMMON,
-                        includePackages = listOf("io.kreekt.*"),
-                        excludePackages = listOf("io.kreekt.internal.*")
+                        includePackages = listOf("io.materia.*"),
+                        excludePackages = listOf("io.materia.internal.*")
                     )
                 )
             )
@@ -136,7 +136,7 @@ class DocumentationGenerationIntegrationTest {
             // Configure migration guide generation
             val migrationConfig = MigrationGuideConfig(
                 sourceFramework = SourceFramework.THREE_JS,
-                targetFramework = "KreeKt",
+                targetFramework = "Materia",
                 includeCodeComparisons = true,
                 includeAutomatedMigration = true,
                 outputFormat = DocumentationFormat.MARKDOWN,
@@ -158,7 +158,7 @@ class DocumentationGenerationIntegrationTest {
                         const cube = new THREE.Mesh(geometry, material);
                         scene.add(cube);
                     """.trimIndent(),
-                    kreektCode = """
+                    materiaCode = """
                         val scene = Scene()
                         val geometry = BoxGeometry(1f, 1f, 1f)
                         val material = MeshBasicMaterial(color = Color.GREEN)
@@ -174,7 +174,7 @@ class DocumentationGenerationIntegrationTest {
                         const renderer = new THREE.WebGLRenderer();
                         renderer.setSize(window.innerWidth, window.innerHeight);
                     """.trimIndent(),
-                    kreektCode = """
+                    materiaCode = """
                         val camera = PerspectiveCamera(
                             fov = 75f,
                             aspect = window.innerWidth / window.innerHeight.toFloat(),
@@ -184,7 +184,7 @@ class DocumentationGenerationIntegrationTest {
                         val renderer = WebGPURenderer(canvas)
                         renderer.setSize(window.innerWidth, window.innerHeight)
                     """.trimIndent(),
-                    explanation = "KreeKt uses WebGPU by default with explicit parameter names"
+                    explanation = "Materia uses WebGPU by default with explicit parameter names"
                 )
             )
 
@@ -333,7 +333,7 @@ class DocumentationGenerationIntegrationTest {
             val deploymentConfig = DocumentationDeploymentConfig(
                 targetEnvironment = DeploymentEnvironment.PRODUCTION,
                 hostingProvider = HostingProvider.GITHUB_PAGES,
-                customDomain = "docs.kreekt.dev",
+                customDomain = "docs.materia.dev",
                 enableSSL = true,
                 enableCDN = true,
                 cdnProvider = CDNProvider.CLOUDFLARE,
@@ -642,7 +642,7 @@ data class MigrationGuideConfig(
 data class MigrationScenario(
     val title: String,
     val threeJsCode: String,
-    val kreektCode: String,
+    val materiaCode: String,
     val explanation: String
 )
 

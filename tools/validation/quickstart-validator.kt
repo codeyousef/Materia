@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Quickstart Validation
+ * Materia Tools - Quickstart Validation
  * Validates that all commands and examples in quickstart.md work correctly
  */
 
-package io.kreekt.tools.validation
+package io.materia.tools.validation
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable

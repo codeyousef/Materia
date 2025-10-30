@@ -37,10 +37,10 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/index.html',
-      title: 'KreeKt Development Tools',
+      title: 'Materia Development Tools',
       meta: {
         viewport: 'width=device-width, initial-scale=1',
-        description: 'Web-based development tools for KreeKt 3D library'
+        description: 'Web-based development tools for Materia 3D library'
       }
     }),
 

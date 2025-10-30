@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for the KreeKt 3D graphics library.
+Complete API reference for the Materia 3D graphics library.
 
 ## Modules
 

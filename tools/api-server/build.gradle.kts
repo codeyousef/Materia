@@ -9,7 +9,7 @@ kotlin {
 }
 
 application {
-    mainClass.set("io.kreekt.tools.api.ToolServerKt")
+    mainClass.set("io.materia.tools.api.ToolServerKt")
 }
 
 dependencies {

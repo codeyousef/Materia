@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - API Documentation Reviewer
+ * Materia Tools - API Documentation Reviewer
  * Reviews and validates API documentation for completeness, accuracy, and quality
  */
 
-package io.kreekt.tools.validation
+package io.materia.tools.validation
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable

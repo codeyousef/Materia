@@ -1,4 +1,4 @@
-package io.kreekt.tools.api.plugins
+package io.materia.tools.api.plugins
 
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -37,8 +37,8 @@ fun Application.configureHTTP() {
         }
 
         // Production CORS
-        allowHost("tools.kreekt.dev", schemes = listOf("https"))
-        allowHost("kreekt.dev", schemes = listOf("https"))
+        allowHost("tools.materia.dev", schemes = listOf("https"))
+        allowHost("materia.dev", schemes = listOf("https"))
 
         allowCredentials = true
         maxAgeInSeconds = 24 * 60 * 60 // 24 hours

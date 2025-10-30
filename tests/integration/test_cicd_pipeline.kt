@@ -1,4 +1,4 @@
-package io.kreekt.tests.integration
+package io.materia.tests.integration
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -23,7 +23,7 @@ class CICDPipelineIntegrationTest {
 
             // Configure multi-platform build pipeline
             val buildPipeline = cicdService.createBuildPipeline(
-                name = "KreeKt Multi-Platform Build",
+                name = "Materia Multi-Platform Build",
                 config = BuildPipelineConfig(
                     platforms = listOf(
                         BuildPlatform.JVM_WINDOWS,
@@ -52,7 +52,7 @@ class CICDPipelineIntegrationTest {
                     branch = "main",
                     triggeredBy = BuildTrigger.PULL_REQUEST,
                     environmentVariables = mapOf(
-                        "KREEKT_VERSION" to "1.0.0-SNAPSHOT",
+                        "MATERIA_VERSION" to "1.0.0-SNAPSHOT",
                         "BUILD_NUMBER" to "42"
                     )
                 )
@@ -85,7 +85,7 @@ class CICDPipelineIntegrationTest {
 
             // Configure comprehensive testing pipeline
             val testPipeline = cicdService.createTestingPipeline(
-                name = "KreeKt Quality Assurance Pipeline",
+                name = "Materia Quality Assurance Pipeline",
                 config = TestingPipelineConfig(
                     testStages = listOf(
                         TestStage.UNIT_TESTS,
@@ -155,7 +155,7 @@ class CICDPipelineIntegrationTest {
 
             // Configure deployment pipeline
             val deploymentPipeline = cicdService.createDeploymentPipeline(
-                name = "KreeKt Library Deployment",
+                name = "Materia Library Deployment",
                 config = DeploymentPipelineConfig(
                     environments = listOf(
                         DeploymentEnvironment.STAGING,
@@ -206,7 +206,7 @@ class CICDPipelineIntegrationTest {
                     artifacts = BuildArtifacts(/* from build pipeline */),
                     version = "1.0.0",
                     releaseNotes = "Official 1.0.0 release",
-                    approvedBy = "release-manager@kreekt.dev"
+                    approvedBy = "release-manager@materia.dev"
                 )
             )
 
@@ -521,7 +521,7 @@ class CICDPipelineIntegrationTest {
 
             // Configure complex pipeline workflow
             val workflowConfig = PipelineWorkflowConfig(
-                name = "Complete KreeKt Release Workflow",
+                name = "Complete Materia Release Workflow",
                 triggers = listOf(
                     WorkflowTrigger.PUSH_TO_MAIN,
                     WorkflowTrigger.PULL_REQUEST,
@@ -574,7 +574,7 @@ class CICDPipelineIntegrationTest {
                     triggeredBy = WorkflowTrigger.PUSH_TO_MAIN,
                     commitSha = "abc123",
                     branch = "main",
-                    author = "developer@kreekt.dev",
+                    author = "developer@materia.dev",
                     environmentVariables = mapOf(
                         "RELEASE_VERSION" to "1.1.0",
                         "DEPLOY_TARGET" to "production"

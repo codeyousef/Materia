@@ -36,8 +36,8 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation(project(":kreekt-gpu"))
-                implementation(project(":kreekt-engine"))
+                implementation(project(":materia-gpu"))
+                implementation(project(":materia-engine"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(project(":"))
             }
@@ -102,10 +102,10 @@ tasks.register("run", JavaExec::class) {
     dependsOn("jvmMainClasses")
     val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (jvmCompilation.runtimeDependencyFiles ?: files()) + jvmCompilation.output.allOutputs
-    mainClass.set("io.kreekt.examples.triangle.MainKt")
+    mainClass.set("io.materia.examples.triangle.MainKt")
 
     doFirst {
-        println("🎮 Starting KreeKt Triangle Example (JVM)")
+        println("🎮 Starting Materia Triangle Example (JVM)")
         println("Bootstrapping GPU abstraction for MVP triangle")
     }
 }
@@ -128,7 +128,7 @@ tasks.register("jsBrowserRun") {
     dependsOn("jsBrowserDevelopmentRun")
 
     doFirst {
-        println("🌐 Launching KreeKt Triangle Example (Browser)")
+        println("🌐 Launching Materia Triangle Example (Browser)")
         println("Opening dev server - ensure a WebGPU capable browser is available")
     }
 }
@@ -150,7 +150,7 @@ tasks.register("installDebug") {
 
 android {
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
-    namespace = "io.kreekt.examples.triangle"
+    namespace = "io.materia.examples.triangle"
 
     defaultConfig {
         minSdk = libs.versions.androidMinSdk.get().toInt()

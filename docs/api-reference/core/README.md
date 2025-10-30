@@ -1,14 +1,14 @@
 # Core Module API Reference
 
 The core module provides fundamental math primitives, scene graph system, and utilities that form the foundation of
-KreeKt.
+Materia.
 
 ## Packages
 
-- `io.kreekt.core.math` - Mathematical primitives
-- `io.kreekt.core.scene` - Scene graph system
-- `io.kreekt.core.utils` - Utility classes and helpers
-- `io.kreekt.core.platform` - Platform abstraction layer
+- `io.materia.core.math` - Mathematical primitives
+- `io.materia.core.scene` - Scene graph system
+- `io.materia.core.utils` - Utility classes and helpers
+- `io.materia.core.platform` - Platform abstraction layer
 
 ## Math Primitives
 

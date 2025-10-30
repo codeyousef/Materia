@@ -1,10 +1,12 @@
-KreeKt — Development Guidelines (Advanced)
+Materia — Development Guidelines (Advanced)
 
 Scope and audience
 
-- This document records project-specific details that help advanced contributors build, test, and extend KreeKt
+- This document records project-specific details that help advanced contributors build, test, and
+  extend Materia
   consistently across platforms.
-- It is intentionally focused on KreeKt’s actual Gradle/KMP wiring, targets, known constraints on Windows, and how to
+- It is intentionally focused on Materia’s actual Gradle/KMP wiring, targets, known constraints on
+  Windows, and how to
   work with the repository’s tests and tools.
 
 1) Build and configuration
@@ -124,7 +126,7 @@ Running tests (when the suite compiles)
 - Run all JVM tests for the root module only:
     - .\gradlew.bat :jvmTest
 - Run a specific test class on JVM:
-    - .\gradlew.bat :jvmTest --tests "io.kreekt.core.math.Box3Test"
+    - .\gradlew.bat :jvmTest --tests "io.materia.core.math.Box3Test"
 - Run tests in a specific subproject (if fixed):
     - .\gradlew.bat :examples:voxelcraft:jvmTest
 - Generate coverage after successful tests:
@@ -135,14 +137,14 @@ Demonstration: creating a simple test locally
 - Because the current repository JVM test sources do not compile end-to-end, the following is a local-only demonstration
   pattern you can use while developing (do this in a temporary branch and do not commit the changes unless you also fix
   the broken tests):
-    1) Create src/jvmTest/kotlin/io/kreekt/demo/DemoGuidelineTest.kt with:
-        - package io.kreekt.demo
+    1) Create src/jvmTest/kotlin/io/materia/demo/DemoGuidelineTest.kt with:
+        - package io.materia.demo
           import kotlin.test.Test
           import kotlin.test.assertEquals
           class DemoGuidelineTest { @Test fun adds() { assertEquals(4, 2 + 2) } }
     2) Temporarily disable or move out the failing test sources under src/commonTest and examples/*/src/commonTest to
        allow jvmTest to compile.
-    3) Run: .\gradlew.bat :jvmTest --tests "io.kreekt.demo.DemoGuidelineTest"
+    3) Run: .\gradlew.bat :jvmTest --tests "io.materia.demo.DemoGuidelineTest"
     4) Revert your temporary moves/changes before opening a PR.
 - If you prefer not to touch existing sources, create a temporary custom task (jvmQuickTest) and directory (
   src/jvmQuickTest/kotlin) as noted above; wire it to kotlin("test") only, run it locally, then drop it before commit.
@@ -173,7 +175,7 @@ Examples and tools
 - Examples live under :examples (basic-scene, voxelcraft). On Windows, some examples may require additional native
   dependencies (Vulkan SDK, drivers). Use run-examples.ps1/.bat scripts at the root to launch examples where available.
 - Tools live under tools/* (docs, editor, profiler, tests, validation, etc.). The root project applies dokka to tools
-  subprojects too (group io.kreekt.tools; version = root version).
+  subprojects too (group io.materia.tools; version = root version).
 
 Code style and conventions
 

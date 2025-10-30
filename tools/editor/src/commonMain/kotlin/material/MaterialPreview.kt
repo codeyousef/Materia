@@ -1,8 +1,8 @@
-package io.kreekt.tools.editor.material
+package io.materia.tools.editor.material
 
-import io.kreekt.tools.editor.data.MaterialDefinition
-import io.kreekt.tools.editor.data.Vector3
-import io.kreekt.tools.editor.data.Color
+import io.materia.tools.editor.data.MaterialDefinition
+import io.materia.tools.editor.data.Vector3
+import io.materia.tools.editor.data.Color
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

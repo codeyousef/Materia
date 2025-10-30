@@ -34,8 +34,8 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation(project(":kreekt-gpu"))
-                implementation(project(":kreekt-engine"))
+                implementation(project(":materia-gpu"))
+                implementation(project(":materia-engine"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(project(":"))
@@ -98,7 +98,7 @@ tasks.register("run", JavaExec::class) {
     dependsOn("jvmMainClasses")
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
-    mainClass.set("io.kreekt.examples.forcegraph.MainKt")
+    mainClass.set("io.materia.examples.forcegraph.MainKt")
 
     doFirst {
         println("🚀 Launching Force Graph on JVM")

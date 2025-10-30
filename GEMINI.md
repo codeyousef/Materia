@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-KreeKt is a production-ready, Kotlin Multiplatform 3D graphics library designed to bring the power and familiarity of Three.js to native platforms. It enables developers to write 3D applications once and deploy them across a wide range of platforms, including web, desktop, and mobile.
+Materia is a production-ready, Kotlin Multiplatform 3D graphics library designed to bring the power
+and familiarity of Three.js to native platforms. It enables developers to write 3D applications once
+and deploy them across a wide range of platforms, including web, desktop, and mobile.
 
 **Key Technologies:**
 
@@ -18,25 +20,26 @@ KreeKt is a production-ready, Kotlin Multiplatform 3D graphics library designed 
 
 **Architecture:**
 
-KreeKt features a modular architecture that promotes a clean separation of concerns. The main modules include:
+Materia features a modular architecture that promotes a clean separation of concerns. The main
+modules include:
 
-*   `kreekt-core`: Contains core mathematical primitives and utilities.
-*   `kreekt-renderer`: An abstraction layer for the underlying graphics APIs (WebGPU/Vulkan).
-*   `kreekt-scene`: Implements the scene graph system.
-*   `kreekt-geometry`: Provides various geometry classes and primitives.
-*   `kreekt-material`: The material system and shaders.
-*   `kreekt-animation`: Handles animation clips and mixers.
-*   `kreekt-loader`: Manages asset loading (GLTF, OBJ, FBX).
-*   `kreekt-controls`: Provides camera controls and user interaction.
-*   `kreekt-physics`: Integrates with the physics engines.
-*   `kreekt-xr`: For VR/AR support.
-*   `kreekt-postprocess`: Handles post-processing effects.
+* `materia-core`: Contains core mathematical primitives and utilities.
+* `materia-renderer`: An abstraction layer for the underlying graphics APIs (WebGPU/Vulkan).
+* `materia-scene`: Implements the scene graph system.
+* `materia-geometry`: Provides various geometry classes and primitives.
+* `materia-material`: The material system and shaders.
+* `materia-animation`: Handles animation clips and mixers.
+* `materia-loader`: Manages asset loading (GLTF, OBJ, FBX).
+* `materia-controls`: Provides camera controls and user interaction.
+* `materia-physics`: Integrates with the physics engines.
+* `materia-xr`: For VR/AR support.
+* `materia-postprocess`: Handles post-processing effects.
 
 The project leverages Kotlin's `expect`/`actual` pattern to provide platform-specific implementations while maintaining a common API.
 
 ## Building and Running
 
-The following Gradle commands are essential for working with the KreeKt project:
+The following Gradle commands are essential for working with the Materia project:
 
 **Building the Project:**
 

@@ -40,7 +40,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("io.kreekt.tools.docs.server.DocServerKt")
+    mainClass.set("io.materia.tools.docs.server.DocServerKt")
 }
 
 tasks.register("serve") {

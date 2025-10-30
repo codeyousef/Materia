@@ -1,6 +1,7 @@
 # VoxelCraft - Minecraft Clone Example
 
-A fully functional creative-mode voxel building game demonstrating KreeKt's multiplatform 3D graphics capabilities.
+A fully functional creative-mode voxel building game demonstrating Materia's multiplatform 3D
+graphics capabilities.
 
 ## Browser Requirements (JavaScript Target)
 
@@ -52,7 +53,8 @@ navigator.gpu
 - Performance: 60 FPS target @ 100k triangles
 
 ## Architecture
-Uses KreeKt's platform-agnostic API:
+
+Uses Materia's platform-agnostic API:
 ```kotlin
 val surface = SurfaceFactory.create(windowOrCanvas)
 val renderer = RendererFactory.create(surface)

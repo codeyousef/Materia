@@ -27,7 +27,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kreekt"
+rootProject.name = "materia"
 
 // Tool modules - Temporarily disabled on Windows due to compilation issues
 // include(":tools:editor")
@@ -38,19 +38,19 @@ rootProject.name = "kreekt"
 // include(":tools:api-server")
 
 // Library modules (future expansion)
-// kreekt-postprocessing needs architectural fixes - temporarily disabled
-// include(":kreekt-postprocessing")
+// materia-postprocessing needs architectural fixes - temporarily disabled
+// include(":materia-postprocessing")
 
 // Validation module
-include(":kreekt-validation")
+include(":materia-validation")
 
 // Example utilities
-include(":kreekt-examples-common")
+include(":materia-examples-common")
 
 // Core MVP modules
-include(":kreekt-gpu")
-include(":kreekt-gpu-android-native")
-include(":kreekt-engine")
+include(":materia-gpu")
+include(":materia-gpu-android-native")
+include(":materia-engine")
 
 // Example projects
 include(":examples:triangle")

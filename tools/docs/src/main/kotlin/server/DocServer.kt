@@ -19,7 +19,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Documentation server for KreeKt with live preview, hot reload, and interactive features.
+ * Documentation server for Materia with live preview, hot reload, and interactive features.
  * Provides a development server for documentation authoring and a production server for deployment.
  */
 @Serializable
@@ -251,7 +251,7 @@ class DocServer {
         }
 
         try {
-            println("Starting KreeKt Documentation Server...")
+            println("Starting Materia Documentation Server...")
             println("Environment: ${config.environment}")
             println("Host: ${config.host}")
             println("Port: ${config.port}")
@@ -319,7 +319,7 @@ class DocServer {
 
         // Generate enhanced Dokka documentation
         val dokkaConfig = DokkaConfiguration(
-            projectName = "KreeKt",
+            projectName = "Materia",
             projectVersion = "1.0.0",
             outputDirectory = outputDirectory,
             sourceDirectories = sourceDirectories,
@@ -368,23 +368,23 @@ class DocServer {
         val navigation = createNavigation(sections)
 
         DocumentationSite(
-            title = "KreeKt Documentation",
+            title = "Materia Documentation",
             version = "1.0.0",
             baseUrl = "http://${config.host}:${config.port}",
             sections = sections,
             navigation = navigation,
             searchIndex = searchIndex,
             theme = ThemeConfiguration(
-                name = "KreeKt",
+                name = "Materia",
                 primaryColor = "#2196F3",
                 secondaryColor = "#FFC107",
                 fontFamily = "Inter, sans-serif"
             ),
             metadata = SiteMetadata(
-                description = "KreeKt is a Kotlin Multiplatform 3D graphics library",
+                description = "Materia is a Kotlin Multiplatform 3D graphics library",
                 keywords = listOf("kotlin", "3d", "graphics", "multiplatform", "webgpu", "vulkan"),
-                author = "KreeKt Team",
-                repository = "https://github.com/kreekt/kreekt",
+                author = "Materia Team",
+                repository = "https://github.com/materia/materia",
                 license = "Apache 2.0"
             )
         )
@@ -709,16 +709,16 @@ class DocServer {
 
     private fun generateHomePageContent(): String {
         return """
-            # Welcome to KreeKt Documentation
+            # Welcome to Materia Documentation
 
-            KreeKt is a Kotlin Multiplatform 3D graphics library that provides Three.js-like API
+            Materia is a Kotlin Multiplatform 3D graphics library that provides Three.js-like API
             for creating 3D applications across JVM, Web, Android, iOS, and Native platforms.
 
             ## Quick Start
 
-            Get started with KreeKt in just a few steps:
+            Get started with Materia in just a few steps:
 
-            1. **Installation**: Add KreeKt to your project dependencies
+            1. **Installation**: Add Materia to your project dependencies
             2. **Basic Setup**: Create your first 3D scene
             3. **Explore Examples**: Learn from interactive code examples
             4. **Advanced Features**: Dive into advanced rendering techniques
@@ -839,7 +839,7 @@ class StaticSiteGenerator {
             appendLine("<head>")
             appendLine("  <meta charset=\"UTF-8\">")
             appendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">")
-            appendLine("  <title>${section.title} - KreeKt Documentation</title>")
+            appendLine("  <title>${section.title} - Materia Documentation</title>")
             appendLine("  <link rel=\"stylesheet\" href=\"${baseUrl}/css/main.css\">")
             theme.customCss.forEach { css ->
                 appendLine("  <link rel=\"stylesheet\" href=\"${baseUrl}/$css\">")
@@ -953,7 +953,7 @@ object DocServerCLI {
             }
             else -> {
                 println("""
-                    KreeKt Documentation Server CLI
+                    Materia Documentation Server CLI
 
                     Usage:
                       serve [port]           Start development server (default port: 8080)

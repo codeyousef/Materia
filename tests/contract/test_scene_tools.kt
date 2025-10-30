@@ -1,4 +1,4 @@
-package io.kreekt.tests.contract
+package io.materia.tests.contract
 
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -83,7 +83,7 @@ class SceneToolsContractTest {
     fun `test project summary serialization contract`() {
         // This test will FAIL until ProjectSummary data class is implemented
         assertFailsWith<ClassNotFoundException> {
-            Class.forName("io.kreekt.tools.editor.data.ProjectSummary")
+            Class.forName("io.materia.tools.editor.data.ProjectSummary")
         }
     }
 

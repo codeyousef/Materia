@@ -4,7 +4,8 @@ The camera module provides various camera types for viewing and rendering 3D sce
 
 ## Overview
 
-Cameras in KreeKt define the viewpoint from which scenes are rendered. They compute view and projection matrices that
+Cameras in Materia define the viewpoint from which scenes are rendered. They compute view and
+projection matrices that
 transform 3D world coordinates into 2D screen coordinates.
 
 ## Camera Types
@@ -581,6 +582,6 @@ fun pan(deltaX: Float, deltaY: Float) {
 
 ---
 
-**Module**: `io.kreekt.camera`
+**Module**: `io.materia.camera`
 **Since**: 1.0.0
 **Status**: ✅ Stable

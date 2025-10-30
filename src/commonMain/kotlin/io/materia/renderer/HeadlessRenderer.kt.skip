@@ -1,0 +1,203 @@
+package io.materia.renderer
+
+import io.materia.camera.Camera
+import io.materia.camera.Viewport
+import io.materia.core.math.Color
+import io.materia.core.scene.Scene
+
+/**
+ * Headless renderer implementation for off-screen rendering
+ * Used for light probe baking, shadow map generation, and other GPU compute tasks
+ */
+class HeadlessRenderer : Renderer {
+
+    override val capabilities = RendererCapabilities(
+        maxTextureSize = 4096,
+        maxVertexUniforms = 1024,
+        maxFragmentUniforms = 1024,
+        maxSamples = 4
+    )
+
+    override var renderTarget: RenderTarget? = null
+    override var autoClear: Boolean = true
+    override var autoClearColor: Boolean = true
+    override var autoClearDepth: Boolean = true
+    override var autoClearStencil: Boolean = true
+    override var clearColor: Color = Color(0f, 0f, 0f)
+    override var clearAlpha: Float = 1f
+
+    override var shadowMap: ShadowMapSettings = ShadowMapSettings(
+        enabled = false,
+        type = ShadowMapType.PCF_SOFT,
+        autoUpdate = true,
+        needsUpdate = false
+    )
+
+    override var toneMapping: ToneMapping = ToneMapping.LINEAR
+    override var toneMappingExposure: Float = 1.0f
+    override var outputColorSpace: ColorSpace = ColorSpace.LINEAR_sRGB
+    override var physicallyCorrectLights: Boolean = false
+
+    private var width: Int = 512
+    private var height: Int = 512
+    private var pixelRatio: Float = 1f
+    private var initialized = false
+
+    override suspend fun initialize(surface: RenderSurface): RendererResult<Unit> {
+        // Headless renderer doesn't need a surface
+        // It renders to offscreen framebuffers
+        initialized = true
+        return RendererResult.Success(Unit)
+    }
+
+    override fun render(scene: Scene, camera: Camera): RendererResult<Unit> {
+        if (!initialized) {
+            return RendererResult.Error(RendererException.InvalidState("Renderer not initialized"))
+        }
+
+        // In a full implementation, this would:
+        // 1. Setup render target (framebuffer)
+        // 2. Clear buffers if needed
+        // 3. Render scene geometry
+        // 4. Apply post-processing
+
+        if (autoClear) {
+            clear()
+        }
+
+        // Render to current render target or default framebuffer
+        val target = renderTarget ?: createDefaultFramebuffer()
+
+        // Simplified rendering - would contain full pipeline in production
+        renderScene(scene, camera, target)
+
+        return RendererResult.Success(Unit)
+    }
+
+    override fun setSize(width: Int, height: Int, updateStyle: Boolean): RendererResult<Unit> {
+        this.width = width
+        this.height = height
+
+        // Recreate framebuffers if needed
+        // In a full implementation, this would resize the render target
+
+        return RendererResult.Success(Unit)
+    }
+
+    override fun setPixelRatio(pixelRatio: Float): RendererResult<Unit> {
+        this.pixelRatio = pixelRatio
+        return RendererResult.Success(Unit)
+    }
+
+    override fun setViewport(x: Int, y: Int, width: Int, height: Int): RendererResult<Unit> {
+        // Set viewport for rendering area
+        return RendererResult.Success(Unit)
+    }
+
+    override fun getViewport(): Viewport {
+        return Viewport(0, 0, width, height)
+    }
+
+    override fun setScissor(x: Int, y: Int, width: Int, height: Int): RendererResult<Unit> {
+        // Set scissor test area
+        return RendererResult.Success(Unit)
+    }
+
+    override fun setScissorTest(enable: Boolean): RendererResult<Unit> {
+        // Enable/disable scissor test
+        return RendererResult.Success(Unit)
+    }
+
+    override fun clear(color: Boolean, depth: Boolean, stencil: Boolean): RendererResult<Unit> {
+        // Clear the requested buffers
+        if (color) clearColorBuffer()
+        if (depth) clearDepth()
+        if (stencil) clearStencil()
+        return RendererResult.Success(Unit)
+    }
+
+    override fun clearColorBuffer(): RendererResult<Unit> {
+        // Clear color buffer only
+        return RendererResult.Success(Unit)
+    }
+
+    override fun clearDepth(): RendererResult<Unit> {
+        // Clear depth buffer only
+        return RendererResult.Success(Unit)
+    }
+
+    override fun clearStencil(): RendererResult<Unit> {
+        // Clear stencil buffer only
+        return RendererResult.Success(Unit)
+    }
+
+    override fun compile(scene: Scene, camera: Camera): RendererResult<Unit> {
+        // Pre-compile materials and shaders for the scene
+        return RendererResult.Success(Unit)
+    }
+
+    override fun dispose(): RendererResult<Unit> {
+        // Clean up GPU resources
+        renderTarget = null
+        initialized = false
+        return RendererResult.Success(Unit)
+    }
+
+    override fun forceContextLoss(): RendererResult<Unit> {
+        // Force context loss for testing
+        initialized = false
+        return RendererResult.Success(Unit)
+    }
+
+    override fun isContextLost(): Boolean {
+        return !initialized
+    }
+
+    override fun getStats(): RenderStats {
+        return RenderStats(
+            frame = 0,
+            calls = 0,
+            triangles = 0,
+            points = 0,
+            lines = 0
+        )
+    }
+
+    override fun resetStats() {
+        // Reset rendering statistics
+    }
+
+    override fun resetState(): RendererResult<Unit> {
+        // Reset all GPU state
+        return RendererResult.Success(Unit)
+    }
+
+    private fun createDefaultFramebuffer(): RenderTarget {
+        // Create a default offscreen framebuffer
+        return HeadlessRenderTarget(width, height)
+    }
+
+    private fun renderScene(scene: Scene, camera: Camera, target: RenderTarget) {
+        // Simplified scene rendering
+        // In production, this would:
+        // - Sort objects by material
+        // - Batch draw calls
+        // - Apply frustum culling
+        // - Handle transparency
+        // - Process lights
+        // - Apply shadows
+    }
+}
+
+/**
+ * Simple render target implementation for headless rendering
+ */
+class HeadlessRenderTarget(
+    override val width: Int,
+    override val height: Int
+) : RenderTarget {
+    override val texture: Texture? = null
+    override val depthTexture: Texture? = null
+    override val stencilBuffer: Boolean = false
+    override val depthBuffer: Boolean = true
+}

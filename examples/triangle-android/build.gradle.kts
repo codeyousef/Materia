@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "io.kreekt.examples.triangle.android"
+    namespace = "io.materia.examples.triangle.android"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "io.kreekt.examples.triangle.android"
+        applicationId = "io.materia.examples.triangle.android"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
@@ -40,8 +40,8 @@ android {
 
 dependencies {
     implementation(project(":examples:triangle"))
-    implementation(project(":kreekt-examples-common"))
-    implementation(project(":kreekt-gpu-android-native"))
+    implementation(project(":materia-examples-common"))
+    implementation(project(":materia-gpu-android-native"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

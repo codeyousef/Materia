@@ -3,7 +3,8 @@ Got it — here’s a concrete decision + wiring plan to unblock Android Vulkan 
 # Decision (approved path)
 
 **Add a tiny NDK C++ module and JNI shim** that exposes just the Vulkan bits we need (
-instance/device/swapchain/sync/draw) to the Kotlin `:kreekt-gpu` Android actuals. We’ll **not**chase
+instance/device/swapchain/sync/draw) to the Kotlin `:materia-gpu` Android actuals. We’ll **not**
+chase
 a general JVM binding; Android’s Vulkan is native-only, and LWJGL doesn’t apply here. We’ll keep
 shaders **single-source WGSL** and **compile to SPIR-V at build time** so Android only loads`.spv`
 from assets — matching our “WebGPU semantics everywhere; Vulkan adapts underneath” rule .
@@ -21,13 +22,13 @@ All are permissive (MIT/Apache-2). We vendor them into `third_party/` for reprod
 # Module layout
 
 ```
-:kreekt-gpu/
+:materia-gpu/
   src/commonMain/...           # WebGPU-like API (expect)
   src/androidMain/...          # Android actuals -> JNI calls
 
-:kreekt-gpu-android-native/    # NEW (CMake + NDK)
+:materia-gpu-android-native/    # NEW (CMake + NDK)
   CMakeLists.txt
-  include/kreekt_vk.hpp
+  include/materia_vk.hpp
   src/main/cpp/vulkan_bridge.cpp  # Vulkan implementation + JNI entrypoints
   third_party/{volk,vk_bootstrap,vma}/
 
@@ -154,7 +155,7 @@ internal external fun vkDestroyInstance(instanceId: Long)
 // expect/actual sketch
 expect class GpuDevice { /* ... */ }
 actual class GpuDevice {
-    private val instance = vkInit("KreeKt", BuildConfig.DEBUG)
+    private val instance = vkInit("Materia", BuildConfig.DEBUG)
     private val device = vkCreateDevice(instance)
 
     fun recordAndSubmit(frame: FrameTargets) {
@@ -188,7 +189,7 @@ actual class GpuDevice {
 ```cpp
 // vulkan_bridge.cpp (snippets)
 extern "C" JNIEXPORT jlong JNICALL
-Java_io_kreekt_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
+Java_io_materia_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
         JNIEnv*, jclass,
         jlong instanceId,
         jlong deviceId,
@@ -228,7 +229,7 @@ Java_io_kreekt_gpu_bridge_VulkanBridge_vkCommandEncoderBeginRenderPass(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_kreekt_gpu_bridge_VulkanBridge_vkQueueSubmit(
+Java_io_materia_gpu_bridge_VulkanBridge_vkQueueSubmit(
         JNIEnv*, jclass,
         jlong instanceId,
         jlong deviceId,
@@ -268,7 +269,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":kreekt-gpu-android-native"))
+    implementation(project(":materia-gpu-android-native"))
 }
 
 tasks.named("preBuild") {
@@ -280,15 +281,15 @@ tasks.named("preBuild") {
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
-project(kreekt_vk LANGUAGES C CXX)
+project(materia_vk LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 
-add_library(kreekt_vk SHARED
+add_library(materia_vk SHARED
         src/main/cpp/vulkan_bridge.cpp
         third_party/volk/volk.c
 )
 
-target_include_directories(kreekt_vk PRIVATE
+target_include_directories(materia_vk PRIVATE
         src/main/cpp/include
         third_party/volk
         third_party/vk_bootstrap
@@ -299,7 +300,7 @@ find_library(log-lib log)
 find_library(android-lib android)
 find_library(vulkan-lib vulkan)
 
-target_link_libraries(kreekt_vk
+target_link_libraries(materia_vk
         PRIVATE
         ${vulkan-lib}
         ${android-lib}
@@ -336,7 +337,7 @@ add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
   keep it **build-time**.
 
 If this looks good, I’ll reflect it in the Android target bootstrap and swap the Android stubs in
-`:kreekt-gpu` to the JNI calls above.
+`:materia-gpu` to the JNI calls above.
 
 # Command encoder bridge (implemented)
 
@@ -368,7 +369,7 @@ afterwards via `vkCommandEncoderSetPipeline`.
 
 # Android app lifecycle integration
 
-- `VulkanBridge` loads `libkreekt_vk.so`, and `TriangleActivity` initialises
+- `VulkanBridge` loads `libmateria_vk.so`, and `TriangleActivity` initialises
   `AndroidVulkanAssets` before the renderer boots.
 - Validation layers (when enabled via `-PvkEnableValidation=true`) also hook `VK_EXT_debug_utils` 
   so warnings/errors are forwarded to logcat.
@@ -384,6 +385,6 @@ afterwards via `vkCommandEncoderSetPipeline`.
 - `syncAndroidShaders` copies compiled SPIR-V blobs into the Triangle Android app before every
   `preBuild`.
 - The native module is shared across the project; the example app depends on
-  `:kreekt-gpu-android-native` so the packaged `.so` is merged automatically.
+  `:materia-gpu-android-native` so the packaged `.so` is merged automatically.
 - CI should run `./gradlew :examples:triangle-android:assembleDebug` to cover the native build once
   the Android SDK/NDK has been provisioned (e.g., `sdkmanager "ndk;26.1.10909125"`).

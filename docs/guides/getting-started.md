@@ -1,6 +1,6 @@
-# Getting Started with KreeKt
+# Getting Started with Materia
 
-> **Learn how to create your first 3D scene with KreeKt in minutes**
+> **Learn how to create your first 3D scene with Materia in minutes**
 
 ## 📋 Prerequisites
 
@@ -18,7 +18,7 @@
 
 ## 🚀 Quick Setup
 
-### 1. Add KreeKt to Your Project
+### 1. Add Materia to Your Project
 
 #### Gradle (Kotlin DSL)
 
@@ -47,7 +47,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("io.kreekt:kreekt-core:0.1.0-alpha01")
+                implementation("io.materia:materia-core:0.1.0-alpha01")
             }
         }
     }
@@ -59,12 +59,12 @@ kotlin {
 Create a file `src/commonMain/kotlin/FirstScene.kt`:
 
 ```kotlin
-import io.kreekt.core.scene.*
-import io.kreekt.core.math.*
-import io.kreekt.geometry.primitives.*
-import io.kreekt.material.SimpleMaterial
-import io.kreekt.camera.PerspectiveCamera
-import io.kreekt.renderer.Renderer
+import io.materia.core.scene.*
+import io.materia.core.math.*
+import io.materia.geometry.primitives.*
+import io.materia.material.SimpleMaterial
+import io.materia.camera.PerspectiveCamera
+import io.materia.renderer.Renderer
 
 class FirstScene {
     // Scene components
@@ -123,13 +123,13 @@ class FirstScene {
 Create `src/jvmMain/kotlin/Main.kt`:
 
 ```kotlin
-import io.kreekt.renderer.createRenderer
-import io.kreekt.renderer.RendererResult
+import io.materia.renderer.createRenderer
+import io.materia.renderer.RendererResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 
 fun main() = runBlocking {
-    println("🚀 Starting KreeKt First Scene")
+    println("🚀 Starting Materia First Scene")
 
     // Create renderer (platform-specific)
     val rendererResult = createRenderer()
@@ -182,9 +182,9 @@ fun main() = runBlocking {
 Create `src/jsMain/kotlin/Main.kt`:
 
 ```kotlin
-import io.kreekt.renderer.createRenderer
-import io.kreekt.renderer.RendererResult
-import io.kreekt.core.math.Color
+import io.materia.renderer.createRenderer
+import io.materia.renderer.RendererResult
+import io.materia.core.math.Color
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.GlobalScope
@@ -200,7 +200,7 @@ fun main() {
 }
 
 suspend fun startApp() {
-    console.log("🚀 Starting KreeKt Web App")
+    console.log("🚀 Starting Materia Web App")
 
     // Get canvas element
     val canvas = document.getElementById("canvas")
@@ -253,7 +253,7 @@ Create `src/jsMain/resources/index.html`:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>KreeKt First Scene</title>
+    <title>Materia First Scene</title>
     <style>
         body {
             margin: 0;
@@ -289,7 +289,7 @@ Create `src/jsMain/resources/index.html`:
 
 ### Scene Graph
 
-KreeKt uses a hierarchical scene graph where every object is an `Object3D`:
+Materia uses a hierarchical scene graph where every object is an `Object3D`:
 
 ```kotlin
 val scene = Scene()
@@ -337,7 +337,7 @@ mesh.scale.multiply(1.5f)
 
 ### Cameras
 
-KreeKt provides multiple camera types:
+Materia provides multiple camera types:
 
 ```kotlin
 // Perspective Camera (3D with depth)
@@ -363,7 +363,7 @@ val orthoCamera = OrthographicCamera(
 
 ### Geometries
 
-KreeKt includes many built-in geometries:
+Materia includes many built-in geometries:
 
 ```kotlin
 // Primitives
@@ -417,11 +417,11 @@ val phong = MeshPhongMaterial().apply {
 Here's a complete scene with multiple objects and animation:
 
 ```kotlin
-import io.kreekt.core.scene.*
-import io.kreekt.core.math.*
-import io.kreekt.geometry.primitives.*
-import io.kreekt.material.*
-import io.kreekt.camera.PerspectiveCamera
+import io.materia.core.scene.*
+import io.materia.core.math.*
+import io.materia.geometry.primitives.*
+import io.materia.material.*
+import io.materia.camera.PerspectiveCamera
 import kotlin.math.*
 
 class CompleteScene {
@@ -533,7 +533,7 @@ class CompleteScene {
 ### Camera Controls
 
 ```kotlin
-import io.kreekt.controls.OrbitControls
+import io.materia.controls.OrbitControls
 
 val controls = OrbitControls(camera).apply {
     enableDamping = true
@@ -598,7 +598,7 @@ scene.traverse { obj ->
 - **[Platform-Specific Setup](platform-specific.md)** - Detailed platform configuration
 - **[API Reference](../api-reference/README.md)** - Complete API documentation
 - **[Examples](../examples/basic-usage.md)** - More code examples
-- **[Architecture Overview](../architecture/overview.md)** - How KreeKt works
+- **[Architecture Overview](../architecture/overview.md)** - How Materia works
 
 ## 💡 Tips
 

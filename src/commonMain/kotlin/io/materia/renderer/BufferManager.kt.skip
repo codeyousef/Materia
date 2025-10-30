@@ -1,0 +1,28 @@
+package io.materia.renderer
+
+/**
+ * Advanced buffer management system for GPU resources
+ * T118 - Buffer management for vertex, index, uniform buffers with pooling
+ *
+ * This file serves as the public API entry point.
+ * Implementation is in io.materia.renderer.buffer package.
+ */
+
+// Re-export all buffer types and interfaces
+typealias BufferType = io.materia.renderer.buffer.BufferType
+typealias BufferUsage = io.materia.renderer.buffer.BufferUsage
+typealias BufferAccess = io.materia.renderer.buffer.BufferAccess
+typealias AttributeFormat = io.materia.renderer.buffer.AttributeFormat
+typealias IndexType = io.materia.renderer.buffer.IndexType
+typealias VertexAttribute = io.materia.renderer.buffer.VertexAttribute
+typealias BufferAllocationResult = io.materia.renderer.buffer.BufferAllocationResult
+typealias BufferStats = io.materia.renderer.buffer.BufferStats
+typealias Buffer = io.materia.renderer.buffer.Buffer
+typealias VertexBuffer = io.materia.renderer.buffer.VertexBuffer
+typealias IndexBuffer = io.materia.renderer.buffer.IndexBuffer
+typealias UniformBuffer = io.materia.renderer.buffer.UniformBuffer
+typealias StorageBuffer = io.materia.renderer.buffer.StorageBuffer
+typealias BufferManager = io.materia.renderer.buffer.BufferManager
+typealias DefaultBufferManager = io.materia.renderer.buffer.DefaultBufferManager
+typealias BufferPool = io.materia.renderer.buffer.BufferPool
+typealias BufferUtils = io.materia.renderer.buffer.BufferUtils

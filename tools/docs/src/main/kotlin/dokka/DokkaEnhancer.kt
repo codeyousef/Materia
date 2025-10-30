@@ -10,7 +10,7 @@ import java.net.URL
 import kotlin.collections.*
 
 /**
- * Enhanced Dokka integration for KreeKt documentation generation.
+ * Enhanced Dokka integration for Materia documentation generation.
  * Provides advanced documentation features, custom styling, and interactive elements.
  */
 @OptIn(ExperimentalTime::class)
@@ -421,7 +421,7 @@ class DokkaEnhancer {
         return metadata.classes.map { className ->
             APIDocumentation(
                 className = className,
-                packageName = "kreekt.core", // Would be extracted from source
+                packageName = "materia.core", // Would be extracted from source
                 description = "Enhanced documentation for $className",
                 examples = generateClassExamples(className),
                 usageNotes = generateUsageNotes(className),
@@ -439,8 +439,8 @@ class DokkaEnhancer {
                 title = "Getting Started",
                 content = generateGettingStartedContent(),
                 metadata = DocumentationMetadata(
-                    title = "Getting Started with KreeKt",
-                    description = "Quick start guide for KreeKt 3D graphics library",
+                    title = "Getting Started with Materia",
+                    description = "Quick start guide for Materia 3D graphics library",
                     category = DocumentationCategory.TUTORIAL,
                     complexity = ComplexityLevel.BEGINNER
                 )
@@ -450,8 +450,8 @@ class DokkaEnhancer {
                 title = "Architecture Overview",
                 content = generateArchitectureContent(),
                 metadata = DocumentationMetadata(
-                    title = "KreeKt Architecture",
-                    description = "Understanding KreeKt's multiplatform architecture",
+                    title = "Materia Architecture",
+                    description = "Understanding Materia's multiplatform architecture",
                     category = DocumentationCategory.GUIDE,
                     complexity = ComplexityLevel.INTERMEDIATE
                 )
@@ -476,7 +476,7 @@ class DokkaEnhancer {
                 CodeExample(
                     id = "jvm-setup",
                     title = "JVM Setup",
-                    description = "Setting up KreeKt on JVM platform",
+                    description = "Setting up Materia on JVM platform",
                     code = """
                         // JVM-specific setup
                         val renderer = VulkanRenderer()
@@ -490,7 +490,7 @@ class DokkaEnhancer {
                 CodeExample(
                     id = "js-setup",
                     title = "JavaScript Setup",
-                    description = "Setting up KreeKt in browser",
+                    description = "Setting up Materia in browser",
                     code = """
                         // JavaScript/WebGPU setup
                         val renderer = WebGPURenderer()
@@ -555,14 +555,14 @@ class DokkaEnhancer {
             CodeExample(
                 id = "threejs-migration",
                 title = "Migrating from Three.js",
-                description = "How to migrate Three.js code to KreeKt",
+                description = "How to migrate Three.js code to Materia",
                 code = """
                     // Three.js
                     const scene = new THREE.Scene();
                     const camera = new THREE.PerspectiveCamera(75, aspect);
                     const renderer = new THREE.WebGLRenderer();
 
-                    // KreeKt equivalent
+                    // Materia equivalent
                     val scene = Scene()
                     val camera = PerspectiveCamera(75.0, aspect)
                     val renderer = WebGPURenderer()
@@ -678,19 +678,19 @@ class DokkaEnhancer {
 
     // Content generation helpers
     private fun generateGettingStartedContent(): String = """
-        # Getting Started with KreeKt
+        # Getting Started with Materia
 
-        KreeKt is a Kotlin Multiplatform 3D graphics library that provides Three.js-like API
+        Materia is a Kotlin Multiplatform 3D graphics library that provides Three.js-like API
         for creating 3D applications across JVM, Web, Android, iOS, and Native platforms.
 
         ## Installation
 
-        Add KreeKt to your project dependencies:
+        Add Materia to your project dependencies:
 
         ```kotlin
         dependencies {
-            implementation("io.github.kreekt:kreekt-core:${'$'}kreekt_version")
-            implementation("io.github.kreekt:kreekt-renderer:${'$'}kreekt_version")
+            implementation("io.github.materia:materia-core:${'$'}materia_version")
+            implementation("io.github.materia:materia-renderer:${'$'}materia_version")
         }
         ```
 
@@ -713,29 +713,29 @@ class DokkaEnhancer {
     """.trimIndent()
 
     private fun generateArchitectureContent(): String = """
-        # KreeKt Architecture
+        # Materia Architecture
 
-        KreeKt is built on a modular, multiplatform architecture that provides
+        Materia is built on a modular, multiplatform architecture that provides
         consistent 3D graphics capabilities across all supported platforms.
 
         ## Core Modules
 
-        - **kreekt-core**: Math primitives and utilities
-        - **kreekt-renderer**: WebGPU/Vulkan abstraction layer
-        - **kreekt-scene**: Scene graph system
-        - **kreekt-geometry**: Geometry classes and primitives
-        - **kreekt-material**: Material system and shaders
+        - **materia-core**: Math primitives and utilities
+        - **materia-renderer**: WebGPU/Vulkan abstraction layer
+        - **materia-scene**: Scene graph system
+        - **materia-geometry**: Geometry classes and primitives
+        - **materia-material**: Material system and shaders
 
         ## Platform Strategy
 
-        KreeKt uses Kotlin Multiplatform's expect/actual pattern to provide
+        Materia uses Kotlin Multiplatform's expect/actual pattern to provide
         platform-specific implementations while maintaining a unified API.
     """.trimIndent()
 
     private fun generatePerformanceContent(): String = """
         # Performance Optimization Guide
 
-        Learn how to optimize your KreeKt applications for best performance
+        Learn how to optimize your Materia applications for best performance
         across all platforms.
 
         ## General Guidelines

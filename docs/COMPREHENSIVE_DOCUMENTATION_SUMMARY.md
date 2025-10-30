@@ -432,7 +432,8 @@ This comprehensive documentation provides:
 - **Production-ready** reference material
 
 The documentation follows industry best practices, includes extensive examples, and provides clear guidance for
-developers at all skill levels. It serves as both a learning resource and a comprehensive API reference for the KreeKt
+developers at all skill levels. It serves as both a learning resource and a comprehensive API
+reference for the Materia
 3D graphics library.
 
 ---

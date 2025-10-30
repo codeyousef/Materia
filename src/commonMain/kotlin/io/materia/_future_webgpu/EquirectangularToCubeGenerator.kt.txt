@@ -1,0 +1,137 @@
+package io.materia.texture
+
+import io.materia.core.math.*
+import io.materia.renderer.WebGPURenderer
+import io.materia.scene.Scene
+import kotlin.math.*
+
+/**
+ * Converts equirectangular textures to cube maps
+ * Essential for environment mapping and IBL workflows
+ *
+ * Based on Three.js EquirectangularToCubeGenerator
+ */
+class EquirectangularToCubeGenerator(
+    private val renderer: WebGPURenderer,
+    private val resolution: Int = 512
+) {
+
+    private val scene = Scene()
+    private val camera: CubeCamera
+    private var material: ShaderMaterial? = null
+
+    init {
+        camera = CubeCamera(0.1f, 10f, resolution)
+    }
+
+    /**
+     * Convert equirectangular texture to cube texture
+     */
+    fun convert(equirectTexture: Texture): CubeTexture {
+        // Setup conversion material if not created
+        if (material == null) {
+            material = createConversionMaterial(equirectTexture)
+        } else {
+            material!!.uniforms["tEquirect"].value = equirectTexture
+        }
+
+        // Create sphere with inverted normals to project equirect texture
+        val geometry = SphereGeometry(5f, 60, 40)
+        geometry.scale(-1f, 1f, 1f) // Invert to see from inside
+
+        val mesh = Mesh(geometry, material!!)
+        scene.add(mesh)
+
+        // Render to cube camera
+        camera.update(renderer, scene)
+
+        // Extract cube texture from render target
+        val cubeTexture = camera.renderTarget.texture as CubeTexture
+        cubeTexture.minFilter = LinearMipmapLinearFilter
+        cubeTexture.magFilter = LinearFilter
+        cubeTexture.generateMipmaps = true
+
+        // Cleanup
+        scene.remove(mesh)
+        geometry.dispose()
+
+        return cubeTexture
+    }
+
+    /**
+     * Create shader material for equirect to cube conversion
+     */
+    private fun createConversionMaterial(texture: Texture): ShaderMaterial {
+        return ShaderMaterial(
+            uniforms = mapOf(
+                "tEquirect" to Uniform(texture)
+            ),
+            vertexShader = getVertexShader(),
+            fragmentShader = getFragmentShader(),
+            side = BackSide,
+            blending = NoBlending
+        )
+    }
+
+    private fun getVertexShader(): String {
+        return """
+            varying vec3 vWorldDirection;
+
+            vec3 transformDirection(in vec3 dir, in mat4 matrix) {
+                return normalize((matrix * vec4(dir, 0.0)).xyz);
+            }
+
+            void main() {
+                vWorldDirection = transformDirection(position, modelMatrix);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        """
+    }
+
+    private fun getFragmentShader(): String {
+        return """
+            uniform sampler2D tEquirect;
+            varying vec3 vWorldDirection;
+
+            vec2 equirectUV(in vec3 dir) {
+                // Convert 3D direction to equirectangular UV coordinates
+                float u = atan(dir.z, dir.x) * 0.15915494309; // 1/(2*PI)
+                float v = asin(clamp(dir.y, -1.0, 1.0)) * 0.31830988618; // 1/PI
+                return vec2(u + 0.5, v + 0.5);
+            }
+
+            void main() {
+                vec2 uv = equirectUV(normalize(vWorldDirection));
+                gl_FragColor = texture2D(tEquirect, uv);
+            }
+        """
+    }
+
+    /**
+     * Dispose of resources
+     */
+    fun dispose() {
+        material?.dispose()
+    }
+
+    companion object {
+        /**
+         * Quick conversion utility
+         */
+        fun quickConvert(
+            renderer: WebGPURenderer,
+            equirectTexture: Texture,
+            resolution: Int = 512
+        ): CubeTexture {
+            val generator = EquirectangularToCubeGenerator(renderer, resolution)
+            val result = generator.convert(equirectTexture)
+            generator.dispose()
+            return result
+        }
+    }
+}
+
+// Supporting classes
+expect class SphereGeometry
+const val BackSide = 1
+const val NoBlending = 0

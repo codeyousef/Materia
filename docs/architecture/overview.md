@@ -1,6 +1,7 @@
 # Architecture Overview
 
-KreeKt is designed as a modular Kotlin Multiplatform library that provides Three.js-equivalent 3D graphics capabilities
+Materia is designed as a modular Kotlin Multiplatform library that provides Three.js-equivalent 3D
+graphics capabilities
 across JVM, Web, Android, iOS, and Native platforms.
 
 ## Design Principles
@@ -72,14 +73,14 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 ### Core Modules
 
-**kreekt-core**
+**materia-core**
 
 - Math primitives (Vector3, Matrix4, Quaternion)
 - Scene graph system (Object3D, Scene, Camera)
 - Core utilities and platform abstraction
 - Size: ~500KB
 
-**kreekt-renderer**
+**materia-renderer**
 
 - WebGPU/Vulkan abstraction layer
 - Platform-specific renderer implementations
@@ -87,21 +88,21 @@ across JVM, Web, Android, iOS, and Native platforms.
 - Shader compilation
 - Size: ~1MB
 
-**kreekt-scene**
+**materia-scene**
 
 - Mesh, Light, Camera implementations
 - Scene management and traversal
 - Visibility and culling
 - Size: ~300KB
 
-**kreekt-geometry**
+**materia-geometry**
 
 - Geometry primitives (Box, Sphere, Plane)
 - Procedural generation
 - Geometry processing and optimization
 - Size: ~400KB
 
-**kreekt-material**
+**materia-material**
 
 - Material system (Basic, Standard, Physical)
 - Shader management
@@ -110,7 +111,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 ### Optional Modules
 
-**kreekt-animation**
+**materia-animation**
 
 - Animation clips and mixers
 - Skeletal animation
@@ -119,7 +120,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 - IK solvers
 - Size: ~400KB
 
-**kreekt-physics**
+**materia-physics**
 
 - Rapier physics engine integration
 - Rigid body dynamics
@@ -127,7 +128,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 - Character controllers
 - Size: ~800KB (includes Rapier)
 
-**kreekt-xr**
+**materia-xr**
 
 - WebXR integration (Web)
 - ARKit integration (iOS)
@@ -135,7 +136,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 - Hand tracking and input
 - Size: ~300KB
 
-**kreekt-loader**
+**materia-loader**
 
 - GLTF/GLB loader
 - OBJ loader
@@ -143,14 +144,14 @@ across JVM, Web, Android, iOS, and Native platforms.
 - Texture compression (DRACO, KTX2)
 - Size: ~500KB
 
-**kreekt-postprocessing**
+**materia-postprocessing**
 
 - Post-processing pipeline
 - Effects (bloom, tone mapping, SSAO)
 - Render passes
 - Size: ~300KB
 
-**kreekt-controls**
+**materia-controls**
 
 - Camera controls (Orbit, First Person, Fly)
 - Input handling
@@ -159,7 +160,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 ### Development Tools
 
-**kreekt-validation**
+**materia-validation**
 
 - Production readiness checker
 - Performance validation
@@ -182,7 +183,7 @@ across JVM, Web, Android, iOS, and Native platforms.
 
 ### Expect/Actual Pattern
 
-KreeKt uses Kotlin's expect/actual mechanism for platform-specific code:
+Materia uses Kotlin's expect/actual mechanism for platform-specific code:
 
 ```kotlin
 // Common code (expect declaration)
@@ -293,7 +294,7 @@ actual class Renderer {
 
 ### Shader Management
 
-KreeKt uses WGSL (WebGPU Shading Language) as the source shader language:
+Materia uses WGSL (WebGPU Shading Language) as the source shader language:
 
 ```
 WGSL Source → Shader Compiler → Platform Shader

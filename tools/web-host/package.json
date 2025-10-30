@@ -1,14 +1,14 @@
 {
-  "name": "kreekt-web-tools",
+  "name": "materia-web-tools",
   "version": "1.0.0",
-  "description": "Web hosting configuration for KreeKt development tools",
+  "description": "Web hosting configuration for Materia development tools",
   "private": true,
   "scripts": {
     "build": "webpack --mode=production",
     "dev": "webpack serve --mode=development",
     "start": "node server.js",
     "deploy": "npm run build && npm run deploy:static",
-    "deploy:static": "rsync -av dist/ /var/www/kreekt-tools/",
+    "deploy:static": "rsync -av dist/ /var/www/materia-tools/",
     "test": "jest"
   },
   "dependencies": {

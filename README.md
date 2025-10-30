@@ -1,11 +1,11 @@
-# 🚀 KreeKt
+# 🚀 Materia
 
 > Kotlin Multiplatform rendering stack for WebGPU + Vulkan, shipping Three.js-style ergonomics across every target.
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org)
 [![Multiplatform](https://img.shields.io/badge/Multiplatform-JVM%20|%20JS%20|%20Native-brightgreen.svg)](https://kotlinlang.org/docs/multiplatform.html)
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-success.svg)](https://github.com/your-username/kreekt/actions)
+[![Build Status](https://img.shields.io/badge/Build-Passing-success.svg)](https://github.com/your-username/materia/actions)
 [![Production Ready](https://img.shields.io/badge/Production%20Ready-✅%20Validated-brightgreen.svg)](#production-readiness)
 [![Constitutional Compliance](https://img.shields.io/badge/Constitutional%20Compliance-✅%20100%25-green.svg)](#constitutional-compliance)
 
@@ -61,7 +61,7 @@ These commands boot the showcase examples and should render in under five minute
 
 ```bash
 ./gradlew :examples:triangle:installDebug
-adb shell am start -n com.kreekt.examples.triangle/.MainActivity
+adb shell am start -n com.materia.examples.triangle/.MainActivity
 ```
 
 > Replace `triangle` with other example modules to install different demos.
@@ -86,26 +86,26 @@ Example-specific READMEs live beside each module (`examples/<name>/README.md`).
 
 ## 🏗️ Architecture
 
-KreeKt follows a modular architecture with clear separation of concerns:
+Materia follows a modular architecture with clear separation of concerns:
 
 ```
-📦 KreeKt Core Modules
-├── 🔧 kreekt-core          # Math primitives, utilities
-├── 🎨 kreekt-renderer      # WebGPU/Vulkan abstraction
-├── 🌳 kreekt-scene         # Scene graph system
-├── 📐 kreekt-geometry      # Geometry classes and primitives
-├── 🎭 kreekt-material      # Material system and shaders
-├── 🎬 kreekt-animation     # Animation clips and mixers
-├── 📁 kreekt-loader        # Asset loading (GLTF, OBJ, FBX)
-├── 🎮 kreekt-controls      # Camera controls and interaction
-├── ⚡ kreekt-physics       # Physics engine integration
-├── 🥽 kreekt-xr           # VR/AR support
-└── ✨ kreekt-postprocess  # Post-processing effects
+📦 Materia Core Modules
+├── 🔧 materia-core          # Math primitives, utilities
+├── 🎨 materia-renderer      # WebGPU/Vulkan abstraction
+├── 🌳 materia-scene         # Scene graph system
+├── 📐 materia-geometry      # Geometry classes and primitives
+├── 🎭 materia-material      # Material system and shaders
+├── 🎬 materia-animation     # Animation clips and mixers
+├── 📁 materia-loader        # Asset loading (GLTF, OBJ, FBX)
+├── 🎮 materia-controls      # Camera controls and interaction
+├── ⚡ materia-physics       # Physics engine integration
+├── 🥽 materia-xr           # VR/AR support
+└── ✨ materia-postprocess  # Post-processing effects
 ```
 
 ### 🔄 Platform Strategy
 
-KreeKt uses Kotlin's `expect`/`actual` pattern for platform-specific implementations:
+Materia uses Kotlin's `expect`/`actual` pattern for platform-specific implementations:
 
 - **Common**: Shared API definitions and business logic
 - **JS**: WebGPU with @webgpu/types bindings
@@ -151,8 +151,8 @@ KreeKt uses Kotlin's `expect`/`actual` pattern for platform-specific implementat
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/kreekt.git
-cd kreekt
+git clone https://github.com/your-username/materia.git
+cd materia
 
 # Build all targets
 ./gradlew build
@@ -202,12 +202,13 @@ See the [Examples](#-examples) section below for more details and additional exa
 
 ## ✅ Production Readiness
 
-KreeKt includes a comprehensive production readiness validation system that ensures the library meets all constitutional
+Materia includes a comprehensive production readiness validation system that ensures the library
+meets all constitutional
 requirements and quality standards.
 
 ### Constitutional Compliance
 
-KreeKt is fully compliant with its constitutional requirements:
+Materia is fully compliant with its constitutional requirements:
 
 - ✅ **60 FPS Performance**: Validated across all platforms with comprehensive benchmarking
 - ✅ **5MB Size Limit**: Library stays under constitutional 5MB constraint
@@ -226,7 +227,7 @@ KreeKt is fully compliant with its constitutional requirements:
 
 ### Validation System
 
-KreeKt includes an automated validation system for continuous quality assurance:
+Materia includes an automated validation system for continuous quality assurance:
 
 #### Quick Validation
 
@@ -243,12 +244,12 @@ KreeKt includes an automated validation system for continuous quality assurance:
 #### Programmatic Validation
 
 ```kotlin
-import io.kreekt.validation.checker.DefaultProductionReadinessChecker
-import io.kreekt.validation.ValidationConfiguration
+import io.materia.validation.checker.DefaultProductionReadinessChecker
+import io.materia.validation.ValidationConfiguration
 
 val checker = DefaultProductionReadinessChecker()
 val result = checker.validateProductionReadiness(
-    projectRoot = "/path/to/kreekt",
+    projectRoot = "/path/to/materia",
     config = ValidationConfiguration.strict()
 )
 
@@ -289,7 +290,7 @@ The validation system provides real-time quality monitoring:
 
 ### Development Standards
 
-KreeKt maintains the highest development standards:
+Materia maintains the highest development standards:
 
 - **Type Safety**: No `!!` operators or unsafe casts in production code
 - **Performance**: Object pooling, dirty flagging, and GPU optimization
@@ -315,10 +316,10 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📖 Documentation
 
-- 📚 **[API Documentation](https://docs.kreekt.io)** - Complete API reference
-- 🎓 **[Getting Started Guide](https://docs.kreekt.io/getting-started)** - Tutorials and examples
-- 🔄 **[Migration from Three.js](https://docs.kreekt.io/migration)** - Porting guide
-- 🏗️ **[Architecture Overview](https://docs.kreekt.io/architecture)** - Technical deep-dive
+- 📚 **[API Documentation](https://docs.materia.io)** - Complete API reference
+- 🎓 **[Getting Started Guide](https://docs.materia.io/getting-started)** - Tutorials and examples
+- 🔄 **[Migration from Three.js](https://docs.materia.io/migration)** - Porting guide
+- 🏗️ **[Architecture Overview](https://docs.materia.io/architecture)** - Technical deep-dive
 
 ---
 
@@ -326,7 +327,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Running the Examples
 
-KreeKt includes comprehensive example projects demonstrating various features:
+Materia includes comprehensive example projects demonstrating various features:
 
 #### 🖥️ **Basic Scene Example**
 
@@ -412,8 +413,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 <div align="center">
 
-**⭐ Star this repository if KreeKt helps your project! ⭐**
+**⭐ Star this repository if Materia helps your project! ⭐**
 
-[🚀 Get Started](https://docs.kreekt.io/getting-started) • [📚 Documentation](https://docs.kreekt.io) • [💬 Community](https://github.com/your-username/kreekt/discussions)
+[🚀 Get Started](https://docs.materia.io/getting-started) • [📚 Documentation](https://docs.materia.io) • [💬 Community](https://github.com/your-username/materia/discussions)
 
 </div>

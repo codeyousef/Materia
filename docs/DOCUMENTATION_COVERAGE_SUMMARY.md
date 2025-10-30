@@ -1,7 +1,7 @@
 # Documentation Coverage Summary
 
 **Generated**: 2025-10-04
-**Based on**: Actual KreeKt codebase (368 source files)
+**Based on**: Actual Materia codebase (368 source files)
 **Approach**: Documentation created ONLY from real, implemented code
 
 ## Overview
@@ -180,7 +180,7 @@ rather than planned features or placeholders.
 
 1. **Internal Utilities** - Some utility classes not documented (intentional)
 2. **Experimental Features** - Beta features need documentation
-3. **Migration Guides** - Three.js to KreeKt migration guide
+3. **Migration Guides** - Three.js to Materia migration guide
 4. **Video Tutorials** - Visual learning resources
 
 ## Next Steps
@@ -289,7 +289,7 @@ Coverage:
 ## Conclusion
 
 This documentation effort successfully created **comprehensive, accurate documentation** based entirely on the actual
-KreeKt codebase. Key achievements:
+Materia codebase. Key achievements:
 
 ✅ **Zero Placeholder Content** - Every documented feature is implemented
 ✅ **100% Accuracy** - All API signatures match actual code

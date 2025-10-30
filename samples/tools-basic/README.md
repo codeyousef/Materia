@@ -1,11 +1,13 @@
-# KreeKt Tools - Basic Usage Example
+# Materia Tools - Basic Usage Example
 
-This sample demonstrates the basic usage of KreeKt development tools for creating a simple 3D scene.
+This sample demonstrates the basic usage of Materia development tools for creating a simple 3D
+scene.
 
 ## Overview
 
 This example shows how to:
-- Set up a basic KreeKt project
+
+- Set up a basic Materia project
 - Use the Scene Editor to create a simple 3D scene
 - Apply materials with the Material Editor
 - Add basic animations with the Animation Editor
@@ -15,7 +17,7 @@ This example shows how to:
 
 - Java 17 or later
 - Node.js 18 or later (for web tools)
-- KreeKt Tools installed
+- Materia Tools installed
 
 ## Project Structure
 
@@ -34,7 +36,7 @@ samples/tools-basic/
 │   └── jsMain/kotlin/
 │       └── WebApp.kt
 ├── scenes/
-│   ├── basic-scene.kreekt
+│   ├── basic-scene.materia
 │   └── materials.json
 └── tools/
     ├── launch-scene-editor.sh
@@ -85,7 +87,7 @@ open http://localhost:3000/tools/profiler
    - Open the Scene Editor
    - Add a cube, sphere, and plane to the scene
    - Position objects using the transform controls
-   - Save as `scenes/basic-scene.kreekt`
+   - Save as `scenes/basic-scene.materia`
 
 2. **Create Materials**
    - Open the Material Editor
@@ -110,10 +112,10 @@ open http://localhost:3000/tools/profiler
 
 ```kotlin
 // BasicScene.kt
-import io.kreekt.scene.*
-import io.kreekt.geometry.*
-import io.kreekt.material.*
-import io.kreekt.math.*
+import io.materia.scene.*
+import io.materia.geometry.*
+import io.materia.material.*
+import io.materia.math.*
 
 class BasicScene {
     val scene = Scene()
@@ -156,8 +158,8 @@ class BasicScene {
 
 ```kotlin
 // MaterialSetup.kt
-import io.kreekt.material.*
-import io.kreekt.texture.*
+import io.materia.material.*
+import io.materia.texture.*
 
 class MaterialSetup {
     fun createBasicMaterials(): Map<String, Material> {
@@ -186,8 +188,8 @@ class MaterialSetup {
 
 ```kotlin
 // AnimationSetup.kt
-import io.kreekt.animation.*
-import io.kreekt.math.*
+import io.materia.animation.*
+import io.materia.math.*
 
 class AnimationSetup {
     fun createRotationAnimation(target: Object3D): AnimationClip {
@@ -214,16 +216,16 @@ class AnimationSetup {
 
 ### Scene Editor Integration
 
-The Scene Editor can load and save scene files in KreeKt format:
+The Scene Editor can load and save scene files in Materia format:
 
 ```kotlin
 // Loading a scene
 val sceneLoader = SceneLoader()
-val scene = sceneLoader.load("scenes/basic-scene.kreekt")
+val scene = sceneLoader.load("scenes/basic-scene.materia")
 
 // Saving a scene
 val sceneExporter = SceneExporter()
-sceneExporter.save(scene, "scenes/basic-scene.kreekt")
+sceneExporter.save(scene, "scenes/basic-scene.materia")
 ```
 
 ### Material Editor Integration
@@ -306,11 +308,11 @@ When you run this example, you should see:
 1. **Tools won't start**
    - Ensure Java 17+ is installed
    - Check that Node.js 18+ is available for web tools
-   - Verify KreeKt Tools are properly installed
+   - Verify Materia Tools are properly installed
 
 2. **Scene not loading**
    - Check file paths are correct
-   - Ensure scene file is valid KreeKt format
+   - Ensure scene file is valid Materia format
    - Verify materials are properly defined
 
 3. **Performance issues**
@@ -320,10 +322,10 @@ When you run this example, you should see:
 
 ### Getting Help
 
-- Check the main KreeKt documentation
+- Check the main Materia documentation
 - Visit the GitHub issues page
-- Join the KreeKt community Discord
+- Join the Materia community Discord
 
 ## License
 
-This example is licensed under the same terms as the KreeKt project.
+This example is licensed under the same terms as the Materia project.

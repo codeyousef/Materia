@@ -1,6 +1,6 @@
-package io.kreekt.tools.tests.performance
+package io.materia.tools.tests.performance
 
-import io.kreekt.tools.tests.data.*
+import io.materia.tools.tests.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.datetime.Clock

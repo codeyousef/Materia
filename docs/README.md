@@ -1,6 +1,6 @@
-# KreeKt Documentation
+# Materia Documentation
 
-> **Comprehensive documentation for KreeKt - A Kotlin Multiplatform 3D Graphics Library**
+> **Comprehensive documentation for Materia - A Kotlin Multiplatform 3D Graphics Library**
 
 ## 🚀 Quick Start
 
@@ -8,9 +8,10 @@
 - **[Basic Usage Examples](examples/basic-usage.md)** - Learn through working code
 - **[API Reference](api-reference/README.md)** - Complete API documentation
 
-## 📚 What is KreeKt?
+## 📚 What is Materia?
 
-KreeKt is a Kotlin Multiplatform library providing Three.js-inspired 3D graphics capabilities with WebGPU/Vulkan
+Materia is a Kotlin Multiplatform library providing Three.js-inspired 3D graphics capabilities with
+WebGPU/Vulkan
 rendering backends. Write 3D applications once and deploy across **JVM, Web (JavaScript), and Native** platforms.
 
 ## ✨ Core Features
@@ -65,7 +66,7 @@ Complete API documentation organized by module:
 
 Step-by-step tutorials and guides:
 
-- **[Getting Started](guides/getting-started.md)** - Your first KreeKt application
+- **[Getting Started](guides/getting-started.md)** - Your first Materia application
 - **[Platform-Specific Setup](guides/platform-specific.md)** - JVM, JS, Native configuration
 - **Materials Guide** (planned) - Working with materials
 - **Animation Guide** (planned) - Animation system
@@ -112,11 +113,11 @@ Real, working code examples:
 ### Creating Your First Scene
 
 ```kotlin
-import io.kreekt.core.scene.*
-import io.kreekt.core.math.*
-import io.kreekt.geometry.primitives.*
-import io.kreekt.material.*
-import io.kreekt.camera.*
+import io.materia.core.scene.*
+import io.materia.core.math.*
+import io.materia.geometry.primitives.*
+import io.materia.material.*
+import io.materia.camera.*
 
 // Create scene
 val scene = Scene()
@@ -157,7 +158,7 @@ See [Getting Started](guides/getting-started.md) for a complete walkthrough.
 ```kotlin
 dependencies {
     commonMain {
-        implementation("io.kreekt:kreekt-core:0.1.0-alpha01")
+        implementation("io.materia:materia-core:0.1.0-alpha01")
     }
 }
 ```
@@ -166,15 +167,15 @@ dependencies {
 
 ```xml
 <dependency>
-    <groupId>io.kreekt</groupId>
-    <artifactId>kreekt-core</artifactId>
+    <groupId>io.materia</groupId>
+    <artifactId>materia-core</artifactId>
     <version>0.1.0-alpha01</version>
 </dependency>
 ```
 
 ## 🎯 Performance Targets
 
-KreeKt is designed with performance in mind:
+Materia is designed with performance in mind:
 
 - **Frame Rate**: 60 FPS target
 - **Triangle Count**: 100k+ triangles on standard hardware
@@ -190,7 +191,7 @@ Performance optimization features:
 
 ## 🔧 Development
 
-### Building KreeKt
+### Building Materia
 
 ```bash
 # Build all platforms
@@ -249,14 +250,14 @@ See the main [CONTRIBUTING.md](../../CONTRIBUTING.md) for detailed guidelines.
 
 ## 🔗 Resources
 
-- **[GitHub Repository](https://github.com/your-org/kreekt)** - Source code
-- **[API Docs (Dokka)](https://kreekt.io/api)** - Generated API documentation
+- **[GitHub Repository](https://github.com/your-org/materia)** - Source code
+- **[API Docs (Dokka)](https://materia.io/api)** - Generated API documentation
 - **[Examples Repository](examples/)** - Working code examples
-- **[Issue Tracker](https://github.com/your-org/kreekt/issues)** - Report bugs
+- **[Issue Tracker](https://github.com/your-org/materia/issues)** - Report bugs
 
 ## 📄 License
 
-KreeKt is licensed under the Apache License 2.0. See [LICENSE](../../LICENSE) for details.
+Materia is licensed under the Apache License 2.0. See [LICENSE](../../LICENSE) for details.
 
 ## 🙏 Acknowledgments
 

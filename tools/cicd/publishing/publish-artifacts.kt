@@ -1,9 +1,9 @@
 /**
- * KreeKt Tools - Publishing Automation
+ * Materia Tools - Publishing Automation
  * Handles publishing to Maven Central, NPM, and other repositories
  */
 
-package io.kreekt.tools.cicd.publishing
+package io.materia.tools.cicd.publishing
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
@@ -82,7 +82,12 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Dry run successful",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("kreekt-core", "kreekt-renderer", "kreekt-scene", "tools")
+                        artifacts = listOf(
+                            "materia-core",
+                            "materia-renderer",
+                            "materia-scene",
+                            "tools"
+                        )
                     )
                 }
 
@@ -158,7 +163,7 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Dry run successful",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("@kreekt/web-editor")
+                        artifacts = listOf("@materia/web-editor")
                     )
                 }
 
@@ -188,7 +193,7 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Published successfully",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("@kreekt/web-editor")
+                        artifacts = listOf("@materia/web-editor")
                     )
                 } else {
                     logger.error("NPM publishing failed: ${publishResult.stderr}")
@@ -226,13 +231,13 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Dry run successful",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("kreekt/tools-api", "kreekt/web-tools")
+                        artifacts = listOf("materia/tools-api", "materia/web-tools")
                     )
                 }
 
                 val images = listOf(
-                    DockerImage("kreekt/tools-api", "tools/api-server/Dockerfile"),
-                    DockerImage("kreekt/web-tools", "tools/web-host/Dockerfile")
+                    DockerImage("materia/tools-api", "tools/api-server/Dockerfile"),
+                    DockerImage("materia/web-tools", "tools/web-host/Dockerfile")
                 )
 
                 val results = images.map { image ->
@@ -296,7 +301,7 @@ class PublishingOrchestrator(
                 val releaseTag = config.version
                 val createReleaseCommand = listOf(
                     "gh", "release", "create", releaseTag,
-                    "--title", "KreeKt Tools v$releaseTag",
+                    "--title", "Materia Tools v$releaseTag",
                     "--notes-file", "CHANGELOG.md",
                     *releaseAssets.toTypedArray()
                 )
@@ -348,7 +353,7 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Dry run successful",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("kreekt-gradle-plugin")
+                        artifacts = listOf("materia-gradle-plugin")
                     )
                 }
 
@@ -368,7 +373,7 @@ class PublishingOrchestrator(
                         success = true,
                         message = "Plugin published successfully",
                         duration = java.time.Duration.between(startTime, Instant.now()),
-                        artifacts = listOf("kreekt-gradle-plugin")
+                        artifacts = listOf("materia-gradle-plugin")
                     )
                 } else {
                     logger.error("Gradle plugin publishing failed: ${result.stderr}")
@@ -485,13 +490,13 @@ class PublishingOrchestrator(
     private fun extractMavenArtifacts(): List<String> {
         // Extract artifact names from build output or configuration
         return listOf(
-            "io.kreekt:kreekt-core",
-            "io.kreekt:kreekt-renderer",
-            "io.kreekt:kreekt-scene",
-            "io.kreekt:kreekt-geometry",
-            "io.kreekt:kreekt-material",
-            "io.kreekt:kreekt-animation",
-            "io.kreekt:kreekt-tools"
+            "io.materia:materia-core",
+            "io.materia:materia-renderer",
+            "io.materia:materia-scene",
+            "io.materia:materia-geometry",
+            "io.materia:materia-material",
+            "io.materia:materia-animation",
+            "io.materia:materia-tools"
         )
     }
 }
