@@ -97,6 +97,7 @@ tasks.register<JavaExec>("runJvm") {
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
     mainClass.set("io.materia.examples.embeddinggalaxy.MainKt")
+    jvmArgs("-Dorg.lwjgl.system.stackSize=512")
 
     doFirst {
         println("🚀 Launching Embedding Galaxy on JVM")

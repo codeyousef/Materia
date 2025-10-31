@@ -59,7 +59,16 @@ tasks.register("runAndroid") {
     description = "Install the Triangle Android demo on a connected device or emulator"
     dependsOn("installDebug")
     doLast {
-        println("📱 Triangle Android demo installed. Launch automatically with:")
-        println("    adb shell am start -n io.materia.examples.triangle.android/.MainActivity")
+        println("📱 Triangle Android demo installed. Attempting to launch activity…")
+        val component = "io.materia.examples.triangle.android/.MainActivity"
+        val result = runCatching {
+            project.exec {
+                commandLine("adb", "shell", "am", "start", "-n", component)
+            }
+        }
+        if (result.isFailure) {
+            println("⚠️ Unable to launch automatically (adb not available?). Start manually with:")
+            println("    adb shell am start -n $component")
+        }
     }
 }

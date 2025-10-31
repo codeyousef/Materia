@@ -1,19 +1,51 @@
 package io.materia.renderer.gpu
 
 import io.materia.util.MateriaLogger
-import java.nio.FloatBuffer
+import org.lwjgl.system.Configuration
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.vulkan.KHRPortabilityEnumeration
 import org.lwjgl.vulkan.KHRPortabilitySubset
 import org.lwjgl.vulkan.KHRSwapchain
-import org.lwjgl.vulkan.VK10.*
-import org.lwjgl.vulkan.VK11
+import org.lwjgl.vulkan.VK10.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
+import org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
+import org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+import org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+import org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+import org.lwjgl.vulkan.VK10.VK_MAKE_VERSION
+import org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_CPU
+import org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+import org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+import org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_OTHER
+import org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU
+import org.lwjgl.vulkan.VK10.VK_QUEUE_COMPUTE_BIT
+import org.lwjgl.vulkan.VK10.VK_QUEUE_GRAPHICS_BIT
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_APPLICATION_INFO
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
+import org.lwjgl.vulkan.VK10.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
+import org.lwjgl.vulkan.VK10.VK_SUCCESS
+import org.lwjgl.vulkan.VK10.VK_VERSION_MAJOR
+import org.lwjgl.vulkan.VK10.VK_VERSION_MINOR
+import org.lwjgl.vulkan.VK10.VK_VERSION_PATCH
+import org.lwjgl.vulkan.VK10.vkCreateCommandPool
+import org.lwjgl.vulkan.VK10.vkCreateDescriptorPool
+import org.lwjgl.vulkan.VK10.vkCreateDevice
+import org.lwjgl.vulkan.VK10.vkCreateInstance
+import org.lwjgl.vulkan.VK10.vkDestroyDevice
+import org.lwjgl.vulkan.VK10.vkDestroyInstance
+import org.lwjgl.vulkan.VK10.vkEnumerateDeviceExtensionProperties
+import org.lwjgl.vulkan.VK10.vkEnumerateInstanceExtensionProperties
+import org.lwjgl.vulkan.VK10.vkEnumeratePhysicalDevices
+import org.lwjgl.vulkan.VK10.vkGetDeviceQueue
+import org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceProperties
+import org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceQueueFamilyProperties
 import org.lwjgl.vulkan.VK11.VK_API_VERSION_1_1
-import org.lwjgl.vulkan.VK12
 import org.lwjgl.vulkan.VkApplicationInfo
+import org.lwjgl.vulkan.VkCommandPoolCreateInfo
 import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo
 import org.lwjgl.vulkan.VkDescriptorPoolSize
-import org.lwjgl.vulkan.VkCommandPoolCreateInfo
 import org.lwjgl.vulkan.VkDevice
 import org.lwjgl.vulkan.VkDeviceCreateInfo
 import org.lwjgl.vulkan.VkDeviceQueueCreateInfo
@@ -26,6 +58,7 @@ import org.lwjgl.vulkan.VkPhysicalDeviceLimits
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties
 import org.lwjgl.vulkan.VkQueue
 import org.lwjgl.vulkan.VkQueueFamilyProperties
+import java.nio.FloatBuffer
 
 internal data class VulkanBootstrapResult(
     val instance: VkInstance,
@@ -43,6 +76,7 @@ internal object VulkanBootstrap {
     private const val TAG = "VulkanBootstrap"
 
     fun createContext(config: GpuRequestConfig): VulkanBootstrapResult {
+        ensureStackCapacity()
         MemoryStack.stackPush().use { stack ->
             val availableInstanceExtensions = queryInstanceExtensions(stack)
             val instance = createInstance(stack, config.label, availableInstanceExtensions)
@@ -90,6 +124,14 @@ internal object VulkanBootstrap {
         }
     }
 
+    private fun ensureStackCapacity() {
+        val desired = 512 * 1024 // 512 KiB to comfortably enumerate extensions
+        val current = Configuration.STACK_SIZE.get()
+        if (current == null || current < desired) {
+            Configuration.STACK_SIZE.set(desired)
+        }
+    }
+
     private fun createCommandPool(device: VkDevice, queueFamilyIndex: Int): Long {
         return MemoryStack.stackPush().use { stack ->
             val createInfo = VkCommandPoolCreateInfo.calloc(stack)
@@ -111,12 +153,18 @@ internal object VulkanBootstrap {
         vkEnumerateInstanceExtensionProperties(null as String?, countBuffer, null)
         val count = countBuffer[0]
         if (count == 0) return emptySet()
-        val props = VkExtensionProperties.calloc(count, stack)
-        vkEnumerateInstanceExtensionProperties(null as String?, countBuffer, props)
-        return buildSet {
-            for (i in 0 until count) {
-                add(props[i].extensionNameString())
+
+        val props = VkExtensionProperties.malloc(count)
+        try {
+            countBuffer.put(0, count)
+            vkEnumerateInstanceExtensionProperties(null as String?, countBuffer, props)
+            return buildSet {
+                for (i in 0 until count) {
+                    add(props[i].extensionNameString())
+                }
             }
+        } finally {
+            props.free()
         }
     }
 
@@ -281,12 +329,18 @@ internal object VulkanBootstrap {
             vkEnumerateDeviceExtensionProperties(device, null as String?, countBuf, null)
             val count = countBuf[0]
             if (count == 0) return@use emptySet()
-            val props = VkExtensionProperties.calloc(count, stack)
-            vkEnumerateDeviceExtensionProperties(device, null as String?, countBuf, props)
-            buildSet {
-                for (i in 0 until count) {
-                    add(props[i].extensionNameString())
+
+            val props = VkExtensionProperties.malloc(count)
+            try {
+                countBuf.put(0, count)
+                vkEnumerateDeviceExtensionProperties(device, null as String?, countBuf, props)
+                return@use buildSet {
+                    for (i in 0 until count) {
+                        add(props[i].extensionNameString())
+                    }
                 }
+            } finally {
+                props.free()
             }
         }
 

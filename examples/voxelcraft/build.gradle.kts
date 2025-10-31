@@ -150,6 +150,7 @@ tasks.register<JavaExec>("runJvm") {
 
     // Add JVM args for LWJGL native access on Java 17+
     jvmArgs = listOf(
+        "-Dorg.lwjgl.system.stackSize=512",
         "--add-opens", "java.base/java.lang=ALL-UNNAMED",
         "--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
         "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
