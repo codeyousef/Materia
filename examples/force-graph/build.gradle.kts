@@ -145,3 +145,12 @@ tasks.register("wasmJsBrowserRun") {
     description = "Alias task for Force Graph browser run (intended wasmJs entry point)"
     dependsOn("runJs")
 }
+
+tasks.register("runAndroid") {
+    group = "examples"
+    description = "Android target placeholder – no APK yet"
+    doLast {
+        println("📱 Force Graph Android build not implemented yet.")
+        println("Track roadmap progress in docs/MVP_STATUS.md (Force Graph Android).")
+    }
+}

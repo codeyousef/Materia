@@ -145,3 +145,12 @@ tasks.register("wasmJsBrowserRun") {
     description = "Alias task for Embedding Galaxy browser run (intended wasmJs entry point)"
     dependsOn("runJs")
 }
+
+tasks.register("runAndroid") {
+    group = "examples"
+    description = "Android port not yet available; prints guidance"
+    doLast {
+        println("📱 Embedding Galaxy does not ship an Android sample yet.")
+        println("Follow progress in docs/MVP_STATUS.md under 'Galaxy Android'.")
+    }
+}

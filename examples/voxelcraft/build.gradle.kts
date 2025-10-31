@@ -177,3 +177,12 @@ tasks.register("run") {
     description = "Alias for `runJvm` to keep scripts compatible"
     dependsOn("runJvm")
 }
+
+tasks.register("runAndroid") {
+    group = "examples"
+    description = "VoxelCraft lacks an Android build; inform the developer"
+    doLast {
+        println("📱 VoxelCraft currently ships JVM + Web builds only; Android support is on the roadmap.")
+        println("See docs/private/voxelcraft-progress-tracking.md for platform plans.")
+    }
+}
