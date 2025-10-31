@@ -6,10 +6,11 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URL
-import java.util.*
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 import kotlin.concurrent.thread
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * JVM implementation of ImageLoader
@@ -125,6 +126,7 @@ actual class CanvasElement {
         }
     }
 
+    @OptIn(ExperimentalEncodingApi::class)
     actual fun toDataURL(type: String, quality: Float): String {
         val img = bufferedImage ?: return "data:,"
 
@@ -163,7 +165,7 @@ actual class CanvasElement {
 
             val bytes = baos.toByteArray()
             val mimeType = if (format == "jpg") "image/jpeg" else "image/$format"
-            "data:$mimeType;base64," + Base64.getEncoder().encodeToString(bytes)
+            "data:$mimeType;base64," + Base64.encode(bytes)
         } catch (e: Exception) {
             "data:," // Return empty data URL on error
         }

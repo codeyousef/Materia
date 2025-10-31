@@ -94,14 +94,14 @@ kotlin {
 // ============================================================================
 
 tasks.register<JavaExec>("runJvm") {
-    group = "examples"
+    group = "run"
     description = "Run the JVM version of the triangle example"
 
     dependsOn("jvmMainClasses")
     val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (jvmCompilation.runtimeDependencyFiles ?: files()) + jvmCompilation.output.allOutputs
     mainClass.set("io.materia.examples.triangle.MainKt")
-    jvmArgs("-Dorg.lwjgl.system.stackSize=512")
+    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
     doFirst {
         println("🎮 Starting Materia Triangle Example (JVM)")
@@ -110,13 +110,13 @@ tasks.register<JavaExec>("runJvm") {
 }
 
 tasks.register("run") {
-    group = "examples"
+    group = "run"
     description = "Alias for `runJvm` to keep legacy scripts working"
     dependsOn("runJvm")
 }
 
 tasks.register("runJs") {
-    group = "examples"
+    group = "run"
     description = "Run the browser triangle example (WebGPU/WebGL)"
 
     dependsOn("jsBrowserDevelopmentRun")
@@ -128,7 +128,7 @@ tasks.register("runJs") {
 }
 
 tasks.register("dev") {
-    group = "examples"
+    group = "run"
     description = "Development mode - continuous build and run"
 
     dependsOn("runJs")
@@ -139,28 +139,29 @@ tasks.register("dev") {
 }
 
 tasks.register("jsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias for browser triangle run task"
     dependsOn("runJs")
 }
 
 tasks.register("wasmJsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias for Web/WASM browser run (dev server) for Triangle example"
     dependsOn("runJs")
 }
 
 tasks.register("installDebug") {
-    group = "examples"
+    group = "run"
     description = "Install the Android debug build for the Triangle example"
     dependsOn(":examples:triangle-android:installDebug")
 }
 
 tasks.register("runAndroid") {
-    group = "examples"
+    group = "run"
     description =
         "Install and launch the Android Triangle example (delegates to :examples:triangle-android)"
     dependsOn(":examples:triangle-android:runAndroid")
+    notCompatibleWithConfigurationCache("Delegates to Android install task")
 }
 
 android {

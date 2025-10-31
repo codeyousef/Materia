@@ -97,7 +97,7 @@ kotlin {
 // ============================================================================
 
 tasks.register("runJs") {
-    group = "examples"
+    group = "run"
     description = "Run VoxelCraft in browser"
 
     dependsOn("jsBrowserDevelopmentRun")
@@ -110,13 +110,13 @@ tasks.register("runJs") {
 }
 
 tasks.register("jsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias for VoxelCraft browser run task"
     dependsOn("runJs")
 }
 
 tasks.register("dev") {
-    group = "examples"
+    group = "run"
     description = "Development mode - continuous build and run"
 
     dependsOn("jsBrowserDevelopmentRun")
@@ -127,7 +127,7 @@ tasks.register("dev") {
 }
 
 tasks.register("buildJs") {
-    group = "examples"
+    group = "run"
     description = "Build production JavaScript bundle"
 
     dependsOn("jsBrowserProductionWebpack")
@@ -138,7 +138,7 @@ tasks.register("buildJs") {
 }
 
 tasks.register<JavaExec>("runJvm") {
-    group = "examples"
+    group = "run"
     description = "Run VoxelCraft on JVM with LWJGL/OpenGL"
 
     dependsOn("jvmMainClasses")
@@ -150,11 +150,15 @@ tasks.register<JavaExec>("runJvm") {
 
     // Add JVM args for LWJGL native access on Java 17+
     jvmArgs = listOf(
-        "-Dorg.lwjgl.system.stackSize=512",
+        "-Dorg.lwjgl.system.stackSize=8192",
         "--add-opens", "java.base/java.lang=ALL-UNNAMED",
         "--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
         "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
     )
+
+    if (System.getenv("VOXELCRAFT_FRAME_BUDGET").isNullOrBlank()) {
+        environment("VOXELCRAFT_FRAME_BUDGET", "60")
+    }
 
     // Enable standard output/error streams
     standardInput = System.`in`
@@ -173,16 +177,14 @@ tasks.register<JavaExec>("runJvm") {
 }
 
 tasks.register("run") {
-    group = "examples"
+    group = "run"
     description = "Alias for `runJvm` to keep scripts compatible"
     dependsOn("runJvm")
 }
 
 tasks.register("runAndroid") {
-    group = "examples"
-    description = "VoxelCraft lacks an Android build; inform the developer"
-    doLast {
-        println("📱 VoxelCraft currently ships JVM + Web builds only; Android support is on the roadmap.")
-        println("See docs/private/voxelcraft-progress-tracking.md for platform plans.")
-    }
+    group = "run"
+    description = "Launch the VoxelCraft Android preview shell"
+    dependsOn(":examples:voxelcraft-android:runAndroid")
+    notCompatibleWithConfigurationCache("Delegates to Android install task")
 }

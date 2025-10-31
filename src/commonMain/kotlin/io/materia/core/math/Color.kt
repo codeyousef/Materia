@@ -17,17 +17,28 @@ data class Color(
 
     companion object {
         // Common colors
-        val WHITE = Color(1f, 1f, 1f, 1f)
-        val BLACK = Color(0f, 0f, 0f, 1f)
-        val RED = Color(1f, 0f, 0f, 1f)
-        val GREEN = Color(0f, 1f, 0f, 1f)
-        val BLUE = Color(0f, 0f, 1f, 1f)
-        val YELLOW = Color(1f, 1f, 0f, 1f)
-        val CYAN = Color(0f, 1f, 1f, 1f)
-        val MAGENTA = Color(1f, 0f, 1f, 1f)
-        val GRAY = Color(0.5f, 0.5f, 0.5f, 1f)
-        val ORANGE = Color(1f, 0.5f, 0f, 1f)
-        val PURPLE = Color(0.5f, 0f, 1f, 1f)
+        val WHITE: Color
+            get() = Color(1f, 1f, 1f, 1f)
+        val BLACK: Color
+            get() = Color(0f, 0f, 0f, 1f)
+        val RED: Color
+            get() = Color(1f, 0f, 0f, 1f)
+        val GREEN: Color
+            get() = Color(0f, 1f, 0f, 1f)
+        val BLUE: Color
+            get() = Color(0f, 0f, 1f, 1f)
+        val YELLOW: Color
+            get() = Color(1f, 1f, 0f, 1f)
+        val CYAN: Color
+            get() = Color(0f, 1f, 1f, 1f)
+        val MAGENTA: Color
+            get() = Color(1f, 0f, 1f, 1f)
+        val GRAY: Color
+            get() = Color(0.5f, 0.5f, 0.5f, 1f)
+        val ORANGE: Color
+            get() = Color(1f, 0.5f, 0f, 1f)
+        val PURPLE: Color
+            get() = Color(0.5f, 0f, 1f, 1f)
 
         /**
          * Creates a color from HSL values

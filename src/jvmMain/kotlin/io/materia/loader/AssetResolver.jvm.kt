@@ -7,7 +7,8 @@ import java.io.InputStream
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 internal class DefaultAssetResolver : AssetResolver {
 
@@ -29,7 +30,7 @@ internal class DefaultAssetResolver : AssetResolver {
         val dataPart = uri.substring(commaIndex + 1)
         val isBase64 = metadata.endsWith(";base64", ignoreCase = true)
         return if (isBase64) {
-            Base64.getDecoder().decode(dataPart)
+            decodeBase64(dataPart)
         } else {
             dataPart.toByteArray(Charsets.UTF_8)
         }
@@ -65,5 +66,9 @@ internal class DefaultAssetResolver : AssetResolver {
         return buffer.toByteArray()
     }
 }
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun decodeBase64(value: String): ByteArray =
+    Base64.decode(value)
 
 internal actual fun createDefaultAssetResolver(): AssetResolver = DefaultAssetResolver()

@@ -1,8 +1,6 @@
 package io.materia.renderer.vulkan
 
-import io.materia.core.math.Color
 import io.materia.renderer.CubeFace
-import io.materia.renderer.CubeTexture as RendererCubeTexture
 import io.materia.renderer.CubeTextureImpl
 import io.materia.renderer.Texture2D
 import io.materia.renderer.TextureFilter
@@ -12,10 +10,123 @@ import io.materia.renderer.material.MaterialBindingSource
 import io.materia.renderer.material.MaterialBindingType
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
-import org.lwjgl.vulkan.VK12.*
-import org.lwjgl.vulkan.*
+import org.lwjgl.vulkan.VK12.VK_ACCESS_SHADER_READ_BIT
+import org.lwjgl.vulkan.VK12.VK_ACCESS_TRANSFER_WRITE_BIT
+import org.lwjgl.vulkan.VK12.VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE
+import org.lwjgl.vulkan.VK12.VK_BORDER_COLOR_INT_OPAQUE_BLACK
+import org.lwjgl.vulkan.VK12.VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+import org.lwjgl.vulkan.VK12.VK_COMMAND_BUFFER_LEVEL_PRIMARY
+import org.lwjgl.vulkan.VK12.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+import org.lwjgl.vulkan.VK12.VK_COMPARE_OP_ALWAYS
+import org.lwjgl.vulkan.VK12.VK_COMPONENT_SWIZZLE_IDENTITY
+import org.lwjgl.vulkan.VK12.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+import org.lwjgl.vulkan.VK12.VK_DESCRIPTOR_TYPE_SAMPLER
+import org.lwjgl.vulkan.VK12.VK_FILTER_LINEAR
+import org.lwjgl.vulkan.VK12.VK_FILTER_NEAREST
+import org.lwjgl.vulkan.VK12.VK_FORMAT_R16G16B16A16_SFLOAT
+import org.lwjgl.vulkan.VK12.VK_FORMAT_R16G16_SFLOAT
+import org.lwjgl.vulkan.VK12.VK_FORMAT_R32G32B32A32_SFLOAT
+import org.lwjgl.vulkan.VK12.VK_FORMAT_R32G32_SFLOAT
+import org.lwjgl.vulkan.VK12.VK_FORMAT_R8G8B8A8_UNORM
+import org.lwjgl.vulkan.VK12.VK_IMAGE_ASPECT_COLOR_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_UNDEFINED
+import org.lwjgl.vulkan.VK12.VK_IMAGE_TILING_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_TYPE_2D
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_SAMPLED_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_USAGE_TRANSFER_DST_BIT
+import org.lwjgl.vulkan.VK12.VK_IMAGE_VIEW_TYPE_2D
+import org.lwjgl.vulkan.VK12.VK_IMAGE_VIEW_TYPE_CUBE
+import org.lwjgl.vulkan.VK12.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+import org.lwjgl.vulkan.VK12.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+import org.lwjgl.vulkan.VK12.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+import org.lwjgl.vulkan.VK12.VK_NULL_HANDLE
+import org.lwjgl.vulkan.VK12.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+import org.lwjgl.vulkan.VK12.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT
+import org.lwjgl.vulkan.VK12.VK_PIPELINE_STAGE_TRANSFER_BIT
+import org.lwjgl.vulkan.VK12.VK_QUEUE_FAMILY_IGNORED
+import org.lwjgl.vulkan.VK12.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+import org.lwjgl.vulkan.VK12.VK_SAMPLER_MIPMAP_MODE_LINEAR
+import org.lwjgl.vulkan.VK12.VK_SAMPLER_MIPMAP_MODE_NEAREST
+import org.lwjgl.vulkan.VK12.VK_SAMPLE_COUNT_1_BIT
+import org.lwjgl.vulkan.VK12.VK_SHADER_STAGE_FRAGMENT_BIT
+import org.lwjgl.vulkan.VK12.VK_SHARING_MODE_EXCLUSIVE
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_SUBMIT_INFO
+import org.lwjgl.vulkan.VK12.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+import org.lwjgl.vulkan.VK12.VK_SUCCESS
+import org.lwjgl.vulkan.VK12.vkAllocateCommandBuffers
+import org.lwjgl.vulkan.VK12.vkAllocateDescriptorSets
+import org.lwjgl.vulkan.VK12.vkAllocateMemory
+import org.lwjgl.vulkan.VK12.vkBeginCommandBuffer
+import org.lwjgl.vulkan.VK12.vkBindBufferMemory
+import org.lwjgl.vulkan.VK12.vkBindImageMemory
+import org.lwjgl.vulkan.VK12.vkCmdCopyBufferToImage
+import org.lwjgl.vulkan.VK12.vkCmdPipelineBarrier
+import org.lwjgl.vulkan.VK12.vkCreateBuffer
+import org.lwjgl.vulkan.VK12.vkCreateDescriptorPool
+import org.lwjgl.vulkan.VK12.vkCreateDescriptorSetLayout
+import org.lwjgl.vulkan.VK12.vkCreateImage
+import org.lwjgl.vulkan.VK12.vkCreateImageView
+import org.lwjgl.vulkan.VK12.vkCreateSampler
+import org.lwjgl.vulkan.VK12.vkDestroyBuffer
+import org.lwjgl.vulkan.VK12.vkDestroyDescriptorPool
+import org.lwjgl.vulkan.VK12.vkDestroyDescriptorSetLayout
+import org.lwjgl.vulkan.VK12.vkDestroyImage
+import org.lwjgl.vulkan.VK12.vkDestroyImageView
+import org.lwjgl.vulkan.VK12.vkDestroySampler
+import org.lwjgl.vulkan.VK12.vkEndCommandBuffer
+import org.lwjgl.vulkan.VK12.vkFreeCommandBuffers
+import org.lwjgl.vulkan.VK12.vkFreeMemory
+import org.lwjgl.vulkan.VK12.vkGetBufferMemoryRequirements
+import org.lwjgl.vulkan.VK12.vkGetImageMemoryRequirements
+import org.lwjgl.vulkan.VK12.vkGetPhysicalDeviceMemoryProperties
+import org.lwjgl.vulkan.VK12.vkMapMemory
+import org.lwjgl.vulkan.VK12.vkQueueSubmit
+import org.lwjgl.vulkan.VK12.vkQueueWaitIdle
+import org.lwjgl.vulkan.VK12.vkUnmapMemory
+import org.lwjgl.vulkan.VK12.vkUpdateDescriptorSets
+import org.lwjgl.vulkan.VkBufferCreateInfo
+import org.lwjgl.vulkan.VkBufferImageCopy
+import org.lwjgl.vulkan.VkCommandBuffer
+import org.lwjgl.vulkan.VkCommandBufferAllocateInfo
+import org.lwjgl.vulkan.VkCommandBufferBeginInfo
+import org.lwjgl.vulkan.VkComponentMapping
+import org.lwjgl.vulkan.VkDescriptorImageInfo
+import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo
+import org.lwjgl.vulkan.VkDescriptorPoolSize
+import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo
+import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding
+import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo
+import org.lwjgl.vulkan.VkDevice
+import org.lwjgl.vulkan.VkImageCreateInfo
+import org.lwjgl.vulkan.VkImageMemoryBarrier
+import org.lwjgl.vulkan.VkImageSubresourceRange
+import org.lwjgl.vulkan.VkImageViewCreateInfo
+import org.lwjgl.vulkan.VkMemoryAllocateInfo
+import org.lwjgl.vulkan.VkMemoryRequirements
+import org.lwjgl.vulkan.VkPhysicalDevice
+import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties
+import org.lwjgl.vulkan.VkQueue
+import org.lwjgl.vulkan.VkSamplerCreateInfo
+import org.lwjgl.vulkan.VkSubmitInfo
+import org.lwjgl.vulkan.VkWriteDescriptorSet
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
+import io.materia.renderer.CubeTexture as RendererCubeTexture
 
 internal class VulkanEnvironmentManager(
     private val device: VkDevice,
@@ -590,40 +701,36 @@ internal class VulkanEnvironmentManager(
     )
 
     private fun collectMipData(cube: CubeTextureImpl): CubeMipData {
-        val bytesPerTexel = when (cube.format) {
-            io.materia.renderer.TextureFormat.RGBA16F -> 8
-            io.materia.renderer.TextureFormat.RGBA32F -> 16
-            else -> 4
-        }
+        val format = cube.format
+        val bytesPerTexel = format.bytesPerTexel()
+        val componentsPerTexel = format.componentCount()
+        val faces = CubeFace.values()
+        val converter = format.byteConverter()
 
         val levelData = mutableListOf<ByteArray>()
 
-        fun appendLevel(faces: Array<ByteArray>, size: Int) {
-            // Flatten face data for this level
-            faces.forEach { data ->
-                require(data.size == size * size * bytesPerTexel) {
-                    "Unexpected data size for cube mip level"
+        fun appendLevel(level: Int, size: Int) {
+            faces.forEach { face ->
+                val floats = cube.getFaceFloatData(face, level)
+                    ?: throw IllegalStateException("Cube texture missing face data for ${face.name} at mip $level")
+                val expectedFloatCount = size * size * componentsPerTexel
+                require(floats.size == expectedFloatCount) {
+                    "Unexpected float count for cube mip level (expected $expectedFloatCount, got ${floats.size})"
                 }
-                levelData.add(data)
+                val bytes = converter(floats)
+                require(bytes.size == size * size * bytesPerTexel) {
+                    "Unexpected byte size for cube mip level (expected ${size * size * bytesPerTexel}, got ${bytes.size})"
+                }
+                levelData.add(bytes)
             }
         }
 
-        val baseFaces = Array(6) { faceIndex ->
-            val face = CubeFace.values()[faceIndex]
-            cube.getFaceFloatData(face, 0)?.toByteArray()
-                ?: throw IllegalStateException("Cube texture missing face data for ${face.name}")
-        }
-        appendLevel(baseFaces, cube.size)
+        appendLevel(level = 0, size = cube.size)
 
         val maxMipLevel = cube.maxMipLevel()
         for (level in 1..maxMipLevel) {
             val size = maxOf(1, cube.size shr level)
-            val faces = Array(6) { faceIndex ->
-                val face = CubeFace.values()[faceIndex]
-                cube.getFaceFloatData(face, level)?.toByteArray()
-                    ?: throw IllegalStateException("Cube texture missing face data for ${face.name} at mip $level")
-            }
-            appendLevel(faces, size)
+            appendLevel(level, size)
         }
 
         val totalBytes = levelData.sumOf { it.size }
@@ -639,6 +746,52 @@ internal class VulkanEnvironmentManager(
             levelCount = maxOf(1, maxMipLevel + 1),
             totalBytes = totalBytes
         )
+    }
+
+    private fun TextureFormat.componentCount(): Int = when (this) {
+        TextureFormat.RGBA8, TextureFormat.RGBA16F, TextureFormat.RGBA32F,
+        TextureFormat.RGBA8UI, TextureFormat.RGBA16UI, TextureFormat.RGBA32UI,
+        TextureFormat.SRGB8_ALPHA8 -> 4
+
+        TextureFormat.RGB8, TextureFormat.RGB16F, TextureFormat.RGB32F,
+        TextureFormat.RGB8UI, TextureFormat.RGB16UI, TextureFormat.RGB32UI,
+        TextureFormat.SRGB8 -> 3
+
+        TextureFormat.RG8, TextureFormat.RG16F, TextureFormat.RG32F,
+        TextureFormat.RG8UI, TextureFormat.RG16UI, TextureFormat.RG32UI -> 2
+
+        else -> 1
+    }
+
+    private fun TextureFormat.bytesPerComponent(): Int = when (this) {
+        TextureFormat.RGBA16F, TextureFormat.RGB16F, TextureFormat.RG16F,
+        TextureFormat.R16F -> 2
+
+        TextureFormat.RGBA32F, TextureFormat.RGB32F, TextureFormat.RG32F,
+        TextureFormat.R32F -> 4
+
+        TextureFormat.RGBA16UI, TextureFormat.RGB16UI, TextureFormat.RG16UI,
+        TextureFormat.R16UI -> 2
+
+        TextureFormat.RGBA32UI, TextureFormat.RGB32UI, TextureFormat.RG32UI,
+        TextureFormat.R32UI -> 4
+
+        else -> 1
+    }
+
+    private fun TextureFormat.bytesPerTexel(): Int = componentCount() * bytesPerComponent()
+
+    private fun TextureFormat.byteConverter(): (FloatArray) -> ByteArray = when (this) {
+        TextureFormat.RGBA16F, TextureFormat.RGB16F, TextureFormat.RG16F,
+        TextureFormat.R16F -> { data -> data.toHalfByteArray() }
+
+        TextureFormat.RGBA32F, TextureFormat.RGB32F, TextureFormat.RG32F,
+        TextureFormat.R32F -> { data -> data.toFloat32ByteArray() }
+
+        TextureFormat.RGBA8, TextureFormat.RGB8, TextureFormat.RG8, TextureFormat.R8,
+        TextureFormat.SRGB8, TextureFormat.SRGB8_ALPHA8 -> { data -> data.toUnormByteArray() }
+
+        else -> { data -> data.toFloat32ByteArray() }
     }
 
     private fun uploadBrdfTexture(texture: Texture2D): BrdfResource {
@@ -910,11 +1063,79 @@ internal class VulkanEnvironmentManager(
         return texture
     }
 
-    private fun FloatArray.toByteArray(): ByteArray {
+    private fun FloatArray.toFloat32ByteArray(): ByteArray {
         val bytes = ByteArray(size * 4)
         val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
         byteBuffer.asFloatBuffer().put(this)
         return bytes
+    }
+
+    private fun FloatArray.toHalfByteArray(): ByteArray {
+        val bytes = ByteArray(size * 2)
+        var index = 0
+        for (value in this) {
+            val half = value.toHalfBits().toInt() and 0xFFFF
+            bytes[index++] = (half and 0xFF).toByte()
+            bytes[index++] = ((half ushr 8) and 0xFF).toByte()
+        }
+        return bytes
+    }
+
+    private fun FloatArray.toUnormByteArray(): ByteArray {
+        val bytes = ByteArray(size)
+        for (i in indices) {
+            val intValue = (this[i].coerceIn(0f, 1f) * 255f + 0.5f).roundToInt()
+            bytes[i] = (intValue and 0xFF).toByte()
+        }
+        return bytes
+    }
+
+    private fun Float.toHalfBits(): Short {
+        val bits = java.lang.Float.floatToIntBits(this)
+        val sign = (bits ushr 16) and 0x8000
+        var exponent = (bits ushr 23) and 0xFF
+        var mantissa = bits and 0x7FFFFF
+
+        return when {
+            exponent == 0xFF -> {
+                if (mantissa == 0) {
+                    (sign or 0x7C00).toShort()
+                } else {
+                    (sign or 0x7C00 or ((mantissa ushr 13) and 0x3FF)).toShort()
+                }
+            }
+
+            exponent > 0x70 -> {
+                (sign or 0x7C00).toShort()
+            }
+
+            exponent < 0x71 -> {
+                if (exponent < 0x67) {
+                    sign.toShort()
+                } else {
+                    mantissa = mantissa or 0x00800000
+                    val shift = 0x71 - exponent
+                    var halfMantissa = mantissa ushr (shift + 13)
+                    if (((mantissa ushr (shift + 12)) and 0x1) != 0) {
+                        halfMantissa += 1
+                    }
+                    (sign or (halfMantissa and 0x03FF)).toShort()
+                }
+            }
+
+            else -> {
+                val halfExponent = exponent - 0x70
+                var halfMantissa = mantissa ushr 13
+                if ((mantissa and 0x00001000) != 0) {
+                    halfMantissa += 1
+                    if (halfMantissa == 0x0400) {
+                        val incremented = ((sign or ((halfExponent + 1) shl 10)) and 0xFFFF)
+                        return incremented.toShort()
+                    }
+                }
+                (sign or (halfExponent shl 10) or (halfMantissa and 0x03FF)).toShort()
+            }
+        }
     }
 
     private fun findMemoryType(typeFilter: Int, properties: Int): Int {

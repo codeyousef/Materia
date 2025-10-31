@@ -105,31 +105,34 @@ cd materia
 
 ## Examples
 
-| Scenario                    | Command                                     | Description                                                                  |
-|-----------------------------|---------------------------------------------|------------------------------------------------------------------------------|
-| Triangle sanity check (JVM) | `./gradlew :examples:triangle:run`          | Minimal pipeline exercising shader compilation and swap chain                |
-| Triangle in browser         | `./gradlew :examples:triangle:jsBrowserRun` | Launches webpack dev server with WebGPU bindings                             |
-| Basic scene showcase        | `./gradlew :examples:basic-scene:runJvm`    | Orbit controls, lighting, shadows                                            |
-| Embedding galaxy            | `./gradlew :examples:embedding-galaxy:run`  | 20k instanced points with clustering                                         |
-| Force graph rerank          | `./gradlew :examples:force-graph:run`       | TF‑IDF vs semantic reranking visualisation                                   |
-| Voxelcraft sandbox          | `./gradlew :examples:voxelcraft:runJvm`     | LWJGL-based voxel environment with Web build: `…:jsBrowserProductionWebpack` |
+| Example          | JVM                                           | Browser / JS                                 | Android                                           |
+|------------------|-----------------------------------------------|----------------------------------------------|---------------------------------------------------|
+| Triangle         | `./gradlew :examples:triangle:runJvm`         | `./gradlew :examples:triangle:runJs`         | `./gradlew :examples:triangle:runAndroid`         |
+| Embedding Galaxy | `./gradlew :examples:embedding-galaxy:runJvm` | `./gradlew :examples:embedding-galaxy:runJs` | `./gradlew :examples:embedding-galaxy:runAndroid` |
+| Force Graph      | `./gradlew :examples:force-graph:runJvm`      | `./gradlew :examples:force-graph:runJs`      | `./gradlew :examples:force-graph:runAndroid`      |
+| VoxelCraft       | `./gradlew :examples:voxelcraft:runJvm`       | `./gradlew :examples:voxelcraft:runJs`       | `./gradlew :examples:voxelcraft:runAndroid`       |
 
-Each example directory contains additional notes and configuration details.
+- All run targets live under the Gradle `run` task group for quick discovery (
+  `./gradlew :examples:triangle:tasks --group run`).
+- JVM runs default to `stackSize=8192` to keep Vulkan happy on software adapters; VoxelCraft caps
+  itself to a short smoke loop (`VOXELCRAFT_FRAME_BUDGET`, default 60 frames) so the CLI run
+  completes without manual interaction.
+- Android tasks install and launch via `adb`; connect a device or emulator first.
+- Browser runs depend on a WebGPU-capable browser (Chrome Canary, Edge Dev, or Firefox Nightly with
+  flags enabled).
 
 ---
 
 ## Modules
 
-| Directory                    | Purpose                                                     |
-|------------------------------|-------------------------------------------------------------|
-| `materia-engine`             | Core scene graph, materials, geometry, animation, telemetry |
-| `materia-gpu`                | GPU abstractions, WebGPU/Vulkan backends, shader management |
-| `materia-gpu-android-native` | Android-native Vulkan glue, validation layers               |
-| `materia-examples-common`    | Shared assets and utilities for example projects            |
-| `materia-loader`             | Asset loader implementations (GLTF, OBJ, FBX, Collada)      |
-| `materia-postprocessing`     | Post-processing passes and compositor                       |
-| `materia-validation`         | Production readiness tooling, CLI, and report generators    |
-| `tools/*`                    | Auxiliary utilities (editor, profiler, testing harnesses)   |
+| Directory                    | Purpose                                                      |
+|------------------------------|--------------------------------------------------------------|
+| `materia-engine`             | Core scene graph, materials, animation, telemetry            |
+| `materia-gpu`                | WebGPU/Vulkan abstraction, swapchains, shader compilation    |
+| `materia-gpu-android-native` | Android Vulkan bootstrap (surface + validation glue)         |
+| `materia-examples-common`    | Shared assets, camera rigs, and debugging overlays           |
+| `materia-validation`         | CLI for readiness checks, lint aggregation, dependency scans |
+| `examples/*`                 | Multiplatform example scenes (JVM, JS, Android wrappers)     |
 
 Additional specs live under `specs/`, while in-depth documentation is located in `docs/`.
 

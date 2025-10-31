@@ -1,17 +1,17 @@
+import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
     kotlin("android")
-    kotlin("plugin.serialization")
 }
 
 android {
-    namespace = "io.materia.examples.triangle.android"
+    namespace = "io.materia.examples.voxelcraft.android"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "io.materia.examples.triangle.android"
+        applicationId = "io.materia.examples.voxelcraft.android"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
@@ -25,7 +25,6 @@ android {
     }
 
     packaging {
-        jniLibs.keepDebugSymbols += "**/*.so"
         resources.excludes += setOf(
             "META-INF/INDEX.LIST",
             "META-INF/DEPENDENCIES",
@@ -47,30 +46,19 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":examples:triangle"))
-    implementation(project(":materia-examples-common"))
-    implementation(project(":materia-gpu-android-native"))
-    implementation(project(":materia-gpu"))
-    implementation(project(":"))
-
+    implementation(project(":examples:voxelcraft"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.kotlinx.coroutines.android)
 }
 
 configurations.configureEach {
     exclude(group = "org.lwjgl")
 }
 
-tasks.named("preBuild") {
-    dependsOn(rootProject.tasks.named("syncAndroidShaders"))
-}
-
 tasks.register("runAndroid") {
     group = "run"
-    description = "Install the Triangle Android demo on a connected device or emulator"
+    description = "Install and launch the VoxelCraft Android placeholder demo"
     dependsOn("assembleDebug")
     notCompatibleWithConfigurationCache("Invokes adb commands for installation")
     doLast {
@@ -87,7 +75,7 @@ tasks.register("runAndroid") {
             -1
         }
 
-        val component = "io.materia.examples.triangle.android/.TriangleActivity"
+        val component = "io.materia.examples.voxelcraft.android/.VoxelCraftActivity"
         val apk = layout.buildDirectory
             .file("outputs/apk/debug/${project.name}-debug.apk")
             .get()
@@ -113,7 +101,7 @@ tasks.register("runAndroid") {
         }
 
         if (runAdbCommand("adb", "shell", "am", "start", "-n", component) != 0) {
-            println("⚠️ Unable to launch automatically (adb not available?). Start manually with:")
+            println("⚠️ Unable to launch automatically. Start manually with:")
             println("    adb shell am start -n $component")
         }
     }

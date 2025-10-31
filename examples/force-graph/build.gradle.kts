@@ -90,14 +90,14 @@ kotlin {
 }
 
 tasks.register<JavaExec>("runJvm") {
-    group = "examples"
+    group = "run"
     description = "Run the JVM version of the Force Graph example"
 
     dependsOn("jvmMainClasses")
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
     mainClass.set("io.materia.examples.forcegraph.MainKt")
-    jvmArgs("-Dorg.lwjgl.system.stackSize=512")
+    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
     doFirst {
         println("🚀 Launching Force Graph on JVM")
@@ -106,13 +106,13 @@ tasks.register<JavaExec>("runJvm") {
 }
 
 tasks.register("run") {
-    group = "examples"
+    group = "run"
     description = "Alias for `runJvm` for backwards-compatible scripts"
     dependsOn("runJvm")
 }
 
 tasks.register("runJs") {
-    group = "examples"
+    group = "run"
     description = "Run the Force Graph example in the browser"
 
     dependsOn("jsBrowserDevelopmentRun")
@@ -124,7 +124,7 @@ tasks.register("runJs") {
 }
 
 tasks.register("dev") {
-    group = "examples"
+    group = "run"
     description = "Development mode for Force Graph (browser)"
 
     dependsOn("runJs")
@@ -135,22 +135,20 @@ tasks.register("dev") {
 }
 
 tasks.register("jsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias task for Force Graph browser run"
     dependsOn("runJs")
 }
 
 tasks.register("wasmJsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias task for Force Graph browser run (intended wasmJs entry point)"
     dependsOn("runJs")
 }
 
 tasks.register("runAndroid") {
-    group = "examples"
-    description = "Android target placeholder – no APK yet"
-    doLast {
-        println("📱 Force Graph Android build not implemented yet.")
-        println("Track roadmap progress in docs/MVP_STATUS.md (Force Graph Android).")
-    }
+    group = "run"
+    description = "Install and launch the Force Graph Android demo"
+    dependsOn(":examples:force-graph-android:runAndroid")
+    notCompatibleWithConfigurationCache("Delegates to Android install task")
 }

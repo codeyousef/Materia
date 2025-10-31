@@ -90,14 +90,14 @@ kotlin {
 }
 
 tasks.register<JavaExec>("runJvm") {
-    group = "examples"
+    group = "run"
     description = "Run the JVM version of the Embedding Galaxy example"
 
     dependsOn("jvmMainClasses")
     val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
     classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
     mainClass.set("io.materia.examples.embeddinggalaxy.MainKt")
-    jvmArgs("-Dorg.lwjgl.system.stackSize=512")
+    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
     doFirst {
         println("🚀 Launching Embedding Galaxy on JVM")
@@ -106,13 +106,13 @@ tasks.register<JavaExec>("runJvm") {
 }
 
 tasks.register("run") {
-    group = "examples"
+    group = "run"
     description = "Alias for `runJvm` to stay compatible with older scripts"
     dependsOn("runJvm")
 }
 
 tasks.register("runJs") {
-    group = "examples"
+    group = "run"
     description = "Run the Embedding Galaxy example in the browser"
 
     dependsOn("jsBrowserDevelopmentRun")
@@ -124,7 +124,7 @@ tasks.register("runJs") {
 }
 
 tasks.register("dev") {
-    group = "examples"
+    group = "run"
     description = "Development mode for Embedding Galaxy (browser)"
 
     dependsOn("runJs")
@@ -135,22 +135,20 @@ tasks.register("dev") {
 }
 
 tasks.register("jsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias task for Embedding Galaxy browser run"
     dependsOn("runJs")
 }
 
 tasks.register("wasmJsBrowserRun") {
-    group = "examples"
+    group = "run"
     description = "Alias task for Embedding Galaxy browser run (intended wasmJs entry point)"
     dependsOn("runJs")
 }
 
 tasks.register("runAndroid") {
-    group = "examples"
-    description = "Android port not yet available; prints guidance"
-    doLast {
-        println("📱 Embedding Galaxy does not ship an Android sample yet.")
-        println("Follow progress in docs/MVP_STATUS.md under 'Galaxy Android'.")
-    }
+    group = "run"
+    description = "Install and launch the Embedding Galaxy Android demo"
+    dependsOn(":examples:embedding-galaxy-android:runAndroid")
+    notCompatibleWithConfigurationCache("Delegates to Android install task")
 }

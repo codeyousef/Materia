@@ -1,10 +1,8 @@
 package io.materia.core.math
 
 import kotlin.test.Test
-import kotlin.test.Ignore
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.math.abs
 
 /**
  * Color implementation test

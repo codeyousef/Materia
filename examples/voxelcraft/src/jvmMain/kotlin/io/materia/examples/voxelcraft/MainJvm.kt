@@ -6,8 +6,44 @@ import io.materia.renderer.RendererConfig
 import io.materia.renderer.RendererFactory
 import io.materia.renderer.RendererInitializationException
 import io.materia.renderer.SurfaceFactory
-import kotlinx.coroutines.*
-import org.lwjgl.glfw.GLFW.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import org.lwjgl.glfw.GLFW.GLFW_CLIENT_API
+import org.lwjgl.glfw.GLFW.GLFW_CURSOR
+import org.lwjgl.glfw.GLFW.GLFW_CURSOR_DISABLED
+import org.lwjgl.glfw.GLFW.GLFW_FALSE
+import org.lwjgl.glfw.GLFW.GLFW_KEY_A
+import org.lwjgl.glfw.GLFW.GLFW_KEY_D
+import org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE
+import org.lwjgl.glfw.GLFW.GLFW_KEY_F
+import org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT
+import org.lwjgl.glfw.GLFW.GLFW_KEY_S
+import org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE
+import org.lwjgl.glfw.GLFW.GLFW_KEY_W
+import org.lwjgl.glfw.GLFW.GLFW_NO_API
+import org.lwjgl.glfw.GLFW.GLFW_PRESS
+import org.lwjgl.glfw.GLFW.GLFW_RELEASE
+import org.lwjgl.glfw.GLFW.GLFW_RESIZABLE
+import org.lwjgl.glfw.GLFW.GLFW_TRUE
+import org.lwjgl.glfw.GLFW.GLFW_VISIBLE
+import org.lwjgl.glfw.GLFW.glfwCreateWindow
+import org.lwjgl.glfw.GLFW.glfwDefaultWindowHints
+import org.lwjgl.glfw.GLFW.glfwDestroyWindow
+import org.lwjgl.glfw.GLFW.glfwGetFramebufferSize
+import org.lwjgl.glfw.GLFW.glfwInit
+import org.lwjgl.glfw.GLFW.glfwPollEvents
+import org.lwjgl.glfw.GLFW.glfwSetCursorPosCallback
+import org.lwjgl.glfw.GLFW.glfwSetErrorCallback
+import org.lwjgl.glfw.GLFW.glfwSetInputMode
+import org.lwjgl.glfw.GLFW.glfwSetKeyCallback
+import org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose
+import org.lwjgl.glfw.GLFW.glfwShowWindow
+import org.lwjgl.glfw.GLFW.glfwTerminate
+import org.lwjgl.glfw.GLFW.glfwWindowHint
+import org.lwjgl.glfw.GLFW.glfwWindowShouldClose
 import org.lwjgl.glfw.GLFWErrorCallback
 import org.lwjgl.glfw.GLFWVulkan
 import org.lwjgl.system.MemoryUtil
@@ -20,6 +56,12 @@ class VoxelCraftJVM {
     private lateinit var renderer: Renderer
     private var headlessMode = false
     private val gameScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var lastFramebufferWidth = 0
+    private var lastFramebufferHeight = 0
+    private val frameBudget: Int = System.getenv("VOXELCRAFT_FRAME_BUDGET")
+        ?.toIntOrNull()
+        ?.takeIf { it > 0 }
+        ?: 600
 
     // Input state
     private val keysPressed = mutableSetOf<Int>()
@@ -271,6 +313,14 @@ class VoxelCraftJVM {
         logInfo("ðŸŽ® Game loop starting...")
         logInfo("ðŸŽ® Controls: WASD=Move, Mouse=Look, F=Flight, Space/Shift=Up/Down, ESC=Quit")
 
+        val initialWidth = IntArray(1)
+        val initialHeight = IntArray(1)
+        glfwGetFramebufferSize(window, initialWidth, initialHeight)
+        if (initialWidth[0] > 0 && initialHeight[0] > 0) {
+            lastFramebufferWidth = initialWidth[0]
+            lastFramebufferHeight = initialHeight[0]
+        }
+
         while (!glfwWindowShouldClose(window)) {
             val currentTime = System.nanoTime()
             val deltaTime = ((currentTime - lastTime) / 1_000_000_000.0).toFloat()
@@ -305,8 +355,17 @@ class VoxelCraftJVM {
             val width = IntArray(1)
             val height = IntArray(1)
             glfwGetFramebufferSize(window, width, height)
-            if (width[0] > 0 && height[0] > 0) {
-                renderer.resize(width[0], height[0])
+            if (width[0] > 0 && height[0] > 0 &&
+                (width[0] != lastFramebufferWidth || height[0] != lastFramebufferHeight)
+            ) {
+                runCatching {
+                    renderer.resize(width[0], height[0])
+                    lastFramebufferWidth = width[0]
+                    lastFramebufferHeight = height[0]
+                }.onFailure { error ->
+                    logWarn("⚠️ Resize skipped: ${error.message ?: error::class.simpleName}")
+                    break
+                }
             }
 
             // Log stats every 60 frames
@@ -317,6 +376,11 @@ class VoxelCraftJVM {
             }
 
             frameCount++
+
+            if (frameBudget > 0 && frameCount >= frameBudget) {
+                logInfo("⏱️ Frame budget of $frameBudget reached – closing window for smoke test.")
+                glfwSetWindowShouldClose(window, true)
+            }
 
             // Poll events (no swap needed - Vulkan handles presentation)
             glfwPollEvents()

@@ -1,6 +1,5 @@
 package io.materia.loader
 
-import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -68,22 +67,7 @@ internal class DefaultAssetResolver : AssetResolver {
 }
 
 @OptIn(ExperimentalEncodingApi::class)
-private fun decodeBase64(value: String): ByteArray {
-    return when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
-            java.util.Base64.getDecoder().decode(value)
-
-        else -> try {
-            android.util.Base64.decode(value, android.util.Base64.DEFAULT)
-        } catch (runtime: RuntimeException) {
-            // Robolectric stubs may throw "not mocked" - fall back to Kotlin implementation.
-            if (runtime.message?.contains("not mocked", ignoreCase = true) == true) {
-                Base64.decode(value)
-            } else {
-                throw runtime
-            }
-        }
-    }
-}
+private fun decodeBase64(value: String): ByteArray =
+    Base64.decode(value)
 
 internal actual fun createDefaultAssetResolver(): AssetResolver = DefaultAssetResolver()
