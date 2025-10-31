@@ -1,4 +1,3 @@
-import org.gradle.api.tasks.JavaExec
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -90,7 +89,7 @@ kotlin {
     }
 }
 
-tasks.register("run", JavaExec::class) {
+tasks.register<JavaExec>("runJvm") {
     group = "examples"
     description = "Run the JVM version of the Embedding Galaxy example"
 
@@ -105,18 +104,13 @@ tasks.register("run", JavaExec::class) {
     }
 }
 
-tasks.register("dev") {
+tasks.register("run") {
     group = "examples"
-    description = "Development mode for Embedding Galaxy (browser)"
-
-    dependsOn("jsBrowserDevelopmentRun")
-
-    doFirst {
-        println("🔄 Starting Embedding Galaxy dev server (WebGPU)")
-    }
+    description = "Alias for `runJvm` to stay compatible with older scripts"
+    dependsOn("runJvm")
 }
 
-tasks.register("jsBrowserRun") {
+tasks.register("runJs") {
     group = "examples"
     description = "Run the Embedding Galaxy example in the browser"
 
@@ -128,11 +122,25 @@ tasks.register("jsBrowserRun") {
     }
 }
 
+tasks.register("dev") {
+    group = "examples"
+    description = "Development mode for Embedding Galaxy (browser)"
+
+    dependsOn("runJs")
+
+    doFirst {
+        println("🔄 Starting Embedding Galaxy dev server (WebGPU)")
+    }
+}
+
+tasks.register("jsBrowserRun") {
+    group = "examples"
+    description = "Alias task for Embedding Galaxy browser run"
+    dependsOn("runJs")
+}
+
 tasks.register("wasmJsBrowserRun") {
     group = "examples"
     description = "Alias task for Embedding Galaxy browser run (intended wasmJs entry point)"
-    dependsOn("jsBrowserDevelopmentRun")
-    doFirst {
-        println("🌐 (alias) Starting Embedding Galaxy via jsBrowserDevelopmentRun")
-    }
+    dependsOn("runJs")
 }

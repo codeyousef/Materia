@@ -109,6 +109,12 @@ tasks.register("runJs") {
     }
 }
 
+tasks.register("jsBrowserRun") {
+    group = "examples"
+    description = "Alias for VoxelCraft browser run task"
+    dependsOn("runJs")
+}
+
 tasks.register("dev") {
     group = "examples"
     description = "Development mode - continuous build and run"
@@ -163,4 +169,10 @@ tasks.register<JavaExec>("runJvm") {
         println("OS: ${System.getProperty("os.name")}")
         println("Java: ${System.getProperty("java.version")}")
     }
+}
+
+tasks.register("run") {
+    group = "examples"
+    description = "Alias for `runJvm` to keep scripts compatible"
+    dependsOn("runJvm")
 }

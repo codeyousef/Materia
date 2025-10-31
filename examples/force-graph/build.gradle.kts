@@ -1,5 +1,3 @@
-import org.gradle.api.tasks.JavaExec
-
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -91,7 +89,7 @@ kotlin {
     }
 }
 
-tasks.register("run", JavaExec::class) {
+tasks.register<JavaExec>("runJvm") {
     group = "examples"
     description = "Run the JVM version of the Force Graph example"
 
@@ -106,18 +104,13 @@ tasks.register("run", JavaExec::class) {
     }
 }
 
-tasks.register("dev") {
+tasks.register("run") {
     group = "examples"
-    description = "Development mode for Force Graph (browser)"
-
-    dependsOn("jsBrowserDevelopmentRun")
-
-    doFirst {
-        println("🔄 Starting Force Graph dev server (WebGPU)")
-    }
+    description = "Alias for `runJvm` for backwards-compatible scripts"
+    dependsOn("runJvm")
 }
 
-tasks.register("jsBrowserRun") {
+tasks.register("runJs") {
     group = "examples"
     description = "Run the Force Graph example in the browser"
 
@@ -129,11 +122,25 @@ tasks.register("jsBrowserRun") {
     }
 }
 
+tasks.register("dev") {
+    group = "examples"
+    description = "Development mode for Force Graph (browser)"
+
+    dependsOn("runJs")
+
+    doFirst {
+        println("🔄 Starting Force Graph dev server (WebGPU)")
+    }
+}
+
+tasks.register("jsBrowserRun") {
+    group = "examples"
+    description = "Alias task for Force Graph browser run"
+    dependsOn("runJs")
+}
+
 tasks.register("wasmJsBrowserRun") {
     group = "examples"
     description = "Alias task for Force Graph browser run (intended wasmJs entry point)"
-    dependsOn("jsBrowserDevelopmentRun")
-    doFirst {
-        println("🌐 (alias) Starting Force Graph via jsBrowserDevelopmentRun")
-    }
+    dependsOn("runJs")
 }

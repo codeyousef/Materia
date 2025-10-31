@@ -53,3 +53,13 @@ dependencies {
 tasks.named("preBuild") {
     dependsOn(rootProject.tasks.named("syncAndroidShaders"))
 }
+
+tasks.register("runAndroid") {
+    group = "examples"
+    description = "Install the Triangle Android demo on a connected device or emulator"
+    dependsOn("installDebug")
+    doLast {
+        println("📱 Triangle Android demo installed. Launch automatically with:")
+        println("    adb shell am start -n io.materia.examples.triangle.android/.MainActivity")
+    }
+}

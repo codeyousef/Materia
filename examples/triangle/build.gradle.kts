@@ -1,5 +1,3 @@
-import org.gradle.api.JavaVersion
-import org.gradle.api.tasks.JavaExec
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -95,7 +93,7 @@ kotlin {
 // Run Tasks for Examples
 // ============================================================================
 
-tasks.register("run", JavaExec::class) {
+tasks.register<JavaExec>("runJvm") {
     group = "examples"
     description = "Run the JVM version of the triangle example"
 
@@ -110,20 +108,15 @@ tasks.register("run", JavaExec::class) {
     }
 }
 
-tasks.register("dev") {
+tasks.register("run") {
     group = "examples"
-    description = "Development mode - continuous build and run"
-
-    dependsOn("jsBrowserDevelopmentRun")
-
-    doFirst {
-        println("🔄 Starting development mode with hot reload")
-    }
+    description = "Alias for `runJvm` to keep legacy scripts working"
+    dependsOn("runJvm")
 }
 
-tasks.register("jsBrowserRun") {
+tasks.register("runJs") {
     group = "examples"
-    description = "Run the browser triangle example"
+    description = "Run the browser triangle example (WebGPU/WebGL)"
 
     dependsOn("jsBrowserDevelopmentRun")
 
@@ -133,19 +126,40 @@ tasks.register("jsBrowserRun") {
     }
 }
 
+tasks.register("dev") {
+    group = "examples"
+    description = "Development mode - continuous build and run"
+
+    dependsOn("runJs")
+
+    doFirst {
+        println("🔄 Starting development mode with hot reload")
+    }
+}
+
+tasks.register("jsBrowserRun") {
+    group = "examples"
+    description = "Alias for browser triangle run task"
+    dependsOn("runJs")
+}
+
 tasks.register("wasmJsBrowserRun") {
     group = "examples"
     description = "Alias for Web/WASM browser run (dev server) for Triangle example"
-    dependsOn("jsBrowserDevelopmentRun")
-    doFirst {
-        println("🌐 (alias) Starting Triangle example in browser via jsBrowserDevelopmentRun")
-    }
+    dependsOn("runJs")
 }
 
 tasks.register("installDebug") {
     group = "examples"
     description = "Install the Android debug build for the Triangle example"
     dependsOn(":examples:triangle-android:installDebug")
+}
+
+tasks.register("runAndroid") {
+    group = "examples"
+    description =
+        "Install and launch the Android Triangle example (delegates to :examples:triangle-android)"
+    dependsOn(":examples:triangle-android:runAndroid")
 }
 
 android {
