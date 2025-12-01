@@ -57,8 +57,8 @@ value class Mat4 @PublishedApi internal constructor(internal val data: FloatArra
 
         data.fill(0f)
         data[0] = f / aspect
-        data[5] = -f  // Flip Y for WebGPU (Y points down in framebuffer)
-        // WebGPU uses depth range [0, 1], not [-1, 1] like OpenGL
+        data[5] = f  // Positive Y - standard right-handed convention
+        // WebGPU/Vulkan use depth range [0, 1], not [-1, 1] like OpenGL
         data[10] = far / (near - far)
         data[11] = -1f
         data[14] = (near * far) / (near - far)
