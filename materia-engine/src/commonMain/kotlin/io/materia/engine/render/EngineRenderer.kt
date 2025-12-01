@@ -114,6 +114,7 @@ private class EngineRendererImpl(
     private var depthView: GpuTextureView? = null
     private var depthWidth: Int = 0
     private var depthHeight: Int = 0
+    private var depthEnabled: Boolean = true
 
     private var width: Int = max(surface.width, 1)
     private var height: Int = max(surface.height, 1)
@@ -176,10 +177,17 @@ private class EngineRendererImpl(
                 label = "engine-surface"
             )
             surfaceFormat = gpuSurface.getPreferredFormat(adapter)
-            sceneRenderer = SceneRenderer(device, surfaceFormat)
+            
+            // Vulkan backend doesn't support depth attachments yet, so disable depth for now
+            depthEnabled = backendType != BackendType.VULKAN
+            val depthFormat = if (depthEnabled) GpuTextureFormat.DEPTH24_PLUS else null
+            sceneRenderer = SceneRenderer(device, surfaceFormat, depthFormat)
+            
             setupFxaaResources()
             initialized = true
-            recreateDepthTexture(width, height)
+            if (depthEnabled) {
+                recreateDepthTexture(width, height)
+            }
             if (fxaaEnabled) {
                 recreateOffscreenTargets(width, height)
             }
@@ -293,7 +301,9 @@ private class EngineRendererImpl(
         this.width = max(width, 1)
         this.height = max(height, 1)
         gpuSurface.resize(this.width, this.height)
-        recreateDepthTexture(this.width, this.height)
+        if (depthEnabled) {
+            recreateDepthTexture(this.width, this.height)
+        }
         if (fxaaEnabled) {
             recreateOffscreenTargets(this.width, this.height)
         }

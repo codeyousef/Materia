@@ -17,7 +17,7 @@ class UnlitPointsMaterial(
     label: String,
     val baseColor: Color = Color.White,
     val size: Float = 1f,
-    renderState: RenderState = RenderState(blendMode = BlendMode.Additive, depthWrite = false)
+    renderState: RenderState = RenderState(blendMode = BlendMode.Opaque, depthWrite = true)
 ) : Material(label, renderState)
 
 class UnlitLineMaterial(

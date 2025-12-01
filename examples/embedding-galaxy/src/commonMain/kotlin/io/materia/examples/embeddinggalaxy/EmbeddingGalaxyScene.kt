@@ -250,7 +250,7 @@ class EmbeddingGalaxyScene(
             baseColor = Color.fromFloats(1f, 1f, 1f),
             size = 1f,
             renderState = RenderState(
-                blendMode = BlendMode.Additive,
+                blendMode = BlendMode.Opaque,
                 depthTest = false,
                 depthWrite = false,
                 cullMode = CullMode.NONE
@@ -305,13 +305,13 @@ class EmbeddingGalaxyScene(
         }
 
         val palette = listOf(
-            Color.fromFloats(0.70f, 0.35f, 1f),
-            Color.fromFloats(0.35f, 0.82f, 1f),
-            Color.fromFloats(1f, 0.58f, 0.32f),
-            Color.fromFloats(0.45f, 1f, 0.74f),
-            Color.fromFloats(1f, 0.85f, 0.35f),
-            Color.fromFloats(0.98f, 0.46f, 0.68f),
-            Color.fromFloats(0.48f, 0.62f, 1f)
+            Color.fromFloats(0.50f, 0.25f, 0.75f),
+            Color.fromFloats(0.25f, 0.60f, 0.75f),
+            Color.fromFloats(0.75f, 0.42f, 0.24f),
+            Color.fromFloats(0.32f, 0.75f, 0.55f),
+            Color.fromFloats(0.75f, 0.62f, 0.25f),
+            Color.fromFloats(0.72f, 0.34f, 0.50f),
+            Color.fromFloats(0.35f, 0.45f, 0.75f)
         )
 
         val positions = FloatArray(maxPoints * 3)
@@ -334,9 +334,9 @@ class EmbeddingGalaxyScene(
             positions[base + 2] = center.z + offset.z
 
             val color = palette[cluster % palette.size]
-            colors[base] = color.r * (0.75f + random.nextFloat() * 0.25f)
-            colors[base + 1] = color.g * (0.75f + random.nextFloat() * 0.25f)
-            colors[base + 2] = color.b * (0.75f + random.nextFloat() * 0.25f)
+            colors[base] = color.r * (0.6f + random.nextFloat() * 0.4f)
+            colors[base + 1] = color.g * (0.6f + random.nextFloat() * 0.4f)
+            colors[base + 2] = color.b * (0.6f + random.nextFloat() * 0.4f)
 
             sizes[index] = 0.45f + random.nextFloat() * 0.9f
 
