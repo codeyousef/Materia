@@ -18,7 +18,9 @@ import io.materia.gpu.GpuInstanceDescriptor
 import io.materia.gpu.GpuLoadOp
 import io.materia.gpu.GpuPowerPreference
 import io.materia.gpu.GpuRenderPassColorAttachment
+import io.materia.gpu.GpuRenderPassDepthStencilAttachment
 import io.materia.gpu.GpuRenderPassDescriptor
+import io.materia.gpu.GpuStoreOp
 import io.materia.gpu.GpuRequestAdapterOptions
 import io.materia.gpu.GpuSampler
 import io.materia.gpu.GpuSamplerDescriptor
@@ -108,6 +110,11 @@ private class EngineRendererImpl(
     private var fxaaWidth: Int = 0
     private var fxaaHeight: Int = 0
 
+    private var depthTexture: GpuTexture? = null
+    private var depthView: GpuTextureView? = null
+    private var depthWidth: Int = 0
+    private var depthHeight: Int = 0
+
     private var width: Int = max(surface.width, 1)
     private var height: Int = max(surface.height, 1)
 
@@ -172,6 +179,7 @@ private class EngineRendererImpl(
             sceneRenderer = SceneRenderer(device, surfaceFormat)
             setupFxaaResources()
             initialized = true
+            recreateDepthTexture(width, height)
             if (fxaaEnabled) {
                 recreateOffscreenTargets(width, height)
             }
@@ -232,14 +240,21 @@ private class EngineRendererImpl(
                         clearColor = clearColor
                     )
                 ),
+                depthStencilAttachment = depthView?.let {
+                    GpuRenderPassDepthStencilAttachment(
+                        view = it,
+                        depthLoadOp = GpuLoadOp.CLEAR,
+                        depthStoreOp = GpuStoreOp.DISCARD,
+                        depthClearValue = 1.0f
+                    )
+                },
                 label = "engine-renderer-pass"
             )
         )
 
-        val viewProjection = mat4().multiply(
-            camera.projectionMatrix(),
-            camera.viewMatrix()
-        )
+        // Compute view-projection matrix (no Y-flip needed for Vulkan)
+        val projectionMatrix = camera.projectionMatrix()
+        val viewProjection = mat4().multiply(projectionMatrix, camera.viewMatrix())
 
         sceneRenderer.record(pass, meshes, points, viewProjection)
         pass.end()
@@ -278,6 +293,7 @@ private class EngineRendererImpl(
         this.width = max(width, 1)
         this.height = max(height, 1)
         gpuSurface.resize(this.width, this.height)
+        recreateDepthTexture(this.width, this.height)
         if (fxaaEnabled) {
             recreateOffscreenTargets(this.width, this.height)
         }
@@ -289,6 +305,9 @@ private class EngineRendererImpl(
         device.destroy()
         gpuInstance.dispose()
         releaseFxaaTargets()
+        depthTexture?.destroy()
+        depthTexture = null
+        depthView = null
         fxaaSampler = null
         fxaaBindGroup = null
         fxaaBindGroupTexture = null
@@ -345,6 +364,29 @@ private class EngineRendererImpl(
             sampler
         )
         fxaaBindGroupTexture = texture
+    }
+
+    private fun recreateDepthTexture(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        if (depthTexture != null && depthWidth == width && depthHeight == height) return
+
+        depthTexture?.destroy()
+
+        val texture = device.createTexture(
+            GpuTextureDescriptor(
+                label = "engine-depth-texture",
+                size = Triple(width, height, 1),
+                mipLevelCount = 1,
+                sampleCount = 1,
+                dimension = GpuTextureDimension.D2,
+                format = GpuTextureFormat.DEPTH24_PLUS,
+                usage = gpuTextureUsage(GpuTextureUsage.RENDER_ATTACHMENT)
+            )
+        )
+        depthTexture = texture
+        depthView = texture.createView()
+        depthWidth = width
+        depthHeight = height
     }
 
     private fun releaseFxaaTargets() {

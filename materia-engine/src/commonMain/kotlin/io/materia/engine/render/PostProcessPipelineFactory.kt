@@ -14,7 +14,6 @@ import io.materia.gpu.GpuRenderPipelineDescriptor
 import io.materia.gpu.GpuShaderModuleDescriptor
 import io.materia.gpu.GpuShaderStage
 import io.materia.gpu.GpuTextureFormat
-import io.materia.io.readTextResource
 
 object PostProcessPipelineFactory {
 
@@ -48,13 +47,13 @@ object PostProcessPipelineFactory {
         val vertex = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "fullscreen_fxaa.vert",
-                code = readTextResource("shaders/fullscreen_fxaa.vert.wgsl")
+                code = FXAA_VERT_SHADER
             )
         )
         val fragment = device.createShaderModule(
             GpuShaderModuleDescriptor(
                 label = "fullscreen_fxaa.frag",
-                code = readTextResource("shaders/fullscreen_fxaa.frag.wgsl")
+                code = FXAA_FRAG_SHADER
             )
         )
 
@@ -93,4 +92,55 @@ object PostProcessPipelineFactory {
             )
         )
     )
+
+    private val FXAA_VERT_SHADER = """
+        struct VertexOutput {
+            @builtin(position) position : vec4<f32>,
+            @location(0) uv : vec2<f32>,
+        };
+
+        const FULLSCREEN_POSITIONS : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
+            vec2<f32>(-1.0, -3.0),
+            vec2<f32>(-1.0, 1.0),
+            vec2<f32>(3.0, 1.0),
+        );
+
+        const FULLSCREEN_UVS : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
+            vec2<f32>(0.0, 2.0),
+            vec2<f32>(0.0, 0.0),
+            vec2<f32>(2.0, 0.0),
+        );
+
+        @vertex
+        fn main(@builtin(vertex_index) vertexIndex : u32) -> VertexOutput {
+            var output : VertexOutput;
+            let pos = FULLSCREEN_POSITIONS[vertexIndex];
+            output.position = vec4<f32>(pos, 0.0, 1.0);
+            output.uv = FULLSCREEN_UVS[vertexIndex] * 0.5;
+            return output;
+        }
+    """.trimIndent()
+
+    private val FXAA_FRAG_SHADER = """
+        struct FragmentInput {
+            @location(0) uv : vec2<f32>,
+        };
+
+        struct FragmentOutput {
+            @location(0) color : vec4<f32>,
+        };
+
+        @group(0) @binding(0)
+        var uColorTexture : texture_2d<f32>;
+
+        @group(0) @binding(1)
+        var uColorSampler : sampler;
+
+        @fragment
+        fn main(input : FragmentInput) -> FragmentOutput {
+            var output : FragmentOutput;
+            output.color = textureSample(uColorTexture, uColorSampler, input.uv);
+            return output;
+        }
+    """.trimIndent()
 }

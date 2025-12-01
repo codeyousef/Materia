@@ -36,6 +36,18 @@ import io.materia.gpu.GpuVertexStepMode
  */
 object UnlitPipelineFactory {
 
+    /**
+     * Controls whether points are rendered using POINT_LIST topology (native points) or
+     * as TRIANGLE_LIST quads (6 vertices per point). The quad fallback is needed for
+     * platforms that don't properly support point primitives (e.g., Android emulators).
+     */
+    var useQuadPointsFallback: Boolean = true
+
+    /**
+     * Number of vertices per point instance when using quad fallback.
+     */
+    const val VERTICES_PER_QUAD_POINT = 6
+
     data class PipelineResources(
         val pipeline: GpuRenderPipeline,
         val bindGroupLayout: GpuBindGroupLayout
@@ -48,7 +60,8 @@ object UnlitPipelineFactory {
         device: GpuDevice,
         colorFormat: GpuTextureFormat,
         renderState: RenderState = RenderState(),
-        primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST
+        primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST,
+        depthFormat: GpuTextureFormat? = null
     ): PipelineResources {
         val layout = createUniformLayout(device, label = "unlit-color-layout")
         val vertexModule = device.createShaderModule(
@@ -70,11 +83,12 @@ object UnlitPipelineFactory {
                 vertexShader = vertexModule,
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
+                depthStencilFormat = depthFormat,
                 vertexBuffers = listOf(vertexLayoutWithColor()),
                 primitiveTopology = primitiveTopology,
                 bindGroupLayouts = listOf(layout),
                 cullMode = renderState.toCullMode(),
-                depthState = renderState.toDepthState(),
+                depthState = renderState.toDepthState(depthFormat),
                 blendMode = renderState.toBlendMode()
             )
         )
@@ -84,37 +98,54 @@ object UnlitPipelineFactory {
 
     /**
      * Create the pipeline used by [io.materia.engine.material.UnlitPointsMaterial].
+     * 
+     * When [useQuadPointsFallback] is true, this creates a pipeline that renders each point
+     * as 6 vertices (2 triangles forming a quad) instead of using native POINT_LIST topology.
+     * This is necessary for platforms that don't support point primitives properly.
      */
     fun createUnlitPointsPipeline(
         device: GpuDevice,
         colorFormat: GpuTextureFormat,
-        renderState: RenderState = RenderState()
+        renderState: RenderState = RenderState(),
+        depthFormat: GpuTextureFormat? = null
     ): PipelineResources {
         val layout = createUniformLayout(device, label = "unlit-points-layout")
+        
+        // Use quad shaders and TRIANGLE_LIST topology for fallback mode
+        val (vertexShaderLabel, fragmentShaderLabel, topology) = if (useQuadPointsFallback) {
+            Triple("unlit_points_quad.vert", "unlit_points_quad.frag", GpuPrimitiveTopology.TRIANGLE_LIST)
+        } else {
+            Triple("unlit_points.vert", "unlit_points.frag", GpuPrimitiveTopology.POINT_LIST)
+        }
+        
         val vertexModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
-                label = "unlit_points.vert",
-                code = ShaderSource.UNLIT_POINTS_VERT
+                label = vertexShaderLabel,
+                code = if (useQuadPointsFallback) ShaderSource.UNLIT_POINTS_QUAD_VERT else ShaderSource.UNLIT_POINTS_VERT
             )
         )
         val fragmentModule = device.createShaderModule(
             GpuShaderModuleDescriptor(
-                label = "unlit_points.frag",
-                code = ShaderSource.UNLIT_POINTS_FRAG
+                label = fragmentShaderLabel,
+                code = if (useQuadPointsFallback) ShaderSource.UNLIT_POINTS_QUAD_FRAG else ShaderSource.UNLIT_POINTS_FRAG
             )
         )
 
+        // Use instance vertex buffers for both quad fallback and native points
+        val vertexBuffers = listOf(instancedPointsLayout())
+        
         val pipeline = device.createRenderPipeline(
             GpuRenderPipelineDescriptor(
                 label = "unlit-points-pipeline",
                 vertexShader = vertexModule,
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
-                vertexBuffers = listOf(instancedPointsLayout()),
-                primitiveTopology = GpuPrimitiveTopology.POINT_LIST,
+                depthStencilFormat = depthFormat,
+                vertexBuffers = vertexBuffers,
+                primitiveTopology = topology,
                 bindGroupLayouts = listOf(layout),
                 cullMode = renderState.toCullMode(),
-                depthState = renderState.toDepthState(),
+                depthState = renderState.toDepthState(depthFormat),
                 blendMode = renderState.toBlendMode()
             )
         )
@@ -308,6 +339,66 @@ private object ShaderSource {
             return output;
         }
     """.trimIndent()
+
+    // Quad-based point shaders for platforms without proper point primitive support
+    // These render each point as 2 triangles (6 vertices) forming a quad
+    val UNLIT_POINTS_QUAD_VERT = """
+        struct VertexInput {
+            @location(0) instancePosition : vec3<f32>,
+            @location(1) instanceColor : vec3<f32>,
+            @location(2) instanceSize : f32,
+            @location(3) instanceExtra : vec4<f32>,
+        };
+
+        struct VertexOutput {
+            @builtin(position) position : vec4<f32>,
+            @location(0) color : vec3<f32>,
+        };
+
+        @group(0) @binding(0)
+        var<uniform> uModelViewProjection : mat4x4<f32>;
+
+        @vertex
+        fn main(@builtin(vertex_index) vertexIndex : u32, @builtin(instance_index) instanceIndex : u32, input : VertexInput) -> VertexOutput {
+            var output : VertexOutput;
+            
+            // Quad offsets for 6 vertices (2 triangles)
+            var quadOffsets = array<vec2<f32>, 6>(
+                vec2<f32>(-1.0, -1.0),
+                vec2<f32>( 1.0, -1.0),
+                vec2<f32>(-1.0,  1.0),
+                vec2<f32>(-1.0,  1.0),
+                vec2<f32>( 1.0, -1.0),
+                vec2<f32>( 1.0,  1.0)
+            );
+            
+            // Transform the point center to clip space
+            let clipPos = uModelViewProjection * vec4<f32>(input.instancePosition, 1.0);
+            
+            // Get the quad corner offset
+            let offset = quadOffsets[vertexIndex];
+            
+            // Scale point size in clip space
+            let pointSize = max(input.instanceSize * 0.012, 0.004);
+            
+            // Apply offset in clip space (multiply by w for perspective-correct sizing)
+            var finalPos = clipPos;
+            finalPos.x = finalPos.x + offset.x * pointSize * clipPos.w;
+            finalPos.y = finalPos.y + offset.y * pointSize * clipPos.w;
+            
+            output.position = finalPos;
+            output.color = input.instanceColor;
+            
+            return output;
+        }
+    """.trimIndent()
+
+    val UNLIT_POINTS_QUAD_FRAG = """
+        @fragment
+        fn main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
+            return vec4<f32>(color, 1.0);
+        }
+    """.trimIndent()
 }
 
 private fun RenderState.toCullMode(): GpuCullMode = when (cullMode) {
@@ -322,10 +413,11 @@ private fun RenderState.toBlendMode(): GpuBlendMode = when (blendMode) {
     BlendMode.Additive -> GpuBlendMode.ADDITIVE
 }
 
-private fun RenderState.toDepthState() = if (depthTest) {
+private fun RenderState.toDepthState(depthFormat: GpuTextureFormat? = null) = if (depthFormat != null) {
+    // When we have a depth attachment, we must provide depth state even if depth testing is disabled
     io.materia.gpu.GpuDepthState(
-        depthWriteEnabled = depthWrite,
-        depthCompare = if (depthWrite) io.materia.gpu.GpuCompareFunction.LESS else io.materia.gpu.GpuCompareFunction.LESS_EQUAL
+        depthWriteEnabled = if (depthTest) depthWrite else false,
+        depthCompare = if (depthTest) io.materia.gpu.GpuCompareFunction.LESS_EQUAL else io.materia.gpu.GpuCompareFunction.ALWAYS
     )
 } else {
     null

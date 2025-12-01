@@ -1,13 +1,12 @@
 package io.materia.loader
 
+import io.materia.util.Base64Compat
 import kotlinx.browser.document
 import org.khronos.webgl.Uint8ClampedArray
 import org.w3c.dom.CanvasRenderingContext2D
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 internal actual object PlatformImageDecoder {
     actual suspend fun decode(bytes: ByteArray): DecodedImage = suspendCoroutine { continuation ->
@@ -35,8 +34,7 @@ internal actual object PlatformImageDecoder {
             continuation.resumeWithException(IllegalArgumentException("Failed to decode image: ${'$'}error"))
         }
 
-        @OptIn(ExperimentalEncodingApi::class)
-        val base64 = Base64.encode(bytes)
+        val base64 = Base64Compat.encode(bytes)
         image.src = "data:application/octet-stream;base64,${'$'}base64"
     }
 }

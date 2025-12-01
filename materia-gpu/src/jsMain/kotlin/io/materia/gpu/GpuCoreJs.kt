@@ -48,7 +48,7 @@ private fun createUint8Array(length: Int): Uint8Array = Uint8Array(length)
 private fun createFloat32Array(length: Int): Float32Array = Float32Array(length)
 
 private fun callIfFunction(target: dynamic, functionName: String) {
-    val fn = target.asDynamic()[functionName]
+    val fn = target[functionName]
     if (fn != null && jsTypeOf(fn) == "function") {
         fn.call(target)
     }
@@ -68,17 +68,17 @@ actual class GpuInstance actual constructor(
         ensureActive {
             val gpu = requireWebGpu()
             val jsOptions = emptyObject()
-            jsOptions.asDynamic().powerPreference = when (options.powerPreference) {
+            jsOptions.powerPreference = when (options.powerPreference) {
                 GpuPowerPreference.LOW_POWER -> "low-power"
                 GpuPowerPreference.HIGH_PERFORMANCE -> "high-performance"
             }
             if (options.forceFallbackAdapter) {
-                jsOptions.asDynamic().forceFallbackAdapter = true
+                jsOptions.forceFallbackAdapter = true
             }
             val adapterHandle = (gpu.requestAdapter(jsOptions) as Promise<dynamic>).awaitJs()
                 ?: error("Failed to acquire WebGPU adapter")
 
-            val info = adapterHandle.asDynamic().info
+            val info = adapterHandle.info
             val adapterInfo = GpuAdapterInfo(
                 name = info?.device as? String
                     ?: info?.name as? String
@@ -124,17 +124,17 @@ actual class GpuAdapter actual constructor(
 
     actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
+        descriptor.label?.let { jsDescriptor.label = it }
         if (descriptor.requiredFeatures.isNotEmpty()) {
-            jsDescriptor.asDynamic().requiredFeatures = descriptor.requiredFeatures.toTypedArray()
+            jsDescriptor.requiredFeatures = descriptor.requiredFeatures.toTypedArray()
         }
         if (descriptor.requiredLimits.isNotEmpty()) {
             val limits = emptyObject()
-            val limitsDyn = limits.asDynamic()
+            val limitsDyn = limits
             descriptor.requiredLimits.forEach { (key, value) ->
                 limitsDyn[key] = value
             }
-            jsDescriptor.asDynamic().requiredLimits = limits
+            jsDescriptor.requiredLimits = limits
         }
 
         val deviceHandle =
@@ -180,121 +180,121 @@ actual class GpuDevice actual constructor(
         }
 
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
-        jsDescriptor.asDynamic().size = descriptor.size.toInt()
-        jsDescriptor.asDynamic().usage = descriptor.usage
-        jsDescriptor.asDynamic().mappedAtCreation = descriptor.mappedAtCreation
+        descriptor.label?.let { jsDescriptor.label = it }
+        jsDescriptor.size = descriptor.size.toInt()
+        jsDescriptor.usage = descriptor.usage
+        jsDescriptor.mappedAtCreation = descriptor.mappedAtCreation
         val buffer = handle().createBuffer(jsDescriptor)
         return GpuBuffer(this, descriptor).apply { attach(buffer, queue()) }
     }
 
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
+        descriptor.label?.let { jsDescriptor.label = it }
         val size = emptyObject()
-        size.asDynamic().width = descriptor.size.first
-        size.asDynamic().height = descriptor.size.second
-        size.asDynamic().depthOrArrayLayers = descriptor.size.third
-        jsDescriptor.asDynamic().size = size
-        jsDescriptor.asDynamic().mipLevelCount = descriptor.mipLevelCount
-        jsDescriptor.asDynamic().sampleCount = descriptor.sampleCount
-        jsDescriptor.asDynamic().dimension = when (descriptor.dimension) {
+        size.width = descriptor.size.first
+        size.height = descriptor.size.second
+        size.depthOrArrayLayers = descriptor.size.third
+        jsDescriptor.size = size
+        jsDescriptor.mipLevelCount = descriptor.mipLevelCount
+        jsDescriptor.sampleCount = descriptor.sampleCount
+        jsDescriptor.dimension = when (descriptor.dimension) {
             GpuTextureDimension.D1 -> "1d"
             GpuTextureDimension.D2 -> "2d"
             GpuTextureDimension.D3 -> "3d"
         }
-        jsDescriptor.asDynamic().format = descriptor.format.toWebGpuFormat()
-        jsDescriptor.asDynamic().usage = descriptor.usage
+        jsDescriptor.format = descriptor.format.toWebGpuFormat()
+        jsDescriptor.usage = descriptor.usage
         val texture = handle().createTexture(jsDescriptor)
         return GpuTexture(this, descriptor).apply { attach(texture) }
     }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
-        jsDescriptor.asDynamic().addressModeU =
+        descriptor.label?.let { jsDescriptor.label = it }
+        jsDescriptor.addressModeU =
             descriptor.addressModeU.name.lowercase().replace('_', '-')
-        jsDescriptor.asDynamic().addressModeV =
+        jsDescriptor.addressModeV =
             descriptor.addressModeV.name.lowercase().replace('_', '-')
-        jsDescriptor.asDynamic().addressModeW =
+        jsDescriptor.addressModeW =
             descriptor.addressModeW.name.lowercase().replace('_', '-')
-        jsDescriptor.asDynamic().magFilter = descriptor.magFilter.name.lowercase()
-        jsDescriptor.asDynamic().minFilter = descriptor.minFilter.name.lowercase()
-        jsDescriptor.asDynamic().mipmapFilter = descriptor.mipmapFilter.name.lowercase()
-        jsDescriptor.asDynamic().lodMinClamp = descriptor.lodMinClamp
-        jsDescriptor.asDynamic().lodMaxClamp = descriptor.lodMaxClamp
+        jsDescriptor.magFilter = descriptor.magFilter.name.lowercase()
+        jsDescriptor.minFilter = descriptor.minFilter.name.lowercase()
+        jsDescriptor.mipmapFilter = descriptor.mipmapFilter.name.lowercase()
+        jsDescriptor.lodMinClamp = descriptor.lodMinClamp
+        jsDescriptor.lodMaxClamp = descriptor.lodMaxClamp
         val sampler = handle().createSampler(jsDescriptor)
         return GpuSampler(this, descriptor).apply { attach(sampler) }
     }
 
     actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
+        descriptor.label?.let { jsDescriptor.label = it }
         val entries = JsArray()
         descriptor.entries.forEach { entry ->
             val jsEntry = emptyObject()
-            jsEntry.asDynamic().binding = entry.binding
-            jsEntry.asDynamic().visibility = entry.visibility.toWebGpuVisibilityMask()
+            jsEntry.binding = entry.binding
+            jsEntry.visibility = entry.visibility.toWebGpuVisibilityMask()
             when (entry.resourceType) {
                 GpuBindingResourceType.UNIFORM_BUFFER -> {
                     val buffer = emptyObject()
-                    buffer.asDynamic().type = "uniform"
-                    jsEntry.asDynamic().buffer = buffer
+                    buffer.type = "uniform"
+                    jsEntry.buffer = buffer
                 }
 
                 GpuBindingResourceType.STORAGE_BUFFER -> {
                     val buffer = emptyObject()
-                    buffer.asDynamic().type = "storage"
-                    jsEntry.asDynamic().buffer = buffer
+                    buffer.type = "storage"
+                    jsEntry.buffer = buffer
                 }
 
                 GpuBindingResourceType.SAMPLER -> {
                     val sampler = emptyObject()
-                    sampler.asDynamic().type = "filtering"
-                    jsEntry.asDynamic().sampler = sampler
+                    sampler.type = "filtering"
+                    jsEntry.sampler = sampler
                 }
 
                 GpuBindingResourceType.TEXTURE -> {
                     val texture = emptyObject()
-                    texture.asDynamic().sampleType = "float"
-                    texture.asDynamic().viewDimension = "2d"
-                    texture.asDynamic().multisampled = false
-                    jsEntry.asDynamic().texture = texture
+                    texture.sampleType = "float"
+                    texture.viewDimension = "2d"
+                    texture.multisampled = false
+                    jsEntry.texture = texture
                 }
             }
-            entries.asDynamic().push(jsEntry)
+            entries.push(jsEntry)
         }
-        jsDescriptor.asDynamic().entries = entries
+        jsDescriptor.entries = entries
         val layout = handle().createBindGroupLayout(jsDescriptor)
         return GpuBindGroupLayout(this, descriptor).apply { attach(layout) }
     }
 
     actual fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
-        jsDescriptor.asDynamic().layout = descriptor.layout.handle()
+        descriptor.label?.let { jsDescriptor.label = it }
+        jsDescriptor.layout = descriptor.layout.handle()
         val entries = JsArray()
         descriptor.entries.forEach { entry ->
             val jsEntry = emptyObject()
-            jsEntry.asDynamic().binding = entry.binding
+            jsEntry.binding = entry.binding
             val resource = when (val binding = entry.resource) {
                 is GpuBindingResource.Buffer -> {
                     val bufferBinding = emptyObject()
-                    bufferBinding.asDynamic().buffer = binding.buffer.handle()
+                    bufferBinding.buffer = binding.buffer.handle()
                     if (binding.offset != 0L) {
-                        bufferBinding.asDynamic().offset = binding.offset
+                        bufferBinding.offset = binding.offset
                     }
-                    binding.size?.let { bufferBinding.asDynamic().size = it }
+                    binding.size?.let { bufferBinding.size = it }
                     bufferBinding
                 }
 
                 is GpuBindingResource.Sampler -> binding.sampler.handle()
                 is GpuBindingResource.Texture -> binding.textureView.handle()
             }
-            jsEntry.asDynamic().resource = resource
-            entries.asDynamic().push(jsEntry)
+            jsEntry.resource = resource
+            entries.push(jsEntry)
         }
-        jsDescriptor.asDynamic().entries = entries
+        jsDescriptor.entries = entries
         val bindGroup = handle().createBindGroup(jsDescriptor)
         return GpuBindGroup(descriptor.layout, descriptor).apply { attach(bindGroup) }
     }
@@ -302,7 +302,7 @@ actual class GpuDevice actual constructor(
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder {
         val encoder = descriptor?.label?.let {
             val encDesc = emptyObject()
-            encDesc.asDynamic().label = it
+            encDesc.label = it
             handle().createCommandEncoder(encDesc)
         } ?: handle().createCommandEncoder()
         return GpuCommandEncoder(this, descriptor).apply { attach(encoder) }
@@ -310,87 +310,88 @@ actual class GpuDevice actual constructor(
 
     actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule {
         val moduleDescriptor = emptyObject()
-        descriptor.label?.let { moduleDescriptor.asDynamic().label = it }
-        moduleDescriptor.asDynamic().code = descriptor.code
+        descriptor.label?.let { moduleDescriptor.label = it }
+        moduleDescriptor.code = descriptor.code
         val module = handle().createShaderModule(moduleDescriptor)
         return GpuShaderModule(this, descriptor).apply { attach(module) }
     }
 
     actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline {
         val pipelineDescriptor = emptyObject()
-        descriptor.label?.let { pipelineDescriptor.asDynamic().label = it }
+        descriptor.label?.let { pipelineDescriptor.label = it }
 
         if (descriptor.bindGroupLayouts.isNotEmpty()) {
             val layoutDescriptor = emptyObject()
             val layouts = JsArray()
             descriptor.bindGroupLayouts.forEach { layout ->
-                layouts.asDynamic().push(layout.handle())
+                layouts.push(layout.handle())
             }
-            layoutDescriptor.asDynamic().bindGroupLayouts = layouts
+            layoutDescriptor.bindGroupLayouts = layouts
             val pipelineLayout = handle().createPipelineLayout(layoutDescriptor)
-            pipelineDescriptor.asDynamic().layout = pipelineLayout
+            pipelineDescriptor.layout = pipelineLayout
         } else {
-            pipelineDescriptor.asDynamic().layout = "auto"
+            pipelineDescriptor.layout = "auto"
         }
         descriptor.depthState?.let { depthState ->
             val depthStencil = emptyObject()
-            depthStencil.asDynamic().format = depthState.format.toWebGpuFormat()
-            depthStencil.asDynamic().depthWriteEnabled = depthState.depthWriteEnabled
-            depthStencil.asDynamic().depthCompare = depthState.depthCompare.toWebGpu()
-            pipelineDescriptor.asDynamic().depthStencil = depthStencil
+            depthStencil.format = depthState.format.toWebGpuFormat()
+            depthStencil.depthWriteEnabled = depthState.depthWriteEnabled
+            depthStencil.depthCompare = depthState.depthCompare.toWebGpu()
+            pipelineDescriptor.depthStencil = depthStencil
         }
 
         val vertexState = emptyObject()
-        vertexState.asDynamic().module = descriptor.vertexShader.handle()
-        vertexState.asDynamic().entryPoint = "main"
+        vertexState.module = descriptor.vertexShader.handle()
+        vertexState.entryPoint = "main"
         val vertexBuffers = JsArray()
         descriptor.vertexBuffers.forEach { layout ->
             val bufferLayout = emptyObject()
-            bufferLayout.asDynamic().arrayStride = layout.arrayStride
-            bufferLayout.asDynamic().stepMode = layout.stepMode.toWebGpu()
+            bufferLayout.arrayStride = layout.arrayStride
+            bufferLayout.stepMode = layout.stepMode.toWebGpu()
             val attributes = JsArray()
             layout.attributes.forEach { attribute ->
                 val attributeDesc = emptyObject()
-                attributeDesc.asDynamic().shaderLocation = attribute.shaderLocation
-                attributeDesc.asDynamic().offset = attribute.offset
-                attributeDesc.asDynamic().format = attribute.format.toWebGpuFormat()
-                attributes.asDynamic().push(attributeDesc)
+                attributeDesc.shaderLocation = attribute.shaderLocation
+                attributeDesc.offset = attribute.offset
+                attributeDesc.format = attribute.format.toWebGpuFormat()
+                attributes.push(attributeDesc)
             }
-            bufferLayout.asDynamic().attributes = attributes
-            vertexBuffers.asDynamic().push(bufferLayout)
+            bufferLayout.attributes = attributes
+            vertexBuffers.push(bufferLayout)
         }
-        vertexState.asDynamic().buffers = vertexBuffers
-        pipelineDescriptor.asDynamic().vertex = vertexState
+        vertexState.buffers = vertexBuffers
+        pipelineDescriptor.vertex = vertexState
 
         descriptor.fragmentShader?.let { fragment ->
             val fragmentState = emptyObject()
-            fragmentState.asDynamic().module = fragment.handle()
-            fragmentState.asDynamic().entryPoint = "main"
+            fragmentState.module = fragment.handle()
+            fragmentState.entryPoint = "main"
             val targets = JsArray()
             descriptor.colorFormats.forEach { format ->
                 val target = emptyObject()
-                target.asDynamic().format = format.toWebGpuFormat()
-                descriptor.blendMode.toWebGpu()?.let { blend ->
-                    target.asDynamic().blend = blend
+                target.format = format.toWebGpuFormat()
+                val blend = descriptor.blendMode.toWebGpu()
+                if (blend != null) {
+                    target.blend = blend
                 }
-                targets.asDynamic().push(target)
+                targets.push(target)
             }
-            fragmentState.asDynamic().targets = targets
-            pipelineDescriptor.asDynamic().fragment = fragmentState
+            fragmentState.targets = targets
+            pipelineDescriptor.fragment = fragmentState
         }
 
         val primitive = emptyObject()
-        primitive.asDynamic().topology = descriptor.primitiveTopology.toWebGpu()
-        primitive.asDynamic().cullMode = descriptor.cullMode.toWebGpu()
-        primitive.asDynamic().frontFace = descriptor.frontFace.toWebGpu()
-        pipelineDescriptor.asDynamic().primitive = primitive
+        primitive.topology = descriptor.primitiveTopology.toWebGpu()
+        primitive.cullMode = descriptor.cullMode.toWebGpu()
+        primitive.frontFace = descriptor.frontFace.toWebGpu()
+        pipelineDescriptor.primitive = primitive
 
         descriptor.depthStencilFormat?.let { depthFormat ->
             val depthStencil = emptyObject()
-            depthStencil.asDynamic().format = depthFormat.toWebGpuFormat()
-            depthStencil.asDynamic().depthWriteEnabled = true
-            depthStencil.asDynamic().depthCompare = "less"
-            pipelineDescriptor.asDynamic().depthStencil = depthStencil
+            depthStencil.format = depthFormat.toWebGpuFormat()
+            depthStencil.depthWriteEnabled = true
+            depthStencil.depthCompare = "less"
+            pipelineDescriptor.depthStencil = depthStencil
         }
 
         val pipeline = handle().createRenderPipeline(pipelineDescriptor)
@@ -399,12 +400,12 @@ actual class GpuDevice actual constructor(
 
     actual fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline {
         val pipelineDescriptor = emptyObject()
-        descriptor.label?.let { pipelineDescriptor.asDynamic().label = it }
+        descriptor.label?.let { pipelineDescriptor.label = it }
         val computeState = emptyObject()
-        computeState.asDynamic().module = descriptor.shader.handle()
-        computeState.asDynamic().entryPoint = "main"
-        pipelineDescriptor.asDynamic().compute = computeState
-        pipelineDescriptor.asDynamic().layout = "auto"
+        computeState.module = descriptor.shader.handle()
+        computeState.entryPoint = "main"
+        pipelineDescriptor.compute = computeState
+        pipelineDescriptor.layout = "auto"
         val pipeline = handle().createComputePipeline(pipelineDescriptor)
         return GpuComputePipeline(this, descriptor).apply { attach(pipeline) }
     }
@@ -431,7 +432,7 @@ actual class GpuQueue actual constructor(
         val queue = queueHandle ?: return
         val jsBuffers = JsArray()
         commandBuffers.forEach { buffer ->
-            jsBuffers.asDynamic().push(buffer.handle())
+            jsBuffers.push(buffer.handle())
         }
         queue.submit(jsBuffers)
     }
@@ -449,19 +450,31 @@ actual class GpuSurface actual constructor(
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
         this.configuration = configuration
-        val canvas = ensureCanvas(label)
-        configureCanvas(canvas, configuration.width, configuration.height)
-        this.canvas = canvas
+        // Use the attached canvas if available, otherwise create/find one by label
+        val existingCanvas = canvas
+        val canvasElement = if (existingCanvas != null && jsTypeOf(existingCanvas) != "undefined") {
+            existingCanvas
+        } else {
+            ensureCanvas(label)
+        }
+        configureCanvas(canvasElement, configuration.width, configuration.height)
+        this.canvas = canvasElement
+        
+        console.log("GpuSurface.configure: canvas.width=${canvasElement.width}, canvas.height=${canvasElement.height}, config=${configuration.width}x${configuration.height}")
 
-        context = context ?: canvas.getContext("webgpu")
+        context = context ?: canvasElement.getContext("webgpu")
                 ?: error("Unable to acquire WebGPU canvas context")
 
         val jsConfig = emptyObject()
-        jsConfig.asDynamic().device = device.handle()
-        jsConfig.asDynamic().format = configuration.format.toWebGpuFormat()
-        jsConfig.asDynamic().usage = configuration.usage
-        jsConfig.asDynamic().alphaMode = "opaque"
+        jsConfig.device = device.handle()
+        jsConfig.format = configuration.format.toWebGpuFormat()
+        jsConfig.usage = configuration.usage
+        jsConfig.alphaMode = "opaque"
         context.configure(jsConfig)
+        
+        // Check what the context thinks the size is
+        val tex = context.getCurrentTexture()
+        console.log("GpuSurface.configure: texture size=${tex.width}x${tex.height}")
     }
 
     actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
@@ -482,15 +495,16 @@ actual class GpuSurface actual constructor(
         val textureHandle = context.getCurrentTexture()
             ?: error("Failed to acquire swapchain texture")
         val surfaceConfig = configuration ?: error("Surface configuration missing")
-        val width =
-            (canvas.width as? Int) ?: (canvas.width as? Double)?.toInt() ?: surfaceConfig.width
-        val height =
-            (canvas.height as? Int) ?: (canvas.height as? Double)?.toInt() ?: surfaceConfig.height
+        
+        // Get actual texture dimensions from the WebGPU texture, not from canvas
+        val actualWidth = textureHandle.width as Int
+        val actualHeight = textureHandle.height as Int
+        
         val texture = GpuTexture(
             device = device,
             descriptor = GpuTextureDescriptor(
                 label = "${label.orDefault("surface")}-frame",
-                size = Triple(width, height, 1),
+                size = Triple(actualWidth, actualHeight, 1),
                 mipLevelCount = 1,
                 sampleCount = 1,
                 dimension = GpuTextureDimension.D2,
@@ -507,10 +521,29 @@ actual class GpuSurface actual constructor(
     }
 
     actual fun resize(width: Int, height: Int) {
-        if (canvas != null) {
-            configureCanvas(canvas, width, height)
-        }
-        configuration = configuration?.copy(width = width, height = height)
+        val dev = configuredDevice ?: return
+        val ctx = context ?: return
+        val config = configuration ?: return
+        val canvasEl = canvas ?: return
+        
+        // First update the canvas dimensions
+        configureCanvas(canvasEl, width, height)
+        
+        // Update configuration
+        val newConfig = config.copy(width = width, height = height)
+        configuration = newConfig
+        
+        // Reconfigure the WebGPU context - it will use the canvas dimensions
+        val jsConfig = emptyObject()
+        jsConfig.device = dev.handle()
+        jsConfig.format = newConfig.format.toWebGpuFormat()
+        jsConfig.usage = newConfig.usage
+        jsConfig.alphaMode = "opaque"
+        ctx.configure(jsConfig)
+        
+        // Verify the texture size after reconfiguration
+        val tex = ctx.getCurrentTexture()
+        console.log("GpuSurface.resize: canvas=${canvasEl.width}x${canvasEl.height}, texture=${tex.width}x${tex.height}")
     }
 }
 
@@ -556,7 +589,7 @@ actual class GpuBuffer actual constructor(
         }
 
         val uint8 = createUint8Array(data.size)
-        val dynArray = uint8.asDynamic()
+        val dynArray: dynamic = uint8
         data.forEachIndexed { index, byte ->
             dynArray[index] = byte.toInt() and 0xFF
         }
@@ -571,7 +604,7 @@ actual class GpuBuffer actual constructor(
             "Write range exceeds buffer size"
         }
         val floatArray = createFloat32Array(data.size)
-        val dynFloats = floatArray.asDynamic()
+        val dynFloats: dynamic = floatArray
         data.forEachIndexed { index, value ->
             dynFloats[index] = value
         }
@@ -604,12 +637,12 @@ actual class GpuTexture actual constructor(
 
     actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView {
         val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.asDynamic().label = it }
-        descriptor.format?.let { jsDescriptor.asDynamic().format = it.toWebGpuFormat() }
-        jsDescriptor.asDynamic().baseMipLevel = descriptor.baseMipLevel
-        descriptor.mipLevelCount?.let { jsDescriptor.asDynamic().mipLevelCount = it }
-        jsDescriptor.asDynamic().baseArrayLayer = descriptor.baseArrayLayer
-        descriptor.arrayLayerCount?.let { jsDescriptor.asDynamic().arrayLayerCount = it }
+        descriptor.label?.let { jsDescriptor.label = it }
+        descriptor.format?.let { jsDescriptor.format = it.toWebGpuFormat() }
+        jsDescriptor.baseMipLevel = descriptor.baseMipLevel
+        descriptor.mipLevelCount?.let { jsDescriptor.mipLevelCount = it }
+        jsDescriptor.baseArrayLayer = descriptor.baseArrayLayer
+        descriptor.arrayLayerCount?.let { jsDescriptor.arrayLayerCount = it }
         val viewHandle = handle().createView(jsDescriptor)
         return GpuTextureView(this, descriptor).apply { attach(viewHandle) }
     }
@@ -675,7 +708,7 @@ actual class GpuCommandEncoder actual constructor(
     actual fun finish(label: String?): GpuCommandBuffer {
         val commandBuffer = label?.let {
             val finishDescriptor = emptyObject()
-            finishDescriptor.asDynamic().label = it
+            finishDescriptor.label = it
             handle().finish(finishDescriptor)
         } ?: handle().finish()
         return GpuCommandBuffer(device, label ?: descriptor?.label).apply { attach(commandBuffer) }
@@ -683,25 +716,55 @@ actual class GpuCommandEncoder actual constructor(
 
     actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder {
         val passDescriptor = emptyObject()
-        descriptor.label?.let { passDescriptor.asDynamic().label = it }
+        descriptor.label?.let { passDescriptor.label = it }
         val attachments = JsArray()
         descriptor.colorAttachments.forEach { attachment ->
             val jsAttachment = emptyObject()
-            jsAttachment.asDynamic().view = attachment.view.handle()
-            attachment.resolveTarget?.let { jsAttachment.asDynamic().resolveTarget = it.handle() }
-            jsAttachment.asDynamic().loadOp = attachment.loadOp.toWebGpu()
-            jsAttachment.asDynamic().storeOp = attachment.storeOp.toWebGpu()
+            jsAttachment.view = attachment.view.handle()
+            attachment.resolveTarget?.let { jsAttachment.resolveTarget = it.handle() }
+            jsAttachment.loadOp = attachment.loadOp.toWebGpu()
+            jsAttachment.storeOp = attachment.storeOp.toWebGpu()
             val color = attachment.clearColor
             val clearValue = emptyObject()
-            clearValue.asDynamic().r = color.componentOrDefault(0, 0.0)
-            clearValue.asDynamic().g = color.componentOrDefault(1, 0.0)
-            clearValue.asDynamic().b = color.componentOrDefault(2, 0.0)
-            clearValue.asDynamic().a = color.componentOrDefault(3, 1.0)
-            jsAttachment.asDynamic().clearValue = clearValue
-            attachments.asDynamic().push(jsAttachment)
+            clearValue.r = color.componentOrDefault(0, 0.0)
+            clearValue.g = color.componentOrDefault(1, 0.0)
+            clearValue.b = color.componentOrDefault(2, 0.0)
+            clearValue.a = color.componentOrDefault(3, 1.0)
+            jsAttachment.clearValue = clearValue
+            attachments.push(jsAttachment)
         }
-        passDescriptor.asDynamic().colorAttachments = attachments
+        passDescriptor.colorAttachments = attachments
+
+        descriptor.depthStencilAttachment?.let { depth ->
+            val depthAttachment = emptyObject()
+            depthAttachment.view = depth.view.handle()
+            depthAttachment.depthLoadOp = depth.depthLoadOp.toWebGpu()
+            depthAttachment.depthStoreOp = depth.depthStoreOp.toWebGpu()
+            depthAttachment.depthClearValue = depth.depthClearValue
+            depthAttachment.depthReadOnly = depth.depthReadOnly
+
+            depth.stencilLoadOp?.let { depthAttachment.stencilLoadOp = it.toWebGpu() }
+            depth.stencilStoreOp?.let { depthAttachment.stencilStoreOp = it.toWebGpu() }
+            depthAttachment.stencilClearValue = depth.stencilClearValue
+            depthAttachment.stencilReadOnly = depth.stencilReadOnly
+
+            passDescriptor.depthStencilAttachment = depthAttachment
+        }
+
         val passHandle = handle().beginRenderPass(passDescriptor)
+        
+        // Explicitly set viewport to match the render target size
+        // This is needed for some WebGPU implementations (like SwiftShader)
+        val firstAttachment = descriptor.colorAttachments.firstOrNull()
+        if (firstAttachment != null) {
+            val textureDesc = firstAttachment.view.texture.descriptor
+            val width = textureDesc.size.first.toDouble()
+            val height = textureDesc.size.second.toDouble()
+            // WebGPU setViewport expects: x, y, width, height, minDepth, maxDepth
+            passHandle.setViewport(0.0, 0.0, width, height, 0.0, 1.0)
+            passHandle.setScissorRect(0, 0, width.toInt(), height.toInt())
+        }
+        
         return GpuRenderPassEncoder(this, descriptor).apply { attach(passHandle) }
     }
 }
@@ -891,30 +954,34 @@ private fun GpuCompareFunction.toWebGpu(): String = when (this) {
 
 private fun GpuBlendMode.toWebGpu(): dynamic? = when (this) {
     GpuBlendMode.DISABLED -> null
-    GpuBlendMode.ALPHA -> emptyObject().apply {
+    GpuBlendMode.ALPHA -> {
+        val blend = emptyObject()
         val color = emptyObject()
-        color.asDynamic().srcFactor = "src-alpha"
-        color.asDynamic().dstFactor = "one-minus-src-alpha"
-        color.asDynamic().operation = "add"
+        color.srcFactor = "src-alpha"
+        color.dstFactor = "one-minus-src-alpha"
+        color.operation = "add"
         val alpha = emptyObject()
-        alpha.asDynamic().srcFactor = "one"
-        alpha.asDynamic().dstFactor = "one-minus-src-alpha"
-        alpha.asDynamic().operation = "add"
-        this.asDynamic().color = color
-        this.asDynamic().alpha = alpha
+        alpha.srcFactor = "one"
+        alpha.dstFactor = "one-minus-src-alpha"
+        alpha.operation = "add"
+        blend.color = color
+        blend.alpha = alpha
+        blend
     }
 
-    GpuBlendMode.ADDITIVE -> emptyObject().apply {
+    GpuBlendMode.ADDITIVE -> {
+        val blend = emptyObject()
         val color = emptyObject()
-        color.asDynamic().srcFactor = "one"
-        color.asDynamic().dstFactor = "one"
-        color.asDynamic().operation = "add"
+        color.srcFactor = "one"
+        color.dstFactor = "one"
+        color.operation = "add"
         val alpha = emptyObject()
-        alpha.asDynamic().srcFactor = "one"
-        alpha.asDynamic().dstFactor = "one"
-        alpha.asDynamic().operation = "add"
-        this.asDynamic().color = color
-        this.asDynamic().alpha = alpha
+        alpha.srcFactor = "one"
+        alpha.dstFactor = "one"
+        alpha.operation = "add"
+        blend.color = color
+        blend.alpha = alpha
+        blend
     }
 }
 

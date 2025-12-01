@@ -97,13 +97,16 @@ tasks.register<JavaExec>("runJvm") {
     group = "run"
     description = "Run the JVM version of the triangle example"
 
-    dependsOn("jvmMainClasses")
-    val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
-    classpath = (jvmCompilation.runtimeDependencyFiles ?: files()) + jvmCompilation.output.allOutputs
+    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
+    val jvmClasses = tasks.named("jvmMainClasses")
+
+    dependsOn(jvmClasses)
+
     mainClass.set("io.materia.examples.triangle.MainKt")
     jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
     doFirst {
+        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🎮 Starting Materia Triangle Example (JVM)")
         println("Bootstrapping GPU abstraction for MVP triangle")
     }

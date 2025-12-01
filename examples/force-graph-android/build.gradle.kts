@@ -74,6 +74,7 @@ tasks.register("runAndroid") {
     description = "Install and launch the Force Graph Android demo"
     dependsOn("assembleDebug")
     notCompatibleWithConfigurationCache("Invokes adb commands for installation")
+    doNotTrackState("adb install/start invocations are non-deterministic")
     doLast {
         fun runAdbCommand(vararg args: String): Int = try {
             val process = ProcessBuilder(*args)

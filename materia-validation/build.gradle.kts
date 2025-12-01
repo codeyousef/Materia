@@ -192,7 +192,10 @@ tasks.register<JavaExec>("validateProductionReadiness") {
     description = "Validates that the Materia codebase is production ready"
 
     mainClass.set("io.materia.validation.cli.ValidationRunnerKt")
-    classpath = kotlin.targets["jvm"].compilations["main"].runtimeDependencyFiles
+    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
+    val jvmClasses = tasks.named("jvmMainClasses")
+
+    dependsOn(jvmClasses)
 
     // Pass project path as argument
     args = listOf(
@@ -210,6 +213,7 @@ tasks.register<JavaExec>("validateProductionReadiness") {
     )
 
     doFirst {
+        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🔍 Starting Materia Production Readiness Validation...")
         println("   Project: ${project.rootDir.absolutePath}")
         println("   Configuration: strict")

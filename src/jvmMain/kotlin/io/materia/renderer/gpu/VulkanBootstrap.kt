@@ -253,7 +253,7 @@ internal object VulkanBootstrap {
                 config.powerPreference == GpuPowerPreference.LOW_POWER || config.forceFallbackAdapter
             return devices.minByOrNull { device ->
                 val rank = devicePerformanceRank(device)
-                if (preferLowPower) rank else -rank
+                if (preferLowPower) -rank else rank
             }!!
         }
     }

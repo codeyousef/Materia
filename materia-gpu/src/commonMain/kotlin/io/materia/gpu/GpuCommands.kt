@@ -37,9 +37,21 @@ data class GpuRenderPassColorAttachment(
     val clearColor: FloatArray = floatArrayOf(0f, 0f, 0f, 1f)
 )
 
+data class GpuRenderPassDepthStencilAttachment(
+    val view: GpuTextureView,
+    val depthLoadOp: GpuLoadOp = GpuLoadOp.CLEAR,
+    val depthStoreOp: GpuStoreOp = GpuStoreOp.DISCARD,
+    val depthClearValue: Float = 1.0f,
+    val depthReadOnly: Boolean = false,
+    val stencilLoadOp: GpuLoadOp? = null,
+    val stencilStoreOp: GpuStoreOp? = null,
+    val stencilClearValue: Int = 0,
+    val stencilReadOnly: Boolean = false
+)
+
 data class GpuRenderPassDescriptor(
     val colorAttachments: List<GpuRenderPassColorAttachment>,
-    val depthStencilAttachment: Any? = null,
+    val depthStencilAttachment: GpuRenderPassDepthStencilAttachment? = null,
     val label: String? = null
 )
 

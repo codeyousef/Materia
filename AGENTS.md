@@ -32,3 +32,18 @@ Write commits with short imperative subjects (e.g., "Add validation wiring"). PR
 Run `./gradlew dependencyCheckAnalyze` during security reviews. Validate release readiness through
 `./gradlew validateProductionReadiness`, reviewing reports in
 `materia-validation/build/validation-reports/`.
+
+## Shader Management & Rendering Architecture
+
+### Dual Shader Source
+The project uses a split strategy for shaders:
+*   **WebGPU (JS):** Uses WGSL source strings defined directly in Kotlin code (e.g., `UnlitPipelineFactory.kt`). Edits to these strings take effect immediately on the JS target.
+*   **Vulkan (JVM):** Uses pre-compiled SPIR-V binaries located in `src/jvmMain/resources/shaders/`. The JVM backend **ignores** the WGSL strings in the Kotlin code.
+*   **Implication:** When modifying shaders, you must update the WGSL string for JS **AND** recompile the shader to SPIR-V for JVM. If the JVM output looks "stale" or "purple" (debug color), it means the SPIR-V binary is out of sync with the code.
+
+### Rendering Pipeline
+*   **EngineRenderer:** The high-level entry point for the engine-focused render loop.
+*   **SceneRenderer:** Handles the actual draw command generation.
+*   **Pipeline Factories:** (e.g., `UnlitPipelineFactory`) Configure the GPU state and load shaders.
+*   **Topology:** WebGPU has strict topology requirements. `POINT_LIST` is often not supported or renders invisible points. Prefer using a **Quad Fallback** (rendering points as 6-vertex billboards) for cross-platform consistency.
+

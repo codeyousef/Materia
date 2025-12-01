@@ -111,7 +111,7 @@ class EmbeddingGalaxyExample(
     private val sceneConfig: EmbeddingGalaxyScene.Config = EmbeddingGalaxyScene.Config(),
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU, GpuBackend.VULKAN),
     private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
-    private val enableFxaa: Boolean = true,
+    private val enableFxaa: Boolean = false,  // Disabled to debug viewport issue
     private val performanceProfile: PerformanceProfile = PerformanceProfile.Desktop
 ) {
 
@@ -144,7 +144,7 @@ class EmbeddingGalaxyExample(
         val rendererConfig = RendererConfig(
             preferredBackend = preferredBackends.firstOrNull()?.toBackendType(),
             powerPreference = powerPreference.toRendererPowerPreference(),
-            enableValidation = false,
+            enableValidation = true,  // Enable validation for debugging
             vsync = true,
             msaaSamples = 1
         )
@@ -162,6 +162,11 @@ class EmbeddingGalaxyExample(
         )
         val renderer = rendererResult.getOrThrow()
         renderer.resize(targetWidth, targetHeight)
+        
+        // Update camera aspect ratio to match the actual viewport
+        if (targetWidth > 0 && targetHeight > 0) {
+            scene.resize(targetWidth.toFloat() / targetHeight.toFloat())
+        }
 
         val mark = TimeSource.Monotonic.markNow()
         renderer.render(scene.scene, scene.camera)

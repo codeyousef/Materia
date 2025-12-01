@@ -93,13 +93,16 @@ tasks.register<JavaExec>("runJvm") {
     group = "run"
     description = "Run the JVM version of the Force Graph example"
 
-    dependsOn("jvmMainClasses")
-    val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
-    classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
+    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
+    val jvmClasses = tasks.named("jvmMainClasses")
+
+    dependsOn(jvmClasses)
+
     mainClass.set("io.materia.examples.forcegraph.MainKt")
     jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
     doFirst {
+        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🚀 Launching Force Graph on JVM")
         println("Bootstrapping EngineRenderer + force-directed scene…")
     }

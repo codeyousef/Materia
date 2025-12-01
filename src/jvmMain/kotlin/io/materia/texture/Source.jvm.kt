@@ -1,5 +1,6 @@
 package io.materia.texture
 
+import io.materia.util.Base64Compat
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -9,8 +10,6 @@ import java.net.URL
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 import kotlin.concurrent.thread
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * JVM implementation of ImageLoader
@@ -126,7 +125,6 @@ actual class CanvasElement {
         }
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
     actual fun toDataURL(type: String, quality: Float): String {
         val img = bufferedImage ?: return "data:,"
 
@@ -165,7 +163,7 @@ actual class CanvasElement {
 
             val bytes = baos.toByteArray()
             val mimeType = if (format == "jpg") "image/jpeg" else "image/$format"
-            "data:$mimeType;base64," + Base64.encode(bytes)
+            "data:$mimeType;base64," + Base64Compat.encode(bytes)
         } catch (e: Exception) {
             "data:," // Return empty data URL on error
         }

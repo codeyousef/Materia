@@ -2,6 +2,7 @@ package io.materia.examples.embeddinggalaxy
 
 import io.materia.engine.camera.PerspectiveCamera
 import io.materia.engine.material.BlendMode
+import io.materia.engine.material.CullMode
 import io.materia.engine.material.RenderState
 import io.materia.engine.material.UnlitPointsMaterial
 import io.materia.engine.math.Color
@@ -35,7 +36,7 @@ class EmbeddingGalaxyScene(
         val maxQualityScale: Float = 1.25f,
         val performanceScale: Float = 0.55f,
         val rotationSpeed: Float = 0.25f,
-        val orbitRadius: Float = 7.2f,
+        val orbitRadius: Float = 12.0f,  // Increased for better initial view
         val orbitSpeed: Float = 0.18f,
         val orbitHeightScale: Float = 0.3f,
         val shockwaveIntervalSeconds: Float = 4f,
@@ -251,7 +252,8 @@ class EmbeddingGalaxyScene(
             renderState = RenderState(
                 blendMode = BlendMode.Additive,
                 depthTest = false,
-                depthWrite = false
+                depthWrite = false,
+                cullMode = CullMode.NONE
             )
         )
 

@@ -1,6 +1,7 @@
 #include "vulkan_bridge.hpp"
 
 #include <android/log.h>
+#include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <jni.h>
 #include <vulkan/vulkan.h>
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <cstdint>
 #include <cstring>
@@ -18,6 +20,8 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <thread>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -26,9 +30,19 @@ namespace {
 
 #define VK_LOG_TAG "MateriaVk"
 #define VK_LOG_INFO(...) __android_log_print(ANDROID_LOG_INFO, VK_LOG_TAG, __VA_ARGS__)
+#define VK_LOG_WARN(...) __android_log_print(ANDROID_LOG_WARN, VK_LOG_TAG, __VA_ARGS__)
 #define VK_LOG_ERROR(...) __android_log_print(ANDROID_LOG_ERROR, VK_LOG_TAG, __VA_ARGS__)
 
     using Id = std::uint64_t;
+
+    template <typename Handle>
+    uintptr_t toHandleValue(Handle handle) {
+        if constexpr (std::is_pointer_v<Handle>) {
+            return reinterpret_cast<uintptr_t>(handle);
+        } else {
+            return static_cast<uintptr_t>(handle);
+        }
+    }
 
     std::atomic<Id> g_nextId{1};
 
@@ -185,6 +199,7 @@ namespace {
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
         VkFormat format = VK_FORMAT_B8G8R8A8_UNORM;
         VkExtent2D extent{0, 0};
+        VkSurfaceTransformFlagBitsKHR preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkRenderPass renderPass = VK_NULL_HANDLE;
         std::vector<VkImage> images;
         std::vector<Id> textureIds;
@@ -808,7 +823,14 @@ namespace {
         }
 
         VkInstance instanceHandle = VK_NULL_HANDLE;
-        if (vkCreateInstance(&createInfo, nullptr, &instanceHandle) != VK_SUCCESS) {
+        VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &instanceHandle);
+        if (instanceResult == VK_ERROR_INCOMPATIBLE_DRIVER && appInfo.apiVersion > VK_API_VERSION_1_0) {
+            VK_LOG_INFO("Vulkan loader incompatible with requested API; retrying with 1.0");
+            appInfo.apiVersion = VK_API_VERSION_1_0;
+            instanceResult = vkCreateInstance(&createInfo, nullptr, &instanceHandle);
+        }
+        if (instanceResult != VK_SUCCESS) {
+            VK_LOG_ERROR("Failed to create Vulkan instance (error=%d)", instanceResult);
             throw std::runtime_error("Failed to create Vulkan instance");
         }
 
@@ -839,14 +861,48 @@ namespace {
             throw std::runtime_error("Failed to obtain ANativeWindow from Surface");
         }
 
+        // Acquire window lock to ensure Surface is fully initialized
+        // This prevents race conditions when Surface is created but not yet ready
+        int32_t windowWidth = ANativeWindow_getWidth(window);
+        int32_t windowHeight = ANativeWindow_getHeight(window);
+
+        // Validate dimensions - if zero, the surface might not be ready yet
+        if (windowWidth <= 0 || windowHeight <= 0) {
+            VK_LOG_WARN(
+                "ANativeWindow has invalid dimensions (width=%d, height=%d); waiting for valid size",
+                windowWidth,
+                windowHeight);
+
+            // Poll for valid dimensions (common on some Android devices during rapid lifecycle changes)
+            int retries = 20;
+            while ((windowWidth <= 0 || windowHeight <= 0) && retries-- > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                windowWidth = ANativeWindow_getWidth(window);
+                windowHeight = ANativeWindow_getHeight(window);
+            }
+
+            if (windowWidth <= 0 || windowHeight <= 0) {
+                ANativeWindow_release(window);
+                throw std::runtime_error("ANativeWindow dimensions remain invalid after waiting");
+            }
+        }
+
+        VK_LOG_INFO(
+                "Creating Vulkan surface (window=%p, size=%dx%d)",
+                static_cast<void *>(window),
+                windowWidth,
+                windowHeight);
+
         VkAndroidSurfaceCreateInfoKHR surfaceInfo{};
         surfaceInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
         surfaceInfo.window = window;
 
         VkSurfaceKHR surfaceHandle = VK_NULL_HANDLE;
-        if (instance.dispatch.createAndroidSurfaceKHR(instance.instance, &surfaceInfo, nullptr,
-                                                      &surfaceHandle) != VK_SUCCESS) {
+        VkResult result = instance.dispatch.createAndroidSurfaceKHR(instance.instance, &surfaceInfo, nullptr,
+                                                      &surfaceHandle);
+        if (result != VK_SUCCESS) {
             ANativeWindow_release(window);
+            VK_LOG_ERROR("Failed to create Android Vulkan surface (VkResult=%d)", result);
             throw std::runtime_error("Failed to create Android Vulkan surface");
         }
 
@@ -855,11 +911,47 @@ namespace {
         surface->window = window;
 
         Id surfaceId = storeObject(instance.surfaces, std::move(surface));
-        VK_LOG_INFO("Created Vulkan surface (surface=%" PRIu64 ")", surfaceId);
+        VK_LOG_INFO(
+                "Created Vulkan surface (surface=%" PRIu64 ", handle=0x%" PRIxPTR ")",
+                surfaceId,
+                toHandleValue(surfaceHandle));
         return surfaceId;
     }
 
-    Id createDeviceInternal(VulkanInstance &instance, bool requestDiscrete) {
+    const char* deviceTypeToString(VkPhysicalDeviceType type) {
+        switch (type) {
+            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "Integrated GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "Discrete GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "Virtual GPU";
+            case VK_PHYSICAL_DEVICE_TYPE_CPU: return "CPU (Software)";
+            default: return "Other/Unknown";
+        }
+    }
+
+    int deviceTypePriority(VkPhysicalDeviceType type, bool preferHighPerformance) {
+        // Higher priority = better choice
+        // For HIGH_PERFORMANCE: prefer discrete > integrated > virtual > CPU
+        // For LOW_POWER: prefer integrated > discrete > virtual > CPU
+        if (preferHighPerformance) {
+            switch (type) {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 100;
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 90;
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return 50;
+                case VK_PHYSICAL_DEVICE_TYPE_CPU: return 10;
+                default: return 1;
+            }
+        } else {
+            switch (type) {
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 100;
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 90;
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return 50;
+                case VK_PHYSICAL_DEVICE_TYPE_CPU: return 10;
+                default: return 1;
+            }
+        }
+    }
+
+    Id createDeviceInternal(VulkanInstance &instance, bool preferHighPerformance) {
         uint32_t deviceCount = 0;
         vkEnumeratePhysicalDevices(instance.instance, &deviceCount, nullptr);
         if (deviceCount == 0) {
@@ -869,13 +961,31 @@ namespace {
         vkEnumeratePhysicalDevices(instance.instance, &deviceCount, physicalDevices.data());
 
         VkPhysicalDevice selectedDevice = VK_NULL_HANDLE;
+        VkPhysicalDeviceProperties selectedProps{};
+        int selectedPriority = -1;
         uint32_t graphicsQueueFamily = UINT32_MAX;
         uint32_t presentQueueFamily = UINT32_MAX;
 
+        VK_LOG_INFO("Enumerated %u Vulkan physical device(s), preferHighPerformance=%s",
+                    deviceCount, preferHighPerformance ? "true" : "false");
+
+        // Log all available devices for debugging
+        for (uint32_t d = 0; d < deviceCount; ++d) {
+            VkPhysicalDeviceProperties props;
+            vkGetPhysicalDeviceProperties(physicalDevices[d], &props);
+            int priority = deviceTypePriority(props.deviceType, preferHighPerformance);
+            VK_LOG_INFO("  Device[%u]: %s (type=%s, priority=%d)",
+                        d, props.deviceName, deviceTypeToString(props.deviceType), priority);
+        }
+
+        // Select the best device based on priority, preferring hardware over software
         for (auto candidate: physicalDevices) {
             VkPhysicalDeviceProperties props;
             vkGetPhysicalDeviceProperties(candidate, &props);
-            if (requestDiscrete && props.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            int priority = deviceTypePriority(props.deviceType, preferHighPerformance);
+
+            // Skip if we already have a better candidate
+            if (priority <= selectedPriority) {
                 continue;
             }
 
@@ -903,20 +1013,26 @@ namespace {
                     selectedDevice = candidate;
                     graphicsQueueFamily = i;
                     presentQueueFamily = i;
+                    selectedProps = props;
+                    selectedPriority = priority;
+                    VK_LOG_INFO("Selected device candidate: %s (type=%s, priority=%d)",
+                                props.deviceName, deviceTypeToString(props.deviceType), priority);
                     break;
                 }
-            }
-
-            if (selectedDevice != VK_NULL_HANDLE) {
-                break;
             }
         }
 
         if (selectedDevice == VK_NULL_HANDLE) {
+            // Fallback to first device if no suitable one found (shouldn't happen normally)
+            VK_LOG_WARN("No suitable device found with graphics+present support, using first available");
             selectedDevice = physicalDevices.front();
             graphicsQueueFamily = 0;
             presentQueueFamily = 0;
+            vkGetPhysicalDeviceProperties(selectedDevice, &selectedProps);
         }
+
+        VK_LOG_INFO("Final device selection: %s (type=%s)",
+                    selectedProps.deviceName, deviceTypeToString(selectedProps.deviceType));
 
         float queuePriority = 1.0f;
         VkDeviceQueueCreateInfo queueInfo{};
@@ -949,6 +1065,24 @@ namespace {
         }
 
         VkPhysicalDeviceFeatures features{};
+        // Enable features for point primitives
+        features.shaderClipDistance = VK_TRUE;  // Required for some clip space operations
+        features.largePoints = VK_TRUE;         // Allow point sizes > 1.0
+        // IMPORTANT: Enable shaderPointSize so vertex shaders can write gl_PointSize
+        // Without this feature, gl_PointSize writes in the vertex shader are ignored!
+        
+        // Query to verify feature support
+        VkPhysicalDeviceFeatures supportedFeatures{};
+        vkGetPhysicalDeviceFeatures(selectedDevice, &supportedFeatures);
+        
+        VK_LOG_INFO("Device point feature support: largePoints=%d, pointSizeRange=[%.1f, %.1f]",
+            supportedFeatures.largePoints,
+            selectedProps.limits.pointSizeRange[0],
+            selectedProps.limits.pointSizeRange[1]);
+        
+        if (!supportedFeatures.largePoints) {
+            VK_LOG_WARN("Device does not support largePoints feature - point rendering may be limited");
+        }
 
         VkDeviceCreateInfo deviceInfo{};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -960,6 +1094,13 @@ namespace {
         }
         deviceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         deviceInfo.ppEnabledExtensionNames = extensions.data();
+
+        VK_LOG_INFO(
+                "Creating Vulkan device (physical=%p, name=%s, graphicsQueueFamily=%u, timelineSupport=%d)",
+                static_cast<void *>(selectedDevice),
+                selectedProps.deviceName,
+                graphicsQueueFamily,
+                timelineQuery.timelineSemaphore == VK_TRUE);
 
         VkDevice deviceHandle = VK_NULL_HANDLE;
         if (vkCreateDevice(selectedDevice, &deviceInfo, nullptr, &deviceHandle) != VK_SUCCESS) {
@@ -1006,9 +1147,14 @@ namespace {
         }
 
         device->descriptorPool = createDescriptorPool(deviceHandle);
+        const bool timelineSupportedFlag = device->timelineSupported;
 
         Id deviceId = storeObject(instance.devices, std::move(device));
-        VK_LOG_INFO("Created Vulkan device (device=%" PRIu64 ")", deviceId);
+        VK_LOG_INFO(
+                "Created Vulkan device (device=%" PRIu64 ", name=%s, timelineSupported=%d)",
+                deviceId,
+                selectedProps.deviceName,
+                timelineSupportedFlag ? 1 : 0);
         return deviceId;
     }
 
@@ -1145,6 +1291,45 @@ namespace {
         VkExtent2D extent = chooseExtent(capabilities, width, height);
         uint32_t imageCount = selectImageCount(capabilities);
 
+        // Validate that the chosen extent is within capabilities
+        if (extent.width < capabilities.minImageExtent.width ||
+            extent.width > capabilities.maxImageExtent.width ||
+            extent.height < capabilities.minImageExtent.height ||
+            extent.height > capabilities.maxImageExtent.height) {
+            VK_LOG_ERROR(
+                "Chosen extent %ux%u is outside surface capabilities (min=%ux%u, max=%ux%u, current=%ux%u)",
+                extent.width, extent.height,
+                capabilities.minImageExtent.width, capabilities.minImageExtent.height,
+                capabilities.maxImageExtent.width, capabilities.maxImageExtent.height,
+                capabilities.currentExtent.width, capabilities.currentExtent.height);
+            throw std::runtime_error("Swapchain extent out of range");
+        }
+
+        VK_LOG_INFO(
+            "Surface capabilities: extent=%ux%u, minExtent=%ux%u, maxExtent=%ux%u, minImageCount=%u, maxImageCount=%u, currentTransform=0x%x, supportedTransforms=0x%x",
+            capabilities.currentExtent.width, capabilities.currentExtent.height,
+            capabilities.minImageExtent.width, capabilities.minImageExtent.height,
+            capabilities.maxImageExtent.width, capabilities.maxImageExtent.height,
+            capabilities.minImageCount, capabilities.maxImageCount,
+            capabilities.currentTransform, capabilities.supportedTransforms);
+
+        // Determine the pre-transform to use:
+        // - Prefer IDENTITY if supported (compositor handles rotation, we render upright)
+        // - Otherwise use currentTransform and we need to handle rotation ourselves
+        VkSurfaceTransformFlagBitsKHR preTransform;
+        bool needsRotationCompensation = false;
+        if (capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+            preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+            VK_LOG_INFO("Using IDENTITY pre-transform (compositor handles rotation)");
+        } else {
+            preTransform = capabilities.currentTransform;
+            // If the current transform is not identity, we'll need to compensate
+            if (preTransform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+                needsRotationCompensation = true;
+                VK_LOG_INFO("Using currentTransform 0x%x (rotation compensation needed)", preTransform);
+            }
+        }
+
         VkSwapchainCreateInfoKHR createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         createInfo.surface = surface.surface;
@@ -1164,10 +1349,19 @@ namespace {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
 
-        createInfo.preTransform = capabilities.currentTransform;
+        createInfo.preTransform = preTransform;
         createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
         createInfo.clipped = VK_TRUE;
+
+        VK_LOG_INFO(
+                "Creating Vulkan swapchain (surface=0x%" PRIxPTR ", extent=%ux%u, minImages=%u, "
+                "presentMode=%u)",
+                toHandleValue(surface.surface),
+                extent.width,
+                extent.height,
+                createInfo.minImageCount,
+                createInfo.presentMode);
 
         VkSwapchainKHR swapchainHandle = VK_NULL_HANDLE;
         if (device.dispatch.createSwapchainKHR(device.device, &createInfo, nullptr,
@@ -1180,15 +1374,27 @@ namespace {
         swapchain->swapchain = swapchainHandle;
         swapchain->format = surfaceFormat;
         swapchain->extent = extent;
+        swapchain->preTransform = preTransform;
         swapchain->renderPass = getOrCreateRenderPass(device, surfaceFormat,
                                                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         uint32_t actualImageCount = 0;
-        device.dispatch.getSwapchainImagesKHR(device.device, swapchainHandle, &actualImageCount,
+        VkResult getImagesResult = device.dispatch.getSwapchainImagesKHR(device.device, swapchainHandle, &actualImageCount,
                                               nullptr);
+        if (getImagesResult != VK_SUCCESS) {
+            VK_LOG_ERROR("Failed to query swapchain image count (result=%d)", getImagesResult);
+            throw std::runtime_error("Failed to query swapchain images");
+        }
+
+        VK_LOG_INFO("Swapchain reports %u images available", actualImageCount);
+
         swapchain->images.resize(actualImageCount);
-        device.dispatch.getSwapchainImagesKHR(device.device, swapchainHandle, &actualImageCount,
+        getImagesResult = device.dispatch.getSwapchainImagesKHR(device.device, swapchainHandle, &actualImageCount,
                                               swapchain->images.data());
+        if (getImagesResult != VK_SUCCESS) {
+            VK_LOG_ERROR("Failed to retrieve swapchain images (result=%d)", getImagesResult);
+            throw std::runtime_error("Failed to retrieve swapchain images");
+        }
 
         swapchain->textureIds.reserve(actualImageCount);
         swapchain->textureViewIds.reserve(actualImageCount);
@@ -1273,12 +1479,26 @@ namespace {
         }
 
         Id swapchainId = storeObject(surface.swapchains, std::move(swapchain));
-        VK_LOG_INFO("Created swapchain (swapchain=%" PRIu64 ")", swapchainId);
+        VK_LOG_INFO(
+                "Created Vulkan swapchain (swapchain=%" PRIu64 ", extent=%ux%u, images=%u)",
+                swapchainId,
+                extent.width,
+                extent.height,
+                actualImageCount);
+
+        // CRITICAL: On Android, give the compositor a moment to fully connect the swapchain
+        // to the ANativeWindow before attempting the first acquire. Without this delay,
+        // vkAcquireNextImageKHR can timeout even though the swapchain was created successfully.
+        VK_LOG_INFO("Waiting briefly for Android compositor to connect swapchain...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
         return swapchainId;
     }
 
     std::unique_ptr<VulkanSurfaceFrame>
     acquireFrameInternal(VulkanDevice &device, VulkanSurface &surface, VulkanSwapchain &swapchain) {
+        // Only wait on fence/timeline if we've previously submitted work
+        // On first acquisition, fence is already signaled from creation
         if (device.timelineSupported) {
             if (swapchain.lastSubmittedValue > swapchain.completedValue) {
                 VkSemaphore waitSemaphore = device.timelineSemaphore;
@@ -1296,23 +1516,97 @@ namespace {
                 swapchain.completedValue = waitValue;
             }
         } else {
-            vkWaitForFences(device.device, 1, &swapchain.inFlightFence, VK_TRUE, UINT64_MAX);
-            vkResetFences(device.device, 1, &swapchain.inFlightFence);
+            // For first frame, fence is already signaled. For subsequent frames, wait for previous submit
+            if (swapchain.completedValue > 0 || swapchain.lastSubmittedValue > 0) {
+                vkWaitForFences(device.device, 1, &swapchain.inFlightFence, VK_TRUE, UINT64_MAX);
+                vkResetFences(device.device, 1, &swapchain.inFlightFence);
+            } else {
+                // First acquisition - reset the signaled fence so we can use it for first submit
+                vkResetFences(device.device, 1, &swapchain.inFlightFence);
+            }
         }
 
         uint32_t imageIndex = 0;
-        VkResult res = device.dispatch.acquireNextImageKHR(
-                device.device,
-                swapchain.swapchain,
-                UINT64_MAX,
-                swapchain.imageAvailableSemaphore,
-                VK_NULL_HANDLE,
-                &imageIndex);
+        // Avoid blocking indefinitely when the driver cannot provide an image (common on emulators and during rapid lifecycle changes).
+        // Use shorter timeout per attempt but more attempts to better handle transient delays
+        constexpr uint64_t acquireTimeoutNs = 200'000'000ull; // 200 ms per attempt (reduced from 500ms)
+        constexpr int maxAcquireAttempts = 30; // Increased from 10 to handle slower devices/emulators (total 6 seconds)
 
-        if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-            throw std::runtime_error("Swapchain out of date, recreation required");
+        VkResult res = VK_TIMEOUT;
+        int attempt = 0;
+
+        VK_LOG_INFO(
+            "Beginning swapchain image acquisition (swapchain=0x%" PRIxPTR ", extent=%ux%u, imageCount=%zu, fenceSubmitted=%llu, fenceCompleted=%llu)",
+            toHandleValue(swapchain.swapchain),
+            swapchain.extent.width,
+            swapchain.extent.height,
+            swapchain.images.size(),
+            swapchain.lastSubmittedValue,
+            swapchain.completedValue);
+
+        for (; attempt < maxAcquireAttempts; ++attempt) {
+            res = device.dispatch.acquireNextImageKHR(
+                    device.device,
+                    swapchain.swapchain,
+                    acquireTimeoutNs,
+                    swapchain.imageAvailableSemaphore,
+                    VK_NULL_HANDLE,
+                    &imageIndex);
+            if (res != VK_TIMEOUT) {
+                break;
+            }
+
+            // Log first 3 attempts and then every 5th attempt, plus the last
+            if (attempt < 3 || attempt % 5 == 0 || attempt == maxAcquireAttempts - 1) {
+                VK_LOG_WARN(
+                        "Swapchain image not ready yet (swapchain=0x%" PRIxPTR
+                        ", attempt=%d/%d, timeoutMs=%llu, extent=%ux%u)",
+                        toHandleValue(swapchain.swapchain),
+                        attempt + 1,
+                        maxAcquireAttempts,
+                        acquireTimeoutNs / 1000000,
+                        swapchain.extent.width,
+                        swapchain.extent.height);
+            }
+
+            // Brief yield to avoid tight spinning
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        if (res != VK_SUCCESS) {
+
+        if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+            VK_LOG_WARN(
+                    "Swapchain acquisition reported OUT_OF_DATE (swapchain=0x%" PRIxPTR
+                    ", extent=%ux%u); requesting recreation",
+                    toHandleValue(swapchain.swapchain),
+                    swapchain.extent.width,
+                    swapchain.extent.height);
+            // Return nullptr to signal that swapchain needs recreation
+            return nullptr;
+        }
+        // SUBOPTIMAL during acquire is fine - we can still use the image
+        if (res == VK_SUBOPTIMAL_KHR) {
+            static int suboptimalAcquireCount = 0;
+            if (suboptimalAcquireCount++ % 60 == 0) {
+                VK_LOG_INFO("Swapchain acquire returned SUBOPTIMAL (frame %d) - continuing", suboptimalAcquireCount);
+            }
+            // Continue with the acquired image - success
+        } else if (res == VK_TIMEOUT) {
+            VK_LOG_ERROR(
+                    "Failed to acquire swapchain image after %d attempts (swapchain=0x%" PRIxPTR
+                    ", extent=%ux%u, totalWaitMs=%llu). Surface may not be ready.",
+                    maxAcquireAttempts,
+                    toHandleValue(swapchain.swapchain),
+                    swapchain.extent.width,
+                    swapchain.extent.height,
+                    (acquireTimeoutNs * maxAcquireAttempts) / 1000000);
+            throw std::runtime_error("Timed out waiting for swapchain image - surface may not be ready");
+        } else if (res != VK_SUCCESS) {
+            VK_LOG_ERROR(
+                    "Failed to acquire swapchain image (swapchain=0x%" PRIxPTR ", result=%d, extent=%ux%u)",
+                    toHandleValue(swapchain.swapchain),
+                    res,
+                    swapchain.extent.width,
+                    swapchain.extent.height);
             throw std::runtime_error("Failed to acquire swapchain image");
         }
 
@@ -1321,10 +1615,15 @@ namespace {
         frame->imageIndex = imageIndex;
         frame->textureId = swapchain.textureIds[imageIndex];
         frame->viewId = swapchain.textureViewIds[imageIndex];
+        VK_LOG_INFO(
+                "Acquired swapchain frame (swapchain=0x%" PRIxPTR ", imageIndex=%u)",
+                toHandleValue(swapchain.swapchain),
+                imageIndex);
         return frame;
     }
 
-    void presentFrameInternal(VulkanDevice &device, VulkanSwapchain &swapchain,
+    // Returns: 0 = success, 1 = needs swapchain recreation, -1 = error
+    int presentFrameInternal(VulkanDevice &device, VulkanSwapchain &swapchain,
                               VulkanCommandBufferWrapper &commandBuffer, uint32_t imageIndex) {
         VkSemaphore waitSemaphores[] = {swapchain.renderFinishedSemaphore};
         VkSwapchainKHR swapchains[] = {swapchain.swapchain};
@@ -1338,13 +1637,31 @@ namespace {
         presentInfo.pImageIndices = &imageIndex;
 
         VkResult res = device.dispatch.queuePresentKHR(device.presentQueue, &presentInfo);
-        if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-            // surface needs resize; signal via exception
-            throw std::runtime_error("Swapchain presentation failed; surface outdated");
+        if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+            // Surface needs resize; signal to Kotlin side
+            VK_LOG_INFO("Present returned OUT_OF_DATE, swapchain recreation needed");
+            return 1;
+        }
+        if (res == VK_SUBOPTIMAL_KHR) {
+            // Suboptimal but still works - content was presented
+            // This commonly happens when using IDENTITY pre-transform on a rotated surface
+            // Log only occasionally to avoid spam
+            static int suboptimalCount = 0;
+            if (suboptimalCount++ % 60 == 0) {
+                VK_LOG_INFO("Present returned SUBOPTIMAL (frame %d) - continuing (IDENTITY pre-transform on rotated surface)", suboptimalCount);
+            }
+            return 0; // Success - content was presented
         }
         if (res != VK_SUCCESS) {
-            throw std::runtime_error("Failed to present swapchain image");
+            VK_LOG_ERROR("vkQueuePresentKHR failed with result %d", res);
+            return -1;
         }
+
+        VK_LOG_INFO(
+                "Presented swapchain frame (swapchain=0x%" PRIxPTR ", imageIndex=%u)",
+                toHandleValue(swapchain.swapchain),
+                imageIndex);
+        return 0;
     }
 
 // ----------------------------------------------------------------------------
@@ -1704,6 +2021,7 @@ namespace {
         rasterizer.rasterizerDiscardEnable = VK_FALSE;
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.cullMode = cullMode;
+        // Counter-clockwise is the OpenGL convention
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.lineWidth = 1.0f;
@@ -1852,6 +2170,7 @@ namespace {
 
         vkCmdBeginRenderPass(encoder.commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+        // Standard viewport - Y flip is handled in the projection matrix
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
@@ -1894,6 +2213,9 @@ namespace {
         commandBuffer->swapchain = encoder.targetSwapchain;
         commandBuffer->imageIndex = encoder.swapchainImageIndex;
 
+        // Transfer ownership: clear encoder's handle to prevent double-free
+        encoder.commandBuffer = VK_NULL_HANDLE;
+
         return storeObject(device.commandBuffers, std::move(commandBuffer));
     }
 
@@ -1902,26 +2224,34 @@ namespace {
                                 VulkanSwapchain *swapchain) {
         VkSemaphore waitSemaphores[1];
         VkPipelineStageFlags waitStages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        uint64_t waitValues[1] = {0}; // Binary semaphore uses 0
         uint32_t waitCount = 0;
         if (swapchain) {
             waitSemaphores[waitCount++] = swapchain->imageAvailableSemaphore;
         }
 
         VkSemaphore signalSemaphores[2];
+        uint64_t signalValues[2] = {0, 0}; // Binary semaphore uses 0, timeline uses incremented value
         uint32_t signalCount = 0;
 
         if (swapchain) {
             signalSemaphores[signalCount++] = swapchain->renderFinishedSemaphore;
+            // signalValues[0] stays 0 for binary semaphore
         }
 
         VkTimelineSemaphoreSubmitInfo timelineInfo{};
-        uint64_t signalValues[1];
+        uint64_t timelineValue = 0;
         if (device.timelineSupported) {
-            signalSemaphores[signalCount++] = device.timelineSemaphore;
-            timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+            signalSemaphores[signalCount] = device.timelineSemaphore;
             device.timelineValue += 1;
-            signalValues[0] = device.timelineValue;
-            timelineInfo.signalSemaphoreValueCount = 1;
+            timelineValue = device.timelineValue;
+            signalValues[signalCount] = timelineValue;
+            signalCount++;
+
+            timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+            timelineInfo.waitSemaphoreValueCount = waitCount;
+            timelineInfo.pWaitSemaphoreValues = waitCount ? waitValues : nullptr;
+            timelineInfo.signalSemaphoreValueCount = signalCount;
             timelineInfo.pSignalSemaphoreValues = signalValues;
         }
 
@@ -1945,7 +2275,7 @@ namespace {
         }
 
         if (device.timelineSupported && swapchain) {
-            swapchain->lastSubmittedValue = signalValues[0];
+            swapchain->lastSubmittedValue = timelineValue;
         }
     }
 
@@ -2105,19 +2435,23 @@ namespace {
 
 namespace materia::vk {
 
+    // Note: These functions expect the caller to hold g_registryMutex
+    // (typically the JNI wrapper functions handle locking)
+
     std::uint64_t createInstance(const char *appName, bool enableValidation) {
+        // Lock here since vkInit JNI doesn't lock
         std::lock_guard<std::mutex> lock(g_registryMutex);
         return createInstanceInternal(appName, enableValidation);
     }
 
     std::uint64_t createSurface(std::uint64_t instanceId, JNIEnv *env, jobject surfaceObj) {
-        std::lock_guard<std::mutex> lock(g_registryMutex);
+        // Caller (JNI) already holds lock - do NOT lock again
         VulkanInstance *instance = requireInstance(instanceId);
         return createSurfaceInternal(*instance, env, surfaceObj);
     }
 
     std::uint64_t createDevice(std::uint64_t instanceId) {
-        std::lock_guard<std::mutex> lock(g_registryMutex);
+        // Caller (JNI) already holds lock - do NOT lock again
         VulkanInstance *instance = requireInstance(instanceId);
         return createDeviceInternal(*instance, true);
     }
@@ -2125,7 +2459,7 @@ namespace materia::vk {
     std::uint64_t
     createSwapchain(std::uint64_t instanceId, std::uint64_t deviceId, std::uint64_t surfaceId,
                     std::uint32_t width, std::uint32_t height) {
-        std::lock_guard<std::mutex> lock(g_registryMutex);
+        // Caller (JNI) already holds lock - do NOT lock again
         VulkanInstance *instance = requireInstance(instanceId);
         VulkanDevice *device = requireDevice(*instance, deviceId);
         VulkanSurface *surface = requireSurface(*instance, surfaceId);
@@ -2258,6 +2592,12 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkSwapchainAcquireFrame(JNIEnv *env, jcl
     VulkanSwapchain *swapchain = requireSwapchain(*surface, static_cast<Id>(swapchainId));
 
     auto frame = acquireFrameInternal(*device, *surface, *swapchain);
+    
+    // If frame is nullptr, swapchain needs recreation - return empty array
+    if (frame == nullptr) {
+        return env->NewLongArray(0);
+    }
+    
     jlongArray result = env->NewLongArray(3);
     jlong values[3];
     values[0] = static_cast<jlong>(frame->imageIndex);
@@ -2268,7 +2608,7 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkSwapchainAcquireFrame(JNIEnv *env, jcl
     return result;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_io_materia_gpu_bridge_VulkanBridge_vkSwapchainPresentFrame(JNIEnv *env, jclass,
                                                                 jlong instanceId, jlong deviceId,
                                                                 jlong surfaceId, jlong swapchainId,
@@ -2282,7 +2622,7 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkSwapchainPresentFrame(JNIEnv *env, jcl
     VulkanSwapchain *swapchain = requireSwapchain(*surface, static_cast<Id>(swapchainId));
     VulkanCommandBufferWrapper *commandBuffer = requireCommandBuffer(*device,
                                                                      static_cast<Id>(commandBufferId));
-    presentFrameInternal(*device, *swapchain, *commandBuffer, static_cast<uint32_t>(imageIndex));
+    return presentFrameInternal(*device, *swapchain, *commandBuffer, static_cast<uint32_t>(imageIndex));
 }
 
 JNIEXPORT jlong JNICALL
@@ -2325,6 +2665,24 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkWriteBufferFloats(JNIEnv *env, jclass,
     jsize length = env->GetArrayLength(data);
     std::vector<float> tmp(length);
     env->GetFloatArrayRegion(data, 0, length, tmp.data());
+    
+    // Debug: log first few values when writing large buffers (likely instance data)
+    if (length > 100) {
+        VK_LOG_INFO("Writing %d floats to buffer %lld (first 11: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
+            length, (long long)bufferId,
+            tmp.size() > 0 ? tmp[0] : 0.0f,
+            tmp.size() > 1 ? tmp[1] : 0.0f,
+            tmp.size() > 2 ? tmp[2] : 0.0f,
+            tmp.size() > 3 ? tmp[3] : 0.0f,
+            tmp.size() > 4 ? tmp[4] : 0.0f,
+            tmp.size() > 5 ? tmp[5] : 0.0f,
+            tmp.size() > 6 ? tmp[6] : 0.0f,
+            tmp.size() > 7 ? tmp[7] : 0.0f,
+            tmp.size() > 8 ? tmp[8] : 0.0f,
+            tmp.size() > 9 ? tmp[9] : 0.0f,
+            tmp.size() > 10 ? tmp[10] : 0.0f);
+    }
+    
     writeBufferInternal(*device, *buffer, tmp.data(), tmp.size() * sizeof(float),
                         static_cast<size_t>(offset));
 }
@@ -2468,11 +2826,28 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkCreateRenderPipeline(
     auto attributes = toAttributeDescriptions(env, attributeLocations, attributeBindings,
                                               attributeFormats, attributeOffsets);
 
-    VkRenderPass renderPass =
-            renderPassHandle != 0 ? reinterpret_cast<VkRenderPass>(renderPassHandle)
-                                  : getOrCreateRenderPass(*device,
-                                                          toColorFormat(colorFormat),
-                                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VK_LOG_INFO("CreateRenderPipeline: topology=%d (converted=%d), cullMode=%d, enableBlend=%d, colorFormat=%d",
+        topology, (int)toTopology(topology), cullMode, enableBlend, colorFormat);
+    VK_LOG_INFO("CreateRenderPipeline: bindings count=%zu, attributes count=%zu",
+        bindings.size(), attributes.size());
+    for (size_t i = 0; i < bindings.size(); i++) {
+        VK_LOG_INFO("  binding[%zu]: bindingIdx=%d, stride=%d, inputRate=%d",
+            i, bindings[i].binding, bindings[i].stride, bindings[i].inputRate);
+    }
+    for (size_t i = 0; i < attributes.size(); i++) {
+        VK_LOG_INFO("  attribute[%zu]: loc=%d, binding=%d, format=%d, offset=%d",
+            i, attributes[i].location, attributes[i].binding, attributes[i].format, attributes[i].offset);
+    }
+
+    if (renderPassHandle != 0) {
+        throw std::runtime_error("Explicit render pass handles are not supported on Android Vulkan backend");
+    }
+
+    VkRenderPass renderPass = getOrCreateRenderPass(
+            *device,
+            toColorFormat(colorFormat),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    );
 
     return static_cast<jlong>(createRenderPipelineInternal(
             *device,
@@ -2575,8 +2950,11 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkCommandEncoderSetPipeline(JNIEnv *env,
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     VulkanCommandEncoder *encoder = requireCommandEncoder(*device, static_cast<Id>(encoderId));
     VulkanRenderPipeline *pipeline = requireRenderPipeline(*device, static_cast<Id>(pipelineId));
+    VK_LOG_INFO("SetPipeline: encoderId=%lld, encoder=%p, pipelineId=%lld, pipelinePtr=%p, topology=%d, vkPipeline=%p", 
+        (long long)encoderId, (void*)encoder, (long long)pipelineId, (void*)pipeline, (int)pipeline->topology, (void*)pipeline->pipeline);
     vkCmdBindPipeline(encoder->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     encoder->currentPipeline = pipeline;
+    VK_LOG_INFO("SetPipeline: after assignment currentPipeline=%p", (void*)encoder->currentPipeline);
 }
 
 JNIEXPORT void JNICALL
@@ -2592,6 +2970,8 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkCommandEncoderSetVertexBuffer(JNIEnv *
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     VulkanCommandEncoder *encoder = requireCommandEncoder(*device, static_cast<Id>(encoderId));
     VulkanBuffer *buffer = requireBuffer(*device, static_cast<Id>(bufferId));
+    VK_LOG_INFO("SetVertexBuffer: slot=%d, bufferId=%lld, bufferSize=%llu, offset=%lld", 
+        slot, (long long)bufferId, (unsigned long long)buffer->size, (long long)offset);
     VkDeviceSize offsets[] = {static_cast<VkDeviceSize>(offset)};
     vkCmdBindVertexBuffers(encoder->commandBuffer, static_cast<uint32_t>(slot), 1, &buffer->buffer,
                            offsets);
@@ -2629,6 +3009,8 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkCommandEncoderSetBindGroup(JNIEnv *env
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     VulkanCommandEncoder *encoder = requireCommandEncoder(*device, static_cast<Id>(encoderId));
     VulkanBindGroup *bindGroup = requireBindGroup(*device, static_cast<Id>(bindGroupId));
+    VK_LOG_INFO("SetBindGroup: index=%d, bindGroupId=%lld, descriptorSet=%p, currentPipeline=%p", 
+        index, (long long)bindGroupId, (void*)bindGroup->descriptorSet, (void*)encoder->currentPipeline);
     vkCmdBindDescriptorSets(encoder->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             encoder->currentPipeline->pipelineLayout->layout,
                             static_cast<uint32_t>(index), 1, &bindGroup->descriptorSet, 0, nullptr);
@@ -2644,6 +3026,11 @@ Java_io_materia_gpu_bridge_VulkanBridge_vkCommandEncoderDraw(JNIEnv *env, jclass
     VulkanInstance *instance = requireInstance(static_cast<Id>(instanceId));
     VulkanDevice *device = requireDevice(*instance, static_cast<Id>(deviceId));
     VulkanCommandEncoder *encoder = requireCommandEncoder(*device, static_cast<Id>(encoderId));
+    VK_LOG_INFO("Draw: encoderId=%lld, encoder=%p, vertexCount=%d, instanceCount=%d, currentPipeline=%p", 
+        (long long)encoderId, (void*)encoder, vertexCount, instanceCount, (void*)encoder->currentPipeline);
+    if (encoder->currentPipeline) {
+        VK_LOG_INFO("Draw: using pipeline topology=%d", (int)encoder->currentPipeline->topology);
+    }
     vkCmdDraw(encoder->commandBuffer, static_cast<uint32_t>(vertexCount),
               static_cast<uint32_t>(instanceCount), static_cast<uint32_t>(firstVertex),
               static_cast<uint32_t>(firstInstance));

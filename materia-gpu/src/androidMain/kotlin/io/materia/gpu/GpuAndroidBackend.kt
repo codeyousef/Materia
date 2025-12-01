@@ -1,12 +1,17 @@
 package io.materia.gpu
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.AssetManager
+import android.os.Build
+import android.util.Log
 import android.view.Surface
 import android.view.SurfaceHolder
 import io.materia.BuildConfig
 import io.materia.gpu.bridge.VulkanBridge
 import io.materia.renderer.RenderSurface
+
+private const val ANDROID_VULKAN_TAG = "MateriaVk"
 
 private const val VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT = 0x00000002
 private const val VK_MEMORY_PROPERTY_HOST_COHERENT_BIT = 0x00000004
@@ -48,17 +53,80 @@ private fun FloatArray.componentOrDefault(index: Int, fallback: Float): Float =
  * Utility object so Kotlin actuals can load SPIR-V assets on Android.
  */
 object AndroidVulkanAssets {
+    private const val VULKAN_1_0 = (1 shl 22)
+
     @Volatile
     private var assetManager: AssetManager? = null
+    @Volatile
+    private var appContext: Context? = null
+    @Volatile
+    private var supportCache: Boolean? = null
 
     fun initialise(context: Context) {
         assetManager = context.assets
+        appContext = context.applicationContext
+        supportCache = null
     }
 
     fun loadShader(label: String): ByteArray {
         val manager = assetManager ?: error("AndroidVulkanAssets not initialised")
-        val path = "shaders/${label}.spv"
-        return manager.open(path).use { it.readBytes() }
+        val baseLabel = label.removeSuffix(".spv")
+        val candidateFiles = linkedSetOf(
+            "$label.spv",
+            "$label.main.spv",
+            "$baseLabel.spv",
+            "$baseLabel.main.spv"
+        )
+
+        var lastError: Exception? = null
+        for (candidate in candidateFiles) {
+            val path = "shaders/$candidate"
+            try {
+                manager.open(path).use { stream ->
+                    Log.d(ANDROID_VULKAN_TAG, "Loaded shader asset '$path' for label '$label'")
+                    return stream.readBytes()
+                }
+            } catch (error: Exception) {
+                lastError = error
+            }
+        }
+
+        Log.e(
+            ANDROID_VULKAN_TAG,
+            "Failed to load shader '$label' from assets. Tried: ${candidateFiles.joinToString()}",
+            lastError
+        )
+        throw lastError ?: IllegalStateException("Shader asset for '$label' not found.")
+    }
+
+    fun hasVulkanSupport(): Boolean {
+        supportCache?.let { return it }
+        val context = appContext ?: return false
+        val pm = context.packageManager
+
+        val hasLevel = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL)
+        val hasCompute = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_COMPUTE)
+        val hasVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION, VULKAN_1_0)
+        } else {
+            false
+        }
+
+        val supported = hasLevel || hasCompute || hasVersion
+        supportCache = supported
+
+        if (!supported) {
+            Log.w(
+                ANDROID_VULKAN_TAG,
+                "Device ${Build.MANUFACTURER} ${Build.MODEL} does not advertise Vulkan support"
+            )
+        } else {
+            Log.i(
+                ANDROID_VULKAN_TAG,
+                "Vulkan advertised (level=$hasLevel, compute=$hasCompute, version=$hasVersion)"
+            )
+        }
+        return supported
     }
 }
 
@@ -143,16 +211,42 @@ private fun GpuVertexFormat.toNative(): Int = when (this) {
     else -> error("Vertex format $this not supported on Android Vulkan")
 }
 
-actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance =
-    GpuInstance(descriptor)
+actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance {
+    val supportAdvertised = AndroidVulkanAssets.hasVulkanSupport()
+    if (!supportAdvertised) {
+        Log.w(
+            ANDROID_VULKAN_TAG,
+            "Vulkan support not advertised; attempting to initialise via SwiftShader/system loader"
+        )
+    }
+    return try {
+        Log.i(ANDROID_VULKAN_TAG, "Creating GPU instance (label=${descriptor.label ?: "Materia"}, advertised=$supportAdvertised)")
+        GpuInstance(descriptor)
+    } catch (error: UnsatisfiedLinkError) {
+        Log.e(ANDROID_VULKAN_TAG, "Unable to load materia_vk native bridge", error)
+        throw UnsupportedOperationException(
+            "Vulkan native bridge could not be loaded (${error.message ?: "unknown error"}).",
+            error
+        )
+    } catch (error: RuntimeException) {
+        val message = error.message ?: error::class.simpleName ?: "Unknown error"
+        Log.e(ANDROID_VULKAN_TAG, "Vulkan initialisation failed: $message", error)
+        throw UnsupportedOperationException(
+            "Failed to initialise Vulkan: $message",
+            error
+        )
+    }
+}
 
 actual class GpuInstance actual constructor(
     actual val descriptor: GpuInstanceDescriptor
 ) {
-    internal val handle: Long = VulkanBridge.vkInit(
+    internal val handle: Long = VulkanBridge.vkInitSafe(
         descriptor.label ?: "Materia",
         BuildConfig.VK_ENABLE_VALIDATION
-    )
+    ).also {
+        Log.i(ANDROID_VULKAN_TAG, "Vulkan instance initialised (handle=$it)")
+    }
     private var disposed = false
 
     actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter {
@@ -162,6 +256,10 @@ actual class GpuInstance actual constructor(
             vendor = android.os.Build.MANUFACTURER,
             architecture = android.os.Build.HARDWARE,
             driverVersion = android.os.Build.VERSION.RELEASE
+        )
+        Log.i(
+            ANDROID_VULKAN_TAG,
+            "Providing Vulkan adapter (name=${info.name}, vendor=${info.vendor}, powerPreference=${options.powerPreference})"
         )
         return GpuAdapter(GpuBackend.VULKAN, options, info).also { adapter ->
             adapter.instanceHandle = handle
@@ -190,7 +288,15 @@ actual class GpuAdapter actual constructor(
     internal var instanceHandle: Long = 0L
 
     actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice {
+        Log.i(
+            ANDROID_VULKAN_TAG,
+            "Requesting Vulkan device (instanceHandle=$instanceHandle, label=${descriptor.label ?: "materia-device"})"
+        )
         val deviceHandle = VulkanBridge.vkCreateDevice(instanceHandle)
+        Log.i(
+            ANDROID_VULKAN_TAG,
+            "Vulkan device created (handle=$deviceHandle)"
+        )
         return GpuDevice(this, descriptor).also { device ->
             device.instanceHandle = instanceHandle
             device.handle = deviceHandle
@@ -419,7 +525,7 @@ actual class GpuQueue actual constructor(
                 if (hasSwapchain) {
                     val swapchainState = buffer.swapchainState
                         ?: error("Swapchain state missing for command buffer")
-                    VulkanBridge.vkSwapchainPresentFrame(
+                    val presentResult = VulkanBridge.vkSwapchainPresentFrame(
                         instanceHandle,
                         deviceHandle,
                         swapchainState.surfaceId,
@@ -427,6 +533,13 @@ actual class GpuQueue actual constructor(
                         buffer.handle,
                         imageIndex
                     )
+                    // Handle swapchain recreation if needed
+                    if (presentResult == 1) {
+                        // Swapchain needs recreation - the surface will handle this on next frame
+                        android.util.Log.i("GpuQueue", "Present returned OUT_OF_DATE, surface will recreate swapchain")
+                    } else if (presentResult < 0) {
+                        android.util.Log.e("GpuQueue", "Present failed with result $presentResult")
+                    }
                 }
             } finally {
                 VulkanBridge.vkDestroyCommandBuffer(instanceHandle, deviceHandle, buffer.handle)
@@ -467,6 +580,11 @@ actual class GpuSurface actual constructor(
         }
         require(nativeSurface.isValid) { "Android Surface is not valid for Vulkan presentation" }
 
+        Log.i(
+            ANDROID_VULKAN_TAG,
+            "Configuring Vulkan surface (label=${label ?: "surface"}, width=$resolvedWidth, height=$resolvedHeight, reuseExisting=${swapchainState != null})"
+        )
+
         val instanceHandle = device.instanceHandle
         val deviceHandle = device.handle
 
@@ -490,6 +608,10 @@ actual class GpuSurface actual constructor(
             surfaceId,
             resolvedWidth,
             resolvedHeight
+        )
+        Log.i(
+            ANDROID_VULKAN_TAG,
+            "Vulkan swapchain configured (surfaceId=$surfaceId, swapchainId=$swapchainId, size=${resolvedWidth}x$resolvedHeight)"
         )
 
         swapchainState = AndroidSwapchainState(
@@ -518,6 +640,10 @@ actual class GpuSurface actual constructor(
             val existingTexture = fallbackTexture
             val existingView = fallbackView
             if (existingTexture != null && existingView != null) {
+                Log.w(
+                    ANDROID_VULKAN_TAG,
+                    "Swapchain unavailable; reusing fallback texture for ${label ?: "surface"}"
+                )
                 return GpuSurfaceFrame(existingTexture, existingView)
             }
             val fallbackWidth = config.width.takeIf { it > 0 } ?: 1
@@ -539,6 +665,10 @@ actual class GpuSurface actual constructor(
         }
 
         val handles = try {
+            Log.d(
+                ANDROID_VULKAN_TAG,
+                "Acquiring swapchain frame (surfaceId=${swapchain.surfaceId}, swapchainId=${swapchain.swapchainId})"
+            )
             VulkanBridge.vkSwapchainAcquireFrame(
                 swapchain.instanceHandle,
                 swapchain.deviceHandle,
@@ -547,12 +677,71 @@ actual class GpuSurface actual constructor(
             )
         } catch (error: RuntimeException) {
             swapchainState = null
+            Log.w(
+                ANDROID_VULKAN_TAG,
+                "Swapchain acquire failed; marking surface for reconfigure",
+                error
+            )
             throw IllegalStateException("Swapchain out of date; reconfigure required", error)
+        }
+
+        // Empty array means swapchain needs recreation
+        if (handles.isEmpty()) {
+            Log.i(ANDROID_VULKAN_TAG, "Swapchain reported OUT_OF_DATE, recreating...")
+            // Destroy old swapchain and create new one
+            VulkanBridge.vkDestroySwapchain(
+                swapchain.instanceHandle,
+                swapchain.deviceHandle,
+                swapchain.surfaceId,
+                swapchain.swapchainId
+            )
+            val newSwapchainId = VulkanBridge.vkCreateSwapchain(
+                swapchain.instanceHandle,
+                swapchain.deviceHandle,
+                swapchain.surfaceId,
+                swapchain.width,
+                swapchain.height
+            )
+            Log.i(ANDROID_VULKAN_TAG, "Swapchain recreated (new swapchainId=$newSwapchainId)")
+            swapchainState = AndroidSwapchainState(
+                instanceHandle = swapchain.instanceHandle,
+                deviceHandle = swapchain.deviceHandle,
+                surfaceId = swapchain.surfaceId,
+                swapchainId = newSwapchainId,
+                width = swapchain.width,
+                height = swapchain.height
+            )
+            // Return fallback for this frame, next frame will use new swapchain
+            val fallbackTex = fallbackTexture
+            val fallbackV = fallbackView
+            if (fallbackTex != null && fallbackV != null) {
+                return GpuSurfaceFrame(fallbackTex, fallbackV)
+            }
+            // If no fallback, create one
+            val fallbackDescriptor = GpuTextureDescriptor(
+                label = "${label ?: "surface"}-fallback",
+                size = Triple(swapchain.width, swapchain.height, 1),
+                mipLevelCount = 1,
+                sampleCount = 1,
+                dimension = GpuTextureDimension.D2,
+                format = preferredFormat,
+                usage = config.usage
+            )
+            val newFallback = device.createTexture(fallbackDescriptor)
+            val newFallbackView = newFallback.createView()
+            fallbackTexture = newFallback
+            fallbackView = newFallbackView
+            return GpuSurfaceFrame(newFallback, newFallbackView)
         }
 
         val imageIndex = handles[0].toInt()
         val textureHandle = handles[1]
         val viewHandle = handles[2]
+
+        Log.d(
+            ANDROID_VULKAN_TAG,
+            "Swapchain frame acquired (imageIndex=$imageIndex, textureHandle=$textureHandle, viewHandle=$viewHandle)"
+        )
 
         val descriptor = GpuTextureDescriptor(
             label = "${label ?: "surface"}-swapchain-$imageIndex",

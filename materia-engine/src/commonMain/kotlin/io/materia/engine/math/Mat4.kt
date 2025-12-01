@@ -57,37 +57,56 @@ value class Mat4 @PublishedApi internal constructor(internal val data: FloatArra
 
         data.fill(0f)
         data[0] = f / aspect
-        data[5] = f
-        data[10] = (far + near) / (near - far)
+        data[5] = -f  // Flip Y for WebGPU (Y points down in framebuffer)
+        // WebGPU uses depth range [0, 1], not [-1, 1] like OpenGL
+        data[10] = far / (near - far)
         data[11] = -1f
-        data[14] = (2f * far * near) / (near - far)
+        data[14] = (near * far) / (near - far)
         return this
     }
 
     fun setLookAt(eye: Vec3, target: Vec3, up: Vec3 = Vec3.Up): Mat4 {
-        val forward = vec3(
-            target.x - eye.x,
-            target.y - eye.y,
-            target.z - eye.z
-        ).normalize()
+        // Compute forward direction (from eye to target)
+        val forwardX = target.x - eye.x
+        val forwardY = target.y - eye.y
+        val forwardZ = target.z - eye.z
+        val forwardLen = kotlin.math.sqrt(forwardX * forwardX + forwardY * forwardY + forwardZ * forwardZ)
+        val fwdX = forwardX / forwardLen
+        val fwdY = forwardY / forwardLen
+        val fwdZ = forwardZ / forwardLen
 
-        val right = up.cross(forward).normalize()
-        val realUp = forward.cross(right)
+        // Right = up × forward (for right-handed coords)
+        var rightX = up.y * fwdZ - up.z * fwdY
+        var rightY = up.z * fwdX - up.x * fwdZ
+        var rightZ = up.x * fwdY - up.y * fwdX
+        val rightLen = kotlin.math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ)
+        rightX /= rightLen
+        rightY /= rightLen
+        rightZ /= rightLen
 
-        data[0] = right.x
-        data[4] = right.y
-        data[8] = right.z
-        data[12] = -right.dot(eye)
+        // Recompute up = forward × right
+        val upX = fwdY * rightZ - fwdZ * rightY
+        val upY = fwdZ * rightX - fwdX * rightZ
+        val upZ = fwdX * rightY - fwdY * rightX
 
-        data[1] = realUp.x
-        data[5] = realUp.y
-        data[9] = realUp.z
-        data[13] = -realUp.dot(eye)
+        // Build view matrix (camera looks along -Z in view space)
+        // Row 0: right
+        data[0] = rightX
+        data[4] = rightY
+        data[8] = rightZ
+        data[12] = -(rightX * eye.x + rightY * eye.y + rightZ * eye.z)
 
-        data[2] = -forward.x
-        data[6] = -forward.y
-        data[10] = -forward.z
-        data[14] = forward.dot(eye)
+        // Row 1: up  
+        data[1] = upX
+        data[5] = upY
+        data[9] = upZ
+        data[13] = -(upX * eye.x + upY * eye.y + upZ * eye.z)
+
+        // Row 2: -forward (camera looks along -Z)
+        data[2] = -fwdX
+        data[6] = -fwdY
+        data[10] = -fwdZ
+        data[14] = fwdX * eye.x + fwdY * eye.y + fwdZ * eye.z
 
         data[3] = 0f
         data[7] = 0f

@@ -18,21 +18,39 @@ private val scope = MainScope()
 fun main() {
     scope.launch {
         val canvas = ensureCanvas()
+        
+        // Use the canvas size that was set in ensureCanvas (no DPR scaling for now)
+        val width = canvas.width
+        val height = canvas.height
+        
+        console.log("Starting with canvas: ${width}x${height}")
+        
         val surface = WebGPUSurface(canvas)
         val example = EmbeddingGalaxyExample(performanceProfile = PerformanceProfile.Web)
         val boot = example.boot(
             renderSurface = surface,
-            widthOverride = canvas.width,
-            heightOverride = canvas.height
+            widthOverride = width,
+            heightOverride = height
         )
+        console.log("Boot complete with dimensions: ${width}x${height}")
 
         val runtime = boot.runtime
         println(boot.log.pretty())
 
         val overlay = ensureOverlay(boot.log.pretty())
         var lastTimestamp = window.performance.now()
+        var lastFrameTime = 0.0
+        val targetFrameTime = 1000.0 / 120.0  // 120 FPS cap
 
         fun frame(timestamp: Double) {
+            // FPS limiting - skip frame if not enough time has passed
+            val elapsed = timestamp - lastFrameTime
+            if (elapsed < targetFrameTime) {
+                window.requestAnimationFrame(::frame)
+                return
+            }
+            lastFrameTime = timestamp
+            
             val deltaSeconds = ((timestamp - lastTimestamp) / 1000.0).toFloat().coerceIn(0f, 0.1f)
             lastTimestamp = timestamp
             runtime.frame(deltaSeconds)
@@ -42,15 +60,18 @@ fun main() {
 
         window.requestAnimationFrame { timestamp ->
             lastTimestamp = timestamp
+            lastFrameTime = timestamp
             window.requestAnimationFrame(::frame)
         }
 
         window.onresize = {
-            val width = canvas.clientWidth.takeIf { it > 0 } ?: window.innerWidth
-            val height = canvas.clientHeight.takeIf { it > 0 } ?: window.innerHeight
-            canvas.width = width
-            canvas.height = height
-            runtime.resize(width, height)
+            val newWidth = window.innerWidth
+            val newHeight = window.innerHeight
+            canvas.width = newWidth
+            canvas.height = newHeight
+            canvas.style.width = "${newWidth}px"
+            canvas.style.height = "${newHeight}px"
+            runtime.resize(newWidth, newHeight)
             null
         }
 
@@ -141,13 +162,43 @@ private fun ensureCanvas(): HTMLCanvasElement {
     val existing = document.getElementById("embedding-galaxy-canvas")
     if (existing is HTMLCanvasElement) return existing
 
+    // Reset any default body margins/padding
+    document.body?.style?.margin = "0"
+    document.body?.style?.padding = "0"
+    document.body?.style?.setProperty("overflow", "hidden")
+    
     val canvas = document.createElement("canvas") as HTMLCanvasElement
     canvas.id = "embedding-galaxy-canvas"
-    canvas.style.width = "100vw"
-    canvas.style.height = "100vh"
+    
+    // Get actual viewport size and DPR
+    val dpr = window.devicePixelRatio
+    val cssWidth = window.innerWidth
+    val cssHeight = window.innerHeight
+    
+    // For WebGPU, the canvas buffer should match CSS pixels (not physical pixels)
+    // The browser handles DPR scaling automatically
+    val bufferWidth = cssWidth
+    val bufferHeight = cssHeight
+    
+    console.log("DPR: $dpr, CSS size: ${cssWidth}x${cssHeight}, Buffer size: ${bufferWidth}x${bufferHeight}")
+    
+    // Set canvas buffer size
+    canvas.width = bufferWidth
+    canvas.height = bufferHeight
+    
+    // Set CSS size to match - this is crucial!
+    canvas.style.width = "${cssWidth}px"
+    canvas.style.height = "${cssHeight}px"
+    canvas.style.position = "fixed"
+    canvas.style.left = "0"
+    canvas.style.top = "0"
     canvas.style.display = "block"
     canvas.style.backgroundColor = "#0b1020"
+    
+    // Append directly to body for simplest positioning
     document.body?.appendChild(canvas)
+    
+    console.log("Canvas created: buffer=${canvas.width}x${canvas.height}, cssStyle=${cssWidth}x${cssHeight}")
     return canvas
 }
 
@@ -188,7 +239,7 @@ private fun updateOverlay(container: HTMLDivElement, runtime: EmbeddingGalaxyRun
     val info = container.querySelector("#overlay-info") as? HTMLDivElement ?: return
     val metrics = runtime.metrics()
     val fps = if (metrics.frameTimeMs > 0.0) {
-        1000.0 / metrics.frameTimeMs
+        kotlin.math.min(1000.0 / metrics.frameTimeMs, 120.0)  // Cap at 120 FPS for display
     } else {
         0.0
     }

@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.LibraryExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
@@ -32,6 +35,12 @@ subprojects {
     if (name.startsWith("tools")) {
         group = "io.materia.tools"
         version = rootProject.version
+    }
+
+    plugins.withId("org.jetbrains.kotlin.multiplatform") {
+        tasks.withType<KotlinCompilationTask<*>>().configureEach {
+            compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
+        }
     }
 }
 
@@ -310,7 +319,8 @@ abstract class CompileShadersTask @Inject constructor(
                 execOperations.exec {
                     commandLine(listOf(executable) + args)
                     isIgnoreExitValue = true
-                }.exitValue == 0
+                }
+                true  // Command executed successfully (any exit code means it exists)
             }.getOrDefault(false)
 
         val wgslRoot = wgslDir.get().asFile
@@ -332,7 +342,7 @@ abstract class CompileShadersTask @Inject constructor(
                 Compiler(
                     name = "Tint",
                     executable = tintExec,
-                    detectionArgs = listOf("--version")
+                    detectionArgs = listOf("--help")  // Tint doesn't support --version
                 ) { input, output ->
                     listOf(
                         tintExec,
@@ -416,7 +426,7 @@ tasks.matching { it.name == "jvmProcessResources" }.configureEach {
     dependsOn(compileShaders)
 }
 
-val androidShaderAssetsDir = layout.projectDirectory.dir("examples/triangle-android/src/main/assets/shaders")
+val androidShaderAssetsDir = layout.buildDirectory.dir("generated/androidShaders")
 
 val syncAndroidShaders = tasks.register<Sync>("syncAndroidShaders") {
     group = "build"
@@ -427,28 +437,16 @@ val syncAndroidShaders = tasks.register<Sync>("syncAndroidShaders") {
     from(layout.projectDirectory.dir("src/jvmMain/resources/shaders")) {
         include("**/*.spv")
     }
-    into(androidShaderAssetsDir)
+    into(androidShaderAssetsDir.get().asFile.resolve("shaders"))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-// ============================================================================
-// Custom Tasks for Running Examples
-// ============================================================================
-
-tasks.register("runSimpleDemo", JavaExec::class) {
-    group = "materia"
-    description = "Run the simple Materia demo script"
-
-    dependsOn("jvmMainClasses")
-    classpath = files(
-        configurations.getByName("jvmRuntimeClasspath"),
-        kotlin.targets.getByName("jvm").compilations.getByName("main").output.allOutputs
-    )
-    mainClass.set("examples.SimpleMainKt")
-
-    doFirst {
-        println("🚀 Running Materia Simple Demo...")
-        println("This will demonstrate core Materia functionality")
+gradle.projectsEvaluated {
+    project(":materia-gpu").extensions.configure<LibraryExtension>("android") {
+        sourceSets.getByName("main").assets.srcDir(androidShaderAssetsDir)
+    }
+    project(":materia-gpu").tasks.matching { it.name == "preBuild" }.configureEach {
+        dependsOn(syncAndroidShaders)
     }
 }
 
@@ -461,35 +459,34 @@ tasks.register("listExamples") {
             """
 🚀 Materia Examples Available:
 
-📝 Simple Examples:
-  ./gradlew listExamples                       - Show this help
-  ./gradlew :examples:basic-scene:runJvm       - Run JVM example with LWJGL
-  ./gradlew :examples:basic-scene:runJs        - Run JavaScript example in browser
+  • Triangle              → JVM `:examples:triangle:runJvm`
+                             Web `:examples:triangle:runJs`
+                             Android `:examples:triangle:runAndroid`
+  • Embedding Galaxy      → JVM `:examples:embedding-galaxy:runJvm`
+                             Web `:examples:embedding-galaxy:runJs`
+                             Android `:examples:embedding-galaxy:runAndroid`
+  • Force Graph           → JVM `:examples:force-graph:runJvm`
+                             Web `:examples:force-graph:runJs`
+                             Android `:examples:force-graph:runAndroid`
+  • VoxelCraft            → JVM `:examples:voxelcraft:runJvm`
+                             Web `:examples:voxelcraft:runJs`
+                             Android `:examples:voxelcraft:runAndroid`
 
-🔧 Build Tasks:
-  ./gradlew build                              - Build entire project
-  ./gradlew :examples:basic-scene:build        - Build examples only
+ℹ️  All `run*` tasks are grouped under Gradle's `run` task group:
+    ./gradlew :examples:triangle:tasks --group run
 
-📊 Test Tasks:
-  ./gradlew test                               - Run all tests
-  ./gradlew :examples:basic-scene:test         - Run example tests
+🔧 Utilities:
+  ./gradlew build                    - Full build (all targets + checks)
+  ./gradlew test                     - Multiplatform unit tests
+  ./gradlew koverHtmlReport          - Coverage report
+  ./gradlew compileShaders           - WGSL → SPIR-V cache
+  ./gradlew dokkaHtml                - API reference docs
 
-🌐 Platform-specific:
-  ./gradlew compileKotlinJvm                   - Compile JVM target
-  ./gradlew compileKotlinJs                    - Compile JavaScript target
-  ./gradlew compileKotlinLinuxX64              - Compile Linux native
-  ./gradlew compileKotlinMingwX64              - Compile Windows native
+📦 Standalone script:
+  kotlinc -script examples/simple-demo.kt
 
-📖 Documentation:
-  ./gradlew dokkaHtml                          - Generate API documentation
-
-💡 Quick Start:
-  1. ./gradlew build                           - Build everything
-  2. ./gradlew :examples:basic-scene:runJvm    - Interactive 3D example
-  3. ./gradlew :examples:basic-scene:runJs     - Web browser example
-
-🎯 Direct file execution (requires kotlinc):
-  kotlinc -script examples/simple-demo.kt     - Standalone demo script
+🌐 Emulator tip:
+  Use an x86_64 Android emulator with Vulkan graphics to exercise the Android demos.
         """.trimIndent()
         )
     }
@@ -497,10 +494,10 @@ tasks.register("listExamples") {
 
 tasks.register("quickStart") {
     group = "materia"
-    description = "Quick start - build and run basic scene example"
+    description = "Quick start - build and run the Triangle JVM example"
 
     dependsOn("build")
-    finalizedBy(":examples:basic-scene:runJvm")
+    finalizedBy(":examples:triangle:runJvm")
 
     doLast {
         println("✅ Materia Quick Start Complete!")

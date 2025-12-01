@@ -53,7 +53,7 @@
 |-------------------------------|-----------------------------|------------------------------------------------------------------------------|----------------|
 | **Browser (wasm/JS)**         | WebGPU with WebGL2 fallback | Uses `@webgpu/types` bindings, webpack dev server                            | ✅ Ready        |
 | **JVM (Linux/macOS/Windows)** | Vulkan via LWJGL 3.3.6      | GLFW windowing, shader compilation through Tint/Naga                         | ✅ Ready        |
-| **Android**                   | Vulkan (API 24+)            | SurfaceView swap chain, Robolectric-friendly fallbacks                       | 🟢 Beta        |
+| **Android**                   | Vulkan (API 24+)            | SurfaceView swap chain, compositor sync, Robolectric-friendly fallbacks      | ✅ Ready        |
 | **Native (macOS/iOS)**        | MoltenVK                    | Expect/actual stubs in place, feature parity tracked in `docs/MVP_STATUS.md` | 🟡 In Progress |
 
 ---
@@ -118,6 +118,8 @@ cd materia
   itself to a short smoke loop (`VOXELCRAFT_FRAME_BUDGET`, default 60 frames) so the CLI run
   completes without manual interaction.
 - Android tasks install and launch via `adb`; connect a device or emulator first.
+- For emulators, use an x86_64 system image with Vulkan graphics enabled (Android Studio >
+  Settings > Tools > Emulator > Advanced).
 - Browser runs depend on a WebGPU-capable browser (Chrome Canary, Edge Dev, or Firefox Nightly with
   flags enabled).
 

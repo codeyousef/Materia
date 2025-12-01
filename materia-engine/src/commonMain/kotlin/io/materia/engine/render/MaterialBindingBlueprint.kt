@@ -18,27 +18,31 @@ sealed class MaterialBindingBlueprint(
 
     fun createPipeline(
         device: GpuDevice,
-        colorFormat: GpuTextureFormat
+        colorFormat: GpuTextureFormat,
+        depthFormat: GpuTextureFormat? = null
     ): UnlitPipelineFactory.PipelineResources =
         when (this) {
             is UnlitColor -> UnlitPipelineFactory.createUnlitColorPipeline(
                 device,
                 colorFormat,
                 renderState,
-                primitiveTopology
+                primitiveTopology,
+                depthFormat
             )
 
             is UnlitLines -> UnlitPipelineFactory.createUnlitColorPipeline(
                 device,
                 colorFormat,
                 renderState,
-                primitiveTopology
+                primitiveTopology,
+                depthFormat
             )
 
             is UnlitPoints -> UnlitPipelineFactory.createUnlitPointsPipeline(
                 device,
                 colorFormat,
-                renderState
+                renderState,
+                depthFormat
             )
         }
 

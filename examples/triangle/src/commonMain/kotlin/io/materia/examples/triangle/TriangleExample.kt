@@ -7,6 +7,7 @@ import io.materia.engine.geometry.Geometry
 import io.materia.engine.geometry.GeometryAttribute
 import io.materia.engine.geometry.GeometryLayout
 import io.materia.engine.material.BlendMode
+import io.materia.engine.material.CullMode
 import io.materia.engine.material.RenderState
 import io.materia.engine.material.UnlitColorMaterial
 import io.materia.engine.material.UnlitPointsMaterial
@@ -139,7 +140,11 @@ class TriangleExample(
         val triangleMaterial = UnlitColorMaterial(
             label = "triangle",
             color = Color.fromFloats(1f, 0.4f, 0.2f),
-            renderState = RenderState(depthTest = false, depthWrite = false)
+            renderState = RenderState(
+                depthTest = false,
+                depthWrite = false,
+                cullMode = CullMode.NONE  // Disable culling for testing
+            )
         )
 
         val triangleMesh = Mesh(
@@ -166,7 +171,8 @@ class TriangleExample(
             renderState = RenderState(
                 depthTest = false,
                 depthWrite = false,
-                blendMode = BlendMode.Additive
+                blendMode = BlendMode.Additive,
+                cullMode = CullMode.NONE
             )
         )
 

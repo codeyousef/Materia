@@ -1,12 +1,52 @@
 package io.materia.gpu.bridge
 
+import android.util.Log
+
 internal object VulkanBridge {
 
+    private const val TAG = "VulkanBridge"
+    private var libraryLoaded = false
+    private var loadError: Throwable? = null
+
     init {
-        System.loadLibrary("materia_vk")
+        try {
+            Log.i(TAG, "Loading native library 'materia_vk'...")
+            System.loadLibrary("materia_vk")
+            libraryLoaded = true
+            Log.i(TAG, "Native library 'materia_vk' loaded successfully")
+        } catch (e: UnsatisfiedLinkError) {
+            loadError = e
+            Log.e(TAG, "Failed to load native library 'materia_vk': ${e.message}", e)
+            Log.e(TAG, "Library search path: ${System.getProperty("java.library.path")}")
+        } catch (e: Exception) {
+            loadError = e
+            Log.e(TAG, "Unexpected error loading native library: ${e.message}", e)
+        }
+    }
+
+    private fun checkLibraryLoaded() {
+        if (!libraryLoaded) {
+            val error = loadError ?: IllegalStateException("Native library not loaded for unknown reason")
+            throw UnsatisfiedLinkError("materia_vk native library not available: ${error.message}").apply {
+                initCause(error)
+            }
+        }
     }
 
     external fun vkInit(appName: String, enableValidation: Boolean): Long
+
+    fun vkInitSafe(appName: String, enableValidation: Boolean): Long {
+        checkLibraryLoaded()
+        return try {
+            Log.i(TAG, "Calling vkInit(appName='$appName', validation=$enableValidation)...")
+            val handle = vkInit(appName, enableValidation)
+            Log.i(TAG, "vkInit returned handle: $handle")
+            handle
+        } catch (e: Exception) {
+            Log.e(TAG, "vkInit failed: ${e.message}", e)
+            throw e
+        }
+    }
 
     external fun vkCreateSurface(instanceId: Long, surface: Any): Long
 
@@ -27,6 +67,10 @@ internal object VulkanBridge {
         swapchainId: Long
     ): LongArray
 
+    /**
+     * Present a frame to the swapchain.
+     * @return 0 = success, 1 = needs swapchain recreation, -1 = error
+     */
     external fun vkSwapchainPresentFrame(
         instanceId: Long,
         deviceId: Long,
@@ -34,7 +78,7 @@ internal object VulkanBridge {
         swapchainId: Long,
         commandBufferId: Long,
         imageIndex: Int
-    )
+    ): Int
 
     external fun vkCreateBuffer(
         instanceId: Long,

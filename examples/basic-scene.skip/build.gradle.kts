@@ -92,12 +92,14 @@ tasks.register("runJvm", JavaExec::class) {
     group = "examples"
     description = "Run the JVM version of the basic scene example"
 
-    dependsOn("jvmMainClasses")
-    val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
-    classpath = (jvmCompilation.runtimeDependencyFiles ?: files()) + jvmCompilation.output.allOutputs
+    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
+    val jvmClasses = tasks.named("jvmMainClasses")
+
+    dependsOn(jvmClasses)
     mainClass.set("MainKt")
 
     doFirst {
+        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🎮 Starting Materia Basic Scene Example (JVM)")
         println("This will demonstrate 3D scene creation with LWJGL backend")
     }
@@ -107,12 +109,14 @@ tasks.register("runSimple", JavaExec::class) {
     group = "examples"
     description = "Run the simple launcher (no complex setup needed)"
 
-    dependsOn("jvmMainClasses")
-    val jvmCompilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
-    classpath = jvmCompilation.runtimeDependencyFiles ?: files()
+    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
+    val jvmClasses = tasks.named("jvmMainClasses")
+
+    dependsOn(jvmClasses)
     mainClass.set("SimpleMainKt")
 
     doFirst {
+        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🚀 Starting Materia Simple Launcher")
         println("This demonstrates core library functionality")
     }

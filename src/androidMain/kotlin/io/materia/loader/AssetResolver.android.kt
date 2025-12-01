@@ -1,13 +1,12 @@
 package io.materia.loader
 
+import io.materia.util.Base64Compat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.net.URL
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 internal class DefaultAssetResolver : AssetResolver {
 
@@ -66,8 +65,7 @@ internal class DefaultAssetResolver : AssetResolver {
     }
 }
 
-@OptIn(ExperimentalEncodingApi::class)
 private fun decodeBase64(value: String): ByteArray =
-    Base64.decode(value)
+    Base64Compat.decode(value)
 
 internal actual fun createDefaultAssetResolver(): AssetResolver = DefaultAssetResolver()

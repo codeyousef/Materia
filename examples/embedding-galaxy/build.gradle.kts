@@ -17,7 +17,12 @@ kotlin {
         browser {
             commonWebpackConfig {
                 outputFileName = "embedding-galaxy.js"
+                devServer = devServer?.copy(
+                    open = false,
+                    port = 8080
+                )
             }
+            binaries.executable()
             testTask {
                 enabled = false
             }
@@ -93,12 +98,18 @@ tasks.register<JavaExec>("runJvm") {
     group = "run"
     description = "Run the JVM version of the Embedding Galaxy example"
 
-    dependsOn("jvmMainClasses")
-    val compilation = kotlin.targets.getByName("jvm").compilations.getByName("main")
-    classpath = (compilation.runtimeDependencyFiles ?: files()) + compilation.output.allOutputs
+    val jvmMain = kotlin.targets.getByName("jvm").compilations.getByName("main")
+    dependsOn(jvmMain.compileKotlinTaskName)
+    // dependsOn(jvmMain.processResourcesTaskName) // Not available in this version of KGP?
+
     mainClass.set("io.materia.examples.embeddinggalaxy.MainKt")
     jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
 
+    classpath = files(
+        jvmMain.output.allOutputs,
+        configurations.named("jvmRuntimeClasspath")
+    )
+    
     doFirst {
         println("🚀 Launching Embedding Galaxy on JVM")
         println("Bootstrapping EngineRenderer + instanced galaxy scene…")
@@ -114,36 +125,7 @@ tasks.register("run") {
 tasks.register("runJs") {
     group = "run"
     description = "Run the Embedding Galaxy example in the browser"
-
     dependsOn("jsBrowserDevelopmentRun")
-
-    doFirst {
-        println("🌐 Launching Embedding Galaxy (Browser / WebGPU)")
-        println("Ensure a WebGPU-capable browser is available.")
-    }
-}
-
-tasks.register("dev") {
-    group = "run"
-    description = "Development mode for Embedding Galaxy (browser)"
-
-    dependsOn("runJs")
-
-    doFirst {
-        println("🔄 Starting Embedding Galaxy dev server (WebGPU)")
-    }
-}
-
-tasks.register("jsBrowserRun") {
-    group = "run"
-    description = "Alias task for Embedding Galaxy browser run"
-    dependsOn("runJs")
-}
-
-tasks.register("wasmJsBrowserRun") {
-    group = "run"
-    description = "Alias task for Embedding Galaxy browser run (intended wasmJs entry point)"
-    dependsOn("runJs")
 }
 
 tasks.register("runAndroid") {

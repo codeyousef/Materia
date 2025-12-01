@@ -22,7 +22,8 @@ import kotlin.reflect.KClass
 
 class SceneRenderer(
     private val device: GpuDevice,
-    private val colorFormat: GpuTextureFormat
+    private val colorFormat: GpuTextureFormat,
+    private val depthFormat: GpuTextureFormat? = GpuTextureFormat.DEPTH24_PLUS
 ) {
     private val geometryUploader = GeometryUploader(device)
     private val geometryCache = mutableMapOf<Any, UploadedGeometry>()
@@ -97,7 +98,15 @@ class SceneRenderer(
             pass.setPipeline(resources.pipeline.pipeline)
             pass.setBindGroup(0, resources.bindGroup)
             pass.setVertexBuffer(0, resources.geometry.vertexBuffer)
-            pass.draw(1, resources.instanceCount)
+            
+            // When using quad fallback, each point needs 6 vertices (2 triangles)
+            // Otherwise, use native point primitives with 1 vertex per point
+            val verticesPerPoint = if (UnlitPipelineFactory.useQuadPointsFallback) {
+                UnlitPipelineFactory.VERTICES_PER_QUAD_POINT
+            } else {
+                1
+            }
+            pass.draw(verticesPerPoint, resources.instanceCount)
         }
     }
 
@@ -129,10 +138,11 @@ class SceneRenderer(
             PipelineKey(
                 blueprint::class,
                 blueprint.renderState,
-                colorFormat
+                colorFormat,
+                depthFormat
             )
         ) {
-            blueprint.createPipeline(device, colorFormat)
+            blueprint.createPipeline(device, colorFormat, depthFormat)
         }
         val geometry = geometryCache.getOrPut(mesh.geometry) {
             geometryUploader.upload(mesh.geometry, mesh.name)
@@ -180,10 +190,11 @@ class SceneRenderer(
             PipelineKey(
                 blueprint::class,
                 blueprint.renderState,
-                colorFormat
+                colorFormat,
+                depthFormat
             )
         ) {
-            blueprint.createPipeline(device, colorFormat)
+            blueprint.createPipeline(device, colorFormat, depthFormat)
         }
 
         val geometry = geometryCache.getOrPut(node) {
@@ -250,7 +261,8 @@ class SceneRenderer(
     private data class PipelineKey(
         val type: KClass<out MaterialBindingBlueprint>,
         val renderState: RenderState,
-        val format: GpuTextureFormat
+        val colorFormat: GpuTextureFormat,
+        val depthFormat: GpuTextureFormat?
     )
 
     private companion object {

@@ -16,9 +16,7 @@ var uColorSampler : sampler;
 fn main(input : FragmentInput) -> FragmentOutput {
     var output : FragmentOutput;
 
-    // Placeholder: sample the source texture directly. Real FXAA logic can be
-    // layered on later without changing bindings or IO structures.
-    let uv = input.uv * 0.5;
-    output.color = textureSample(uColorTexture, uColorSampler, uv);
+    // DEBUG: Sample the source texture - just pass through for now
+    output.color = textureSample(uColorTexture, uColorSampler, input.uv);
     return output;
 }

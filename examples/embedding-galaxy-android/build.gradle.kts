@@ -52,6 +52,7 @@ dependencies {
     implementation(project(":materia-examples-common"))
     implementation(project(":materia-gpu-android-native"))
     implementation(project(":materia-gpu"))
+    implementation(project(":materia-engine"))
     implementation(project(":"))
 
     implementation(libs.androidx.core.ktx)
@@ -74,6 +75,7 @@ tasks.register("runAndroid") {
     description = "Install and launch the Embedding Galaxy Android demo"
     dependsOn("assembleDebug")
     notCompatibleWithConfigurationCache("Invokes adb commands for installation")
+    doNotTrackState("adb install/start invocations are non-deterministic")
     doLast {
         fun runAdbCommand(vararg args: String): Int = try {
             val process = ProcessBuilder(*args)

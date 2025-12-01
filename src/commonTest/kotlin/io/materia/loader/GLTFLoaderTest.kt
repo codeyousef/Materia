@@ -1,8 +1,7 @@
 package io.materia.loader
 
+import io.materia.util.Base64Compat
 import kotlinx.coroutines.test.runTest
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -16,7 +15,6 @@ class GLTFLoaderTest {
         assertNotNull(loader)
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
     @Test
     fun `load embedded glTF scene`() = runTest {
         val positions = floatArrayOf(
@@ -25,7 +23,7 @@ class GLTFLoaderTest {
             0f, 1f, 0f
         )
         val positionBytes = FloatArrayEncoder.encode(positions)
-        val bufferBase64 = Base64.encode(positionBytes)
+        val bufferBase64 = Base64Compat.encode(positionBytes)
 
         val gltfJson = """
             {
@@ -52,7 +50,7 @@ class GLTFLoaderTest {
             }
         """.trimIndent()
 
-        val documentUri = "data:application/json;base64," + Base64.encode(gltfJson.encodeToByteArray())
+        val documentUri = "data:application/json;base64," + Base64Compat.encode(gltfJson.encodeToByteArray())
 
         val loader = GLTFLoader()
         val asset = loader.load(documentUri)
