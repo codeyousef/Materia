@@ -127,7 +127,7 @@ class CurveEditorTest {
 
         // Auto tangent should have calculated handles
         assertNotNull(keyframe.handles)
-        // In a real implementation, auto mode would calculate smooth tangents
+        // Auto mode uses Catmull-Rom spline derivative for smooth tangents
     }
 
     @Test

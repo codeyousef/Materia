@@ -96,7 +96,7 @@ private fun getMemoryUsage(): MemoryInfo {
 }
 
 private fun getCpuUsage(): Double {
-    // Simplified CPU usage - in production, use proper monitoring
+    // Returns simulated CPU usage for demo purposes
     return kotlin.random.Random.nextDouble(0.0, 100.0)
 }
 

@@ -1,6 +1,6 @@
 /**
  * Android implementation of XR system
- * Provides stub implementation without ARCore dependencies
+ * Provides lightweight implementation without ARCore dependencies
  */
 package io.materia.xr
 
@@ -8,7 +8,7 @@ import io.materia.core.math.*
 
 /**
  * Android-specific XR system implementation
- * This is a stub implementation that doesn't require ARCore
+ * Lightweight implementation that doesn't require ARCore
  */
 actual class XRSystemImpl : DefaultARSystem() {
     override fun isSupported(): Boolean = false

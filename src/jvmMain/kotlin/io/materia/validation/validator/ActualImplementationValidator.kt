@@ -399,8 +399,7 @@ class ActualImplementationValidator : ImplementationValidator {
     )
 
     private fun parseExpectDeclaration(expectDeclaration: String, sourceRoot: String): ExpectInfo? {
-        // This is a simplified implementation
-        // In a real implementation, you'd want to properly parse the AST
+        // Simplified string-based parsing of expect declarations
         return ExpectInfo(
             filePath = "unknown",
             lineNumber = 0,

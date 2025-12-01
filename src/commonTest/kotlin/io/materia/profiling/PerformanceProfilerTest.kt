@@ -175,7 +175,7 @@ class PerformanceProfilerTest {
 
         val stats = PerformanceProfiler.getFrameStats()
         // Note: This test may be flaky depending on system performance
-        // In a real scenario, you'd want more controlled timing
+        // Controlled timing would improve test reliability
         assertTrue(stats.frameCount == 60, "Should have 60 frames")
     }
 

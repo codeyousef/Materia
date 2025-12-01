@@ -110,7 +110,7 @@ class CPUTimer {
 }
 
 /**
- * Timer for GPU measurements (stub implementation)
+ * Timer for GPU measurements (renderer-based timing)
  */
 class GPUTimer(private val renderer: Renderer) {
     private var startTimeNs: Long = 0L

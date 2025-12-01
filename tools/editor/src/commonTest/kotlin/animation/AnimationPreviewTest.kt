@@ -259,7 +259,7 @@ class AnimationPreviewTest {
 
         // Changes in timeline should reflect in preview
         timeline.scrubTo(1.0f)
-        // In a real implementation, this would trigger preview updates
+        // Preview synchronization is event-driven through the timeline observer
 
         timeline.setPlaybackSpeed(2.0f)
         // Preview should match timeline speed

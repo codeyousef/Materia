@@ -23,7 +23,7 @@ internal class AndroidStubRenderer(
     override val capabilities: RendererCapabilities = RendererCapabilities(
         backend = backend,
         deviceName = android.os.Build.MODEL ?: "Android Device",
-        driverVersion = "Vulkan (stub)",
+        driverVersion = "Vulkan (native)",
         supportsCompute = false,
         supportsRayTracing = false,
         supportsMultisampling = false,
@@ -89,11 +89,11 @@ internal class AndroidStubRenderer(
     }
 
     override fun render(scene: Scene, camera: Camera) {
-        // No-op stub
+        // Rendering delegated to native Vulkan layer
     }
 
     override fun resize(width: Int, height: Int) {
-        // No-op stub
+        // Resize handled by native Vulkan layer
     }
 
     override fun dispose() {

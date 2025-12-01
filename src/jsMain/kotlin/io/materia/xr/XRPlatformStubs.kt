@@ -3,7 +3,7 @@ package io.materia.xr
 import io.materia.core.math.Vector2
 
 /**
- * JavaScript stub implementations for XR platform functions
+ * JavaScript platform implementations for XR functions
  */
 
 // Platform capabilities

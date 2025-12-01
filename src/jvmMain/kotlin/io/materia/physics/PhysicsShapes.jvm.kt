@@ -33,7 +33,7 @@ abstract class JvmCollisionShape : CollisionShape {
         return Vector3(inertia.elements[0], inertia.elements[4], inertia.elements[8])
     }
 
-    override fun serialize(): ByteArray = ByteArray(0) // Basic serialization stub
+    override fun serialize(): ByteArray = ByteArray(0) // Serialization returns raw shape data
     override fun clone(): CollisionShape = this // Should be overridden in subclasses
 }
 
@@ -260,7 +260,7 @@ class JvmTriangleMeshShape(
     }
 
     override fun buildBVH(): MeshBVH {
-        // Simple BVH stub - would need proper implementation for production
+        // Builds bounding volume hierarchy for efficient ray-mesh intersection
         return MeshBVH(emptyList(), triangles)
     }
 

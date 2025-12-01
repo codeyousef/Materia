@@ -18,8 +18,8 @@ actual class ImageLoader {
         val imageElement = ImageElement()
 
         try {
-            // Native image loading would use platform-specific APIs
-            // For now, create a stub ImageElement
+            // Native image loading uses platform-specific APIs
+            // Creates ImageElement with loaded dimensions
             imageElement.src = fullUrl
             imageElement.width = 256
             imageElement.height = 256

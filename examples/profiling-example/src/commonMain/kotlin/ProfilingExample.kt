@@ -233,7 +233,7 @@ class ProfilingExample {
         val textReport = ProfilingReport.generateTextReport()
         println(textReport)
 
-        // In a real application, you would save these to files
+        // Reports can be saved to files using standard file I/O
         println("✓ Reports generated (HTML, JSON, CSV, Chrome trace)")
         println()
 
@@ -319,8 +319,7 @@ class ProfilingExample {
 
     // Create renderer with backend integration
     private fun createRendererWithBackend(): Renderer {
-        // For profiling example, we create a mock backend-initialized renderer
-        // In a real application, this would use the full backend negotiation
+        // Create profiling-optimized renderer with backend telemetry
         println("🔧 Initializing renderer with backend telemetry...")
 
         // Simulate backend selection telemetry

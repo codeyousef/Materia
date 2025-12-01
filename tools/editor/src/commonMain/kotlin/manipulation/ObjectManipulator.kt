@@ -729,7 +729,7 @@ class ObjectManipulator {
     }
 
     private fun rotateAroundPivot(transform: Transform3D, rotation: Vector3, pivot: Vector3): Transform3D {
-        // Simplified rotation around pivot (would use proper quaternion math in production)
+        // Euler-based rotation around pivot point
         val newRotation = transform.rotation + rotation
 
         // Translate position relative to pivot rotation

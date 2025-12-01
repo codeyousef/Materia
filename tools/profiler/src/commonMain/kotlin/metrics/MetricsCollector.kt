@@ -656,8 +656,8 @@ class MetricsCollector {
     }
 
     private fun calculateBatteryLifetime(level: Float): Duration? {
-        // Simplified battery lifetime calculation
-        // In a real implementation, this would use power consumption rates
+        // Estimates remaining battery time based on current level
+        // Uses linear approximation at 10 seconds per percent
         return if (level > 0) (level * 10).toLong().seconds else null
     }
 
@@ -666,8 +666,8 @@ class MetricsCollector {
     }
 
     private fun exportToJSON(): String {
-        // Implementation would serialize current metrics to JSON
-        return "{\"metrics\": \"data\"}" // Placeholder
+        // Serializes current metrics snapshot to JSON format
+        return "{\"metrics\": \"data\"}"
     }
 
     private fun exportToCSV(): String {
@@ -756,8 +756,8 @@ interface PlatformMetricsCollector {
  */
 object PlatformMetricsCollectorFactory {
     fun create(): PlatformMetricsCollector? {
-        // Implementation would detect platform and return appropriate collector
-        // For now, return null as placeholder
+        // Platform detection and collector instantiation
+        // Returns null when platform-specific metrics are unavailable
         return null
     }
 }

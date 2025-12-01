@@ -47,8 +47,7 @@ actual suspend fun initializeRendererWithBackend(surface: RenderSurface): Render
         println("    XR_SURFACE: Missing")
     }
 
-    // For now, throw an error as WebGL renderer is not implemented
-    // In a real implementation, this would return either WebGPURenderer or WebGLRenderer
+    // WebGL fallback is not available - WebGPU is the primary JS target
     throw Exception("WebGPU/WebGL renderer not yet implemented. This example demonstrates backend negotiation.")
 }
 

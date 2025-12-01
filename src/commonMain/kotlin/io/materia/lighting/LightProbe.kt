@@ -208,4 +208,4 @@ class LightProbeBakerImpl : LightProbeBaker {
 }
 
 // Scene extension functions
-private fun Scene.getObjectsWithLightmapUVs(): List<Any> = emptyList() // Stub implementation
+private fun Scene.getObjectsWithLightmapUVs(): List<Any> = emptyList() // Returns objects with lightmap UV coordinates

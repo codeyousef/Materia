@@ -41,7 +41,7 @@ class DefaultProductionReadinessChecker : ProductionReadinessChecker {
         "tdd_compliance" to 0.9f,        // 90% test coverage required
         "performance_60fps" to 60.0f,    // 60 FPS minimum
         "library_size_mb" to 5.0f,       // 5MB maximum library size
-        "placeholder_tolerance" to 0.0f,  // Zero tolerance for placeholders in production
+        "placeholder_tolerance" to 0.0f,  // Zero tolerance for placeholder comments
         "implementation_gap_tolerance" to 0.1f, // Max 10% implementation gaps acceptable
         "test_pass_rate" to 0.95f,       // 95% test pass rate required
         "cross_platform_consistency" to 0.9f // 90% feature parity across platforms

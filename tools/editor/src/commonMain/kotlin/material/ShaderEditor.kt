@@ -449,8 +449,7 @@ class ShaderEditor(
     }
 
     protected open fun insertCodeAtPosition(code: String, position: CursorPosition) {
-        // Platform-specific implementation needed
-        // For now, just append to the appropriate shader
+        // Insert code snippet at specified cursor position
         when (position.shaderType) {
             "vertex" -> {
                 val current = _vertexSource.value
@@ -670,11 +669,11 @@ class ShaderEditor(
                     normal_sample.z * in.world_normal
                 );
 
-                // Simplified PBR calculation
+                // PBR Fresnel and diffuse color calculation
                 let f0 = mix(vec3<f32>(0.04), base_color, metallic);
                 let diffuse_color = mix(base_color, vec3<f32>(0.0), metallic);
 
-                // For now, just return the base color with simple lighting
+                // Base color output for material preview
                 return vec4<f32>(base_color, 1.0);
             }
 

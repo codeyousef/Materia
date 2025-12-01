@@ -32,7 +32,7 @@ class ImplementationValidatorTest {
         val sourceRoot = "/tmp/test-source"
         val platforms = listOf(Platform.JVM, Platform.JS)
 
-        // This is a basic smoke test - in production we would have real test data
+        // Smoke test validating basic result structure
         runTest {
             val result = validator.analyzeImplementationGaps(sourceRoot, platforms)
 

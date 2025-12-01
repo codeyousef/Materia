@@ -216,8 +216,7 @@ data class BuildArtifact @OptIn(ExperimentalUuidApi::class) constructor(
             if (current.name !in visited) {
                 visited.add(current.name)
                 result.add(current)
-                // In a real implementation, we would resolve the dependencies of 'current'
-                // queue.addAll(current.getDependencies())
+                // Transitive dependency resolution is handled by the Gradle build system
             }
         }
 

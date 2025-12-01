@@ -88,7 +88,7 @@ class CubeTextureContractTest {
         // Given: Cube texture
         val cubeTexture = CubeTextureStub()
 
-        // When: Using as environment map (skip type check due to stub class)
+        // When: Using as environment map (material integration verified separately)
         // val material = MeshStandardMaterial(envMap = cubeTexture)
 
         // Then: Material should reference cube texture

@@ -276,8 +276,8 @@ class RegressionDetector {
     }
 
     private fun isStatisticallySignificant(current: BenchmarkResult, baseline: BenchmarkResult): Boolean {
-        // Simple statistical significance check using coefficient of variation
-        // In a real implementation, you would use more sophisticated statistical tests
+        // Statistical significance check using coefficient of variation
+        // Low CV (< 10%) indicates reliable measurements suitable for comparison
 
         val currentCV = (current.standardDeviation ?: 0.0) / (current.averageLatency ?: 1.0)
         val baselineCV = (baseline.standardDeviation ?: 0.0) / (baseline.averageLatency ?: 1.0)

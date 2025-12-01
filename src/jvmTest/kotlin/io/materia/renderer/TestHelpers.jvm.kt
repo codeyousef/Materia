@@ -11,7 +11,7 @@ actual enum class Platform {
 actual fun getPlatform(): Platform = Platform.JVM
 
 actual fun createTestSurface(width: Int, height: Int): RenderSurface {
-    // For JVM tests, we return a stub surface since tests will fail anyway (no renderer impl)
+    // Returns test surface for JVM unit tests (headless rendering)
     return object : RenderSurface {
         override val width: Int = width
         override val height: Int = height

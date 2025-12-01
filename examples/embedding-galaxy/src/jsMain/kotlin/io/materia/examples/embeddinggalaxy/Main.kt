@@ -19,7 +19,7 @@ fun main() {
     scope.launch {
         val canvas = ensureCanvas()
         
-        // Use the canvas size that was set in ensureCanvas (no DPR scaling for now)
+        // Use the canvas size as configured in ensureCanvas (DPR handled by canvas setup)
         val width = canvas.width
         val height = canvas.height
         

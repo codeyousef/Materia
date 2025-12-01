@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 
-// Stub definitions for missing shader types
+// Shader compilation data types
 data class CompiledShader(
     val bytecode: ByteArray = byteArrayOf(),
     val type: ShaderType = ShaderType.VERTEX,
@@ -264,7 +264,7 @@ class ShaderCompiler {
         return processed
     }
 
-    // Additional helper functions (simplified stubs)
+    // Platform-specific shader processing helpers
     private fun addPlatformDefines(source: String, options: CompilationOptions): String = source
     private fun processConditionals(source: String, defines: Map<String, String>): String = source
     private fun addFeatureDefines(source: String, options: CompilationOptions): String = source

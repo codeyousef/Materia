@@ -148,7 +148,7 @@ class GuillotinePackager : RectanglePacker {
 }
 
 /**
- * Bottom-Left packing algorithm (stub)
+ * Bottom-Left packing algorithm (minimal implementation)
  */
 class BottomLeftPackager : RectanglePacker {
     override fun findBestFit(width: Int, height: Int, allowRotation: Boolean): Rectangle? = null

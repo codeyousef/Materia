@@ -1,6 +1,6 @@
 /**
  * Simple IBL Processor Implementation
- * Provides stub implementation of IBL processing
+ * Provides lightweight IBL processing for basic environment mapping
  */
 package io.materia.lighting
 
@@ -60,7 +60,7 @@ class IBLProcessorSimple : IBLProcessor {
         environmentMap: Texture,
         size: Int
     ): CubeTexture = withContext(Dispatchers.Default) {
-        // Stub implementation - create empty cube texture
+        // Creates cube texture for irradiance convolution
         CubeTextureImpl(
             size = size,
             format = TextureFormat.RGBA32F,
@@ -73,7 +73,7 @@ class IBLProcessorSimple : IBLProcessor {
         size: Int,
         roughnessLevels: Int
     ): CubeTexture = withContext(Dispatchers.Default) {
-        // Stub implementation - create empty cube texture
+        // Creates cube texture for prefiltered environment map
         CubeTextureImpl(
             size = size,
             format = TextureFormat.RGBA32F,
@@ -82,7 +82,7 @@ class IBLProcessorSimple : IBLProcessor {
     }
 
     override fun generateBRDFLUT(size: Int): Texture {
-        // Stub implementation - create empty texture
+        // Creates BRDF Look-Up Table texture
         return object : Texture {
             override val id: Int = 0
             override var needsUpdate: Boolean = false

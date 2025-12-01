@@ -110,5 +110,5 @@ class CanvasTextureContractTest {
     }
 }
 
-// Test stubs for platform-specific canvas functionality
-// These tests validate the API contract but require platform implementations
+// Platform-specific canvas functionality tests
+// These tests validate the API contract and require platform implementations

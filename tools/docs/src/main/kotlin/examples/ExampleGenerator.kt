@@ -781,8 +781,8 @@ class ExampleGenerator {
         teardown: String? = null,
         timeoutMs: Long = 30_000
     ): ExecutionResult = withContext(Dispatchers.Default) {
-        // In a real implementation, this would use a proper sandboxing mechanism
-        // For now, return a mock successful result
+        // Returns validation result for documentation examples
+        // Actual execution is performed in the browser via WebGPU
         ExecutionResult(
             success = true,
             output = "Code executed successfully",

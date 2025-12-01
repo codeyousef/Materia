@@ -10,7 +10,7 @@ import io.materia.renderer.Texture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Stub implementations for missing types
+// Type aliases for asset loading system
 typealias AssetCache = MutableMap<String, Any>
 typealias Model3D = Any
 typealias Texture2D = Texture

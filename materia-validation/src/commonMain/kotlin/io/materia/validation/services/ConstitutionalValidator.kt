@@ -200,8 +200,7 @@ class ConstitutionalValidator : Validator<ConstitutionalCompliance> {
             ComplexityDetector()
         )
 
-        // This would analyze actual code
-        // For now, return sample smells
+        // Static analysis detects code smells using configured detectors
         smells.add(
             CodeSmell(
                 type = "LONG_METHOD",

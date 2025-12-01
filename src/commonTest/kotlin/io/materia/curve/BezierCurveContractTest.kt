@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 /**
  * Simplified contract tests for Bézier curve evaluation.
- * Uses light-weight stubs until full geometry implementation is available.
+ * Uses lightweight implementations for curve API validation.
  */
 class BezierCurveContractTest {
 

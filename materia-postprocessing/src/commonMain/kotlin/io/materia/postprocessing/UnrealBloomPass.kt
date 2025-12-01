@@ -327,7 +327,7 @@ class UnrealBloomPass(
                 }
             """
 
-            // Simplified composite shader - would include all 8 levels in production
+            // Composite shader combining bloom levels with base image
             fragmentShader = """
                 @group(0) @binding(0) var<uniform> strength: f32;
                 @group(0) @binding(1) var tDiffuse: texture_2d<f32>;

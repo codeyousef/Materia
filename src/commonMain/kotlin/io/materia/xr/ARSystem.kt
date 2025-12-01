@@ -16,7 +16,7 @@ import io.materia.core.platform.currentTimeMillis
  */
 class DefaultARSystem : DefaultXRSystem(), ARSystem {
 
-    // AR System Implementation - providing minimal stubs for compilation
+    // AR System platform feature implementations
 
     override suspend fun requestHitTestSource(options: XRHitTestOptions): XRResult<XRHitTestSource> {
         return XRResult.Error(XRException.NotSupported("Hit test source not implemented"))

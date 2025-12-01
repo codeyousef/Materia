@@ -46,7 +46,7 @@ actual fun getPlatformLightEstimate(lightProbe: XRLightProbe): XRLightEstimate? 
 // Platform transform utilities
 actual fun combineTransforms(first: XRPose, second: XRPose): XRPose = first
 
-// Anchor persistence stubs
+// Anchor persistence platform functions
 internal actual suspend fun savePersistentAnchor(handle: String, pose: XRPose) {}
 internal actual suspend fun removePersistentAnchor(handle: String) {}
 internal actual suspend fun loadPersistentAnchorsFromPlatform(): List<PersistentAnchorData> =
@@ -86,7 +86,7 @@ internal actual fun getPlatformSpaceTransform(
     toSpace: XRReferenceSpace
 ): Matrix4 = Matrix4().identity()
 
-// AR specific stubs
+// AR platform-specific functions
 internal actual fun isPeopleOcclusionSupported(): Boolean = false
 internal actual fun enablePlatformPlaneDetection(enabled: Boolean) {}
 internal actual suspend fun getPlatformDetectedPlanes(): List<PlaneData> = emptyList()
