@@ -113,6 +113,9 @@ abstract class Object3D {
     val rotation: Euler = Euler()
     val scale: Vector3 = Vector3(1f, 1f, 1f)
     val quaternion: Quaternion = Quaternion()
+    
+    /** Up direction for lookAt operations. Default is positive Y. */
+    val up: Vector3 = Vector3(0f, 1f, 0f)
 
     // Transformation matrices
     val matrix: Matrix4 = Matrix4()

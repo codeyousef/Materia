@@ -127,7 +127,6 @@ actual class AudioListener actual constructor(
     camera: Camera?
 ) : Object3D() {
     private val attachedCamera: Camera? = camera
-    actual val up: Vector3 = Vector3(0f, 1f, 0f)
 
     actual override fun updateMatrixWorld(force: Boolean) {
         val camera = attachedCamera

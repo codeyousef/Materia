@@ -6,10 +6,6 @@ import io.materia.core.scene.Object3D
 
 actual class AudioListener actual constructor(camera: Camera?) : Object3D() {
     private val attachedCamera = camera
-    private val defaultUp = Vector3(0f, 1f, 0f)
-
-    actual val up: Vector3
-        get() = defaultUp
 
     actual override fun updateMatrixWorld(force: Boolean) {
         val camera = attachedCamera

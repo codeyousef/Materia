@@ -21,6 +21,11 @@ abstract class Camera : Object3D() {
     val projectionMatrix: Matrix4 = Matrix4()
 
     /**
+     * Inverse of the projection matrix
+     */
+    val projectionMatrixInverse: Matrix4 = Matrix4()
+
+    /**
      * Inverse of the world matrix (view matrix)
      */
     val matrixWorldInverse: Matrix4 = Matrix4()

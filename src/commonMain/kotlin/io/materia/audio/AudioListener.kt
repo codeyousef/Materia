@@ -9,6 +9,5 @@ import io.materia.core.scene.Object3D
  * Typically attached to camera for first-person audio perspective
  */
 expect class AudioListener(camera: Camera?) : Object3D {
-    val up: Vector3
     override fun updateMatrixWorld(force: Boolean)
 }
