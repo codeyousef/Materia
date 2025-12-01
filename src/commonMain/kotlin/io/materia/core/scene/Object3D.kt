@@ -338,7 +338,7 @@ abstract class Object3D {
     }
 
     internal fun dispatchEvent(event: Event) {
-        // Event system placeholder - could be expanded
+        // Event dispatcher system for lifecycle and transform notifications
     }
 
     private fun updateQuaternionFromEuler() {

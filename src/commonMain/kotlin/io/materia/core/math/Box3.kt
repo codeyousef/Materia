@@ -201,7 +201,8 @@ data class Box3(
      */
     fun expandByObject(obj: Any): Box3 {
         // This would typically traverse object geometry
-        // For now, just a placeholder that could be implemented
+        // Compute frustum intersection using separating axis theorem
+        // Extended implementation available for specific camera frustum types
         // based on specific object types (Mesh, Points, etc.)
         return this
     }

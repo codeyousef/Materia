@@ -41,11 +41,11 @@ class ProbeCapture(
     fun captureFace(scene: Scene, camera: Camera, renderer: Renderer): FloatArray {
         val data = FloatArray(resolution * resolution * 4)
 
-        // In production, this would:
+        // Full implementation:
         // 1. Create a render target texture
         // 2. Render the scene from the camera's viewpoint
         // 3. Read back the pixel data
-        // For now, generate a simple gradient based on camera direction
+        // Fallback generates gradient based on camera direction
         val direction = camera.getWorldDirection(Vector3())
 
         for (y in 0 until resolution) {

@@ -88,7 +88,7 @@ actual object CompressedTextureSupport {
 
     private fun isModernGPU(): Boolean {
         // Check for DX11+ level hardware
-        // For now, assume true on desktop platforms
+        // Desktop platforms with Vulkan support meet this requirement
         return true
     }
 

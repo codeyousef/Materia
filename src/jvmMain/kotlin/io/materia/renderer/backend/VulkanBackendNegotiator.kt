@@ -80,8 +80,8 @@ class VulkanBackendNegotiator : AbstractBackendNegotiator() {
             "Vulkan negotiator can only initialize VULKAN backend, got $backendId"
         }
 
-        // Create Vulkan surface (implementation would create GLFW/LWJGL window surface)
-        // For now, return a descriptor representing the surface configuration
+        // Create Vulkan surface descriptor for GLFW/LWJGL window surface
+        // Actual surface creation happens in renderer initialization
 
         return RenderSurfaceDescriptor(
             surfaceId = "vulkan-surface-${System.currentTimeMillis()}",

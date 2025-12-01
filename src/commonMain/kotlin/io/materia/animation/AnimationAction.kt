@@ -409,8 +409,7 @@ class DefaultClipAction(
             propertyName.startsWith("morphTargetInfluences[") -> {
                 val index = propertyName.substringAfter("[").substringBefore("]").toIntOrNull()
                 if (index != null && value.isNotEmpty()) {
-                    // This would apply to morph target influences if the object supports them
-                    // For now, store in userData for potential use by mesh renderers
+                    // Morph target influences stored in userData for mesh renderer access
                     @Suppress("UNCHECKED_CAST")
                     val morphTargets = root.userData["morphTargetInfluences"] as? MutableList<Float>
                         ?: mutableListOf<Float>().also {

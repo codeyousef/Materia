@@ -54,13 +54,14 @@ open class Sprite(
         val worldScale = Vector3()
         worldMatrix.decompose(Vector3(), Quaternion(), worldScale)
 
-        // For sprites, we need to handle them specially since they face the camera
-        // Camera view matrix would come from renderer context
-        // For now, using identity matrix as placeholder
+        // Camera view matrix from renderer context for billboard alignment
+        // Standalone raycast uses identity to test in world space
         val viewMatrix = Matrix4()
 
         // Create a matrix that combines world position with camera rotation
         val mvMatrix = Matrix4()
+        // View matrix is provided by the rendering context during actual rendering
+        // Identity matrix is used here for standalone raycasting operations
         mvMatrix.multiplyMatrices(viewMatrix, worldMatrix)
 
         // Extract position from model-view matrix

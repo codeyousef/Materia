@@ -226,7 +226,7 @@ class MemoryProfiler(private val config: MemoryProfilerConfig = MemoryProfilerCo
                     age = age,
                     suspiciousActivity = listOf("Long-lived allocation: ${age}ms")
                 )
-                // In a real implementation, you'd emit this to a leak reporting system
+                // Emit leak warning to logging system for monitoring and analysis
                 MateriaLogger.warn("MemoryProfiler", "Potential memory leak detected: $leak")
             }
         }

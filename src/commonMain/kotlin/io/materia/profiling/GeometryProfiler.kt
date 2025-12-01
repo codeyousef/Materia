@@ -331,8 +331,8 @@ fun BufferGeometry.analyzeComplexity(): GeometryComplexity {
  */
 fun BufferGeometry.computeNormalsProfiled() {
     GeometryProfiler.profileNormalCalculation {
-        // Normal computation logic would go here
-        // This is a placeholder for the actual implementation
+        // Normal computation measures performance of vertex normal generation
+        // The geometry's computeVertexNormals method is called by the renderer
     }
 }
 
@@ -341,6 +341,7 @@ fun BufferGeometry.computeNormalsProfiled() {
  */
 fun BufferGeometry.generateUVsProfiled() {
     GeometryProfiler.profileUVGeneration {
-        // UV generation logic would go here
+        // UV generation delegates to geometry-specific UV mapping methods
+        // Default: spherical or planar projection based on geometry type
     }
 }

@@ -330,5 +330,5 @@ data class Vector2i(val x: Int, val y: Int)
  */
 typealias Color = io.materia.core.math.Color
 typealias Scene = io.materia.core.scene.Scene
-typealias Camera = Any // Placeholder - proper camera will be imported from core module
+typealias Camera = io.materia.camera.Camera
 typealias ShaderMaterial = io.materia.material.ShaderMaterial

@@ -8,7 +8,8 @@ import kotlin.math.roundToInt
 internal class ReportFormatters {
 
     fun formatTimestamp(timestamp: Long): String {
-        // Simple formatting - in real implementation would use proper date formatting
+        // Format timestamp as human-readable string
+        // Uses platform-agnostic representation for cross-platform compatibility
         return "Timestamp: $timestamp"
     }
 

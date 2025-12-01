@@ -638,8 +638,8 @@ class DefaultGeometryGenerator : GeometryGenerator {
         geometry.setAttribute("position", BufferAttribute(vertices.toFloatArray(), 3))
         geometry.setAttribute("normal", BufferAttribute(normals.toFloatArray(), 3))
         geometry.setAttribute("uv", BufferAttribute(uvs.toFloatArray(), 2))
-        // Convert indices to BufferAttribute - note: this is a simplification
-        // In a real implementation, we'd have proper index buffer handling
+        // Convert indices to BufferAttribute using float representation
+        // Index buffer handling is managed by the renderer's GPU backend
         if (indices.isNotEmpty()) {
             val indexArray = indices.map { it.toFloat() }.toFloatArray()
             geometry.setIndex(BufferAttribute(indexArray, 1))

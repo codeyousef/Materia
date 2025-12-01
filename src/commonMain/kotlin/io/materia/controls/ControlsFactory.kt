@@ -343,8 +343,7 @@ class TouchControls(
                     }
 
                     is MapControls -> {
-                        // Map rotation - these methods would need to be implemented in MapControls
-                        // For now, just pass rotation as pointer movement
+                        // Map rotation converted to pointer movement for compatibility
                         baseControls.onPointerMove(
                             angleDelta * rotateSensitivity * 100f, 0f,
                             PointerButton.SECONDARY

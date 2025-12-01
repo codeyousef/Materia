@@ -1938,8 +1938,7 @@ class VulkanRenderer(
      * T019: Used for SwapchainManager initialization.
      */
     private fun extractVulkanSurface(surface: RenderSurface): Long {
-        // VulkanSurface should have a method to get the VkSurfaceKHR handle
-        // For now, we'll use reflection or expect a specific type
+        // VulkanSurface provides VkSurfaceKHR handle via getSurfaceHandle()
         return when (surface) {
             is VulkanSurface -> surface.getSurfaceHandle()
             else -> throw IllegalArgumentException("RenderSurface must be VulkanSurface for Vulkan renderer")

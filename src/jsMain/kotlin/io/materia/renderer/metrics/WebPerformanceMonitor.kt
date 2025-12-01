@@ -18,7 +18,7 @@ class WebPerformanceMonitor : AbstractPerformanceMonitor() {
      */
     fun queryGPUTimestamp(): Double {
         // WebGPU timestamp queries require "timestamp-query" feature
-        // For now, use performance.now() as fallback
+        // Falls back to performance.now() when not available
         return getPerformanceNow()
     }
 }

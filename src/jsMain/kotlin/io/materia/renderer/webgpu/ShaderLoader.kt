@@ -17,7 +17,7 @@ package io.materia.renderer.webgpu
  */
 fun loadBasicShader(): String {
     // T033: Embedded basic.wgsl shader
-    // In production, this could be loaded from external file
+    // Can also be loaded from external file via fetch API
     return """
 // Basic WGSL Shader (T031)
 // Compatible with WebGPU (native) and Vulkan (via SPIR-V compilation)

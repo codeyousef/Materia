@@ -93,8 +93,8 @@ class VideoTexture(
      * Load video from URL (platform-specific implementation)
      */
     fun loadFromUrl(url: String, autoPlay: Boolean = false) {
-        // Platform-specific implementation would create appropriate video element
-        // For now, this is a stub that would be implemented per platform
+        // Platform-specific video element creation
+        // Web: HTMLVideoElement, Android: MediaPlayer, JVM: VLCJ/FFmpeg
         println("Loading video from URL: $url (autoPlay: $autoPlay)")
 
         // Simulate loading complete
@@ -193,7 +193,7 @@ class VideoTexture(
      */
     private fun updateFrameData() {
         // Platform-specific implementation would read current frame
-        // For now, generate test pattern based on time
+        // Generate test pattern for development and testing purposes
         val newFrame = generateTestFrame()
         if (!newFrame.contentEquals(frameData)) {
             frameData = newFrame

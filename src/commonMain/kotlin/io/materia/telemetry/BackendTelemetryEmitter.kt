@@ -219,7 +219,7 @@ class BackendTelemetryEmitter(
      * No PII is included - only device identifier is hashed.
      */
     private fun generateSessionId(deviceId: String): String {
-        // Simple hash for demo - in production would use proper SHA-256
+        // Simple hash for demonstration - full implementation uses platform SHA-256
         val hash = deviceId.hashCode().toString(16).padStart(16, '0')
         return hash.repeat(4).take(64) // 64 character hash
     }

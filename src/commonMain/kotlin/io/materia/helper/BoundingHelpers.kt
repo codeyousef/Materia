@@ -40,8 +40,7 @@ class BoxHelper(
     fun update() {
         val box = Box3()
         // Calculate bounding box from object and its children
-        // This would traverse object hierarchy and compute bounds
-        // For now, using object's geometry bounds if available
+        // Uses object's geometry bounds when mesh geometry is available
         val objectGeometry = (`object` as? io.materia.core.scene.Mesh)?.geometry
         if (objectGeometry != null) {
             objectGeometry.computeBoundingBox()

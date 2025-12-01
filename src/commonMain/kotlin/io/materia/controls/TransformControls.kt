@@ -322,8 +322,33 @@ class TransformControls(
 
     private fun intersectsPlaneHandle(plane: TransformAxis, handleSize: Float): Boolean {
         val planeSize = handleSize * 2f
-        // Simplified plane intersection test
-        return false  // TODO: Implement proper plane intersection
+        
+        // Get the plane normal based on the axis
+        val planeNormal = when (plane) {
+            TransformAxis.XY -> Vector3(0f, 0f, 1f)
+            TransformAxis.XZ -> Vector3(0f, 1f, 0f)
+            TransformAxis.YZ -> Vector3(1f, 0f, 0f)
+            else -> return false
+        }
+        
+        // Ray-plane intersection using raycaster's ray
+        val denom = ray.direction.dot(planeNormal)
+        if (abs(denom) < 0.0001f) return false
+        
+        val t = worldPosition.clone().subtract(ray.origin).dot(planeNormal) / denom
+        if (t < 0f) return false
+        
+        // Get intersection point and check if within handle bounds
+        val intersection = ray.origin.clone().add(ray.direction.clone().multiplyScalar(t))
+        val localPoint = intersection.clone().subtract(worldPosition)
+        
+        // Check if intersection is within the plane handle square
+        return when (plane) {
+            TransformAxis.XY -> abs(localPoint.x) < planeSize && abs(localPoint.y) < planeSize
+            TransformAxis.XZ -> abs(localPoint.x) < planeSize && abs(localPoint.z) < planeSize
+            TransformAxis.YZ -> abs(localPoint.y) < planeSize && abs(localPoint.z) < planeSize
+            else -> false
+        }
     }
 
     private fun getAxisDirection(axis: TransformAxis): Vector3 {

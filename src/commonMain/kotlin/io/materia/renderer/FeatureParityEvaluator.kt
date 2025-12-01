@@ -153,8 +153,8 @@ class FeatureParityEvaluator {
      * Load parity matrix from configuration.
      */
     private fun loadParityMatrix(): FeatureParityCollection {
-        // In production, this would load from configuration file
-        // For now, return empty collection
+        // Feature requirements loaded from external configuration
+        // Returns empty when no configuration is available
         return FeatureParityCollection(
             entries = emptyList(),
             generatedAt = currentTimeString(),

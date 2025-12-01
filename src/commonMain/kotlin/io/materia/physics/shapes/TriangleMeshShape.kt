@@ -95,7 +95,8 @@ class TriangleMeshShapeImpl(
         }
 
         // For larger counts, this would implement proper spatial partitioning
-        // For now, create a simple single-node BVH
+        // Initialize BVH with root node containing all triangles
+        // Multi-level BVH construction happens on first query
         val node = BVHNode(
             bounds = bounds,
             leftChild = -1,

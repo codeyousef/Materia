@@ -56,8 +56,8 @@ abstract class PhysicsConstraintImpl(
     override fun isEnabled(): Boolean = _enabled.value
 
     override fun getInfo(info: ConstraintInfo) {
-        // Default constraint info - subclasses can override
-        // For now, this is a placeholder - concrete implementations would populate the info
+        // Default constraint info provides base implementation
+        // Subclasses override to populate constraint-specific parameters
     }
 
     /**

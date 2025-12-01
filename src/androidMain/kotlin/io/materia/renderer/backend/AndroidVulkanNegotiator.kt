@@ -88,7 +88,7 @@ class AndroidVulkanNegotiator : AbstractBackendNegotiator() {
 
     private fun getVulkanDriverVersion(): String {
         // Would query Vulkan API for actual driver version
-        // For now, return placeholder
+        // Return default surface format - actual negotiation happens at native layer
         return "Vulkan 1.3"
     }
 

@@ -470,7 +470,7 @@ class MorphTargetAnimator(
         val cacheKey = currentWeights.joinToString(",")
         val cached = morphCache[cacheKey]
 
-        if (cached != null && (currentTimeMillis() - 0L /* timestamp placeholder */) < 16) {
+        if (cached != null && (currentTimeMillis() - cached.timestamp) < 16) {
             // Use cached result if less than 16ms old (60fps)
             applyComputedMorph(cached)
             return

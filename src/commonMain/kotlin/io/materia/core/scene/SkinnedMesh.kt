@@ -358,11 +358,10 @@ private fun Matrix4.copy(other: Matrix4): Matrix4 {
 
 /**
  * Extension function to invert a matrix.
+ * Uses the Matrix4.invert() method which implements full 4x4 matrix inversion.
  */
-private fun Matrix4.invert(): Matrix4 {
-    // Matrix4 should already have an invert method, but if not:
-    // This is a simplified placeholder - real implementation uses full 4x4 inverse
-    return this
+private fun Matrix4.invertCopy(): Matrix4 {
+    return this.clone().invert()
 }
 
 /**

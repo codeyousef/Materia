@@ -178,7 +178,7 @@ private class EngineRendererImpl(
             )
             surfaceFormat = gpuSurface.getPreferredFormat(adapter)
             
-            // Vulkan backend doesn't support depth attachments yet, so disable depth for now
+            // Depth attachments are disabled on Vulkan backend due to current implementation constraints
             depthEnabled = backendType != BackendType.VULKAN
             val depthFormat = if (depthEnabled) GpuTextureFormat.DEPTH24_PLUS else null
             sceneRenderer = SceneRenderer(device, surfaceFormat, depthFormat)

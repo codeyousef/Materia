@@ -257,8 +257,8 @@ class FirstPersonControls(
 
         // Wall collision (simplified sphere collision)
         if (enableCollision) {
-            // This is a simplified implementation
-            // In a real game, you'd integrate with a physics engine
+            // Simplified boundary collision
+            // Physics engine integration recommended for complex collision detection
             val minX = -100f + collisionRadius
             val maxX = 100f - collisionRadius
             val minZ = -100f + collisionRadius

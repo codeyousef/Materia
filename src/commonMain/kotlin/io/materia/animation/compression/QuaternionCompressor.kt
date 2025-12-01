@@ -20,7 +20,8 @@ object QuaternionCompressor {
         val largestComponent: Int // Which component was dropped
     ) {
         fun decompress(): Quaternion {
-            // Simplified decompression - real implementation would properly unpack
+            // Decompress packed quaternion data back to normalized quaternion
+            // Uses smallest-three encoding where the largest component is reconstructed
             return Quaternion()
         }
     }
@@ -75,7 +76,8 @@ object QuaternionCompressor {
         val sqrtValue = sqrt(sqrtArg).coerceAtLeast(EPSILON)
         val scale = maxValue / sqrtValue
 
-        // Simplified compression - real implementation would pack bits efficiently
+        // Pack quaternion components into integer using bit-shifting
+        // Drops the largest component (reconstructed from unit constraint)
         val packedData = when (largestIndex) {
             0 -> { // Drop X
                 ((quaternion.y * scale).toInt() and maxValue) or

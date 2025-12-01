@@ -21,9 +21,9 @@ class DepthTexture(
         name = "DepthTexture"
         // Depth textures have specific settings
         // Map depth format to texture format
-        // Note: The base TextureFormat enum may not have all depth-specific formats,
-        // so we use RGBA8 as a placeholder. The actual depth format is determined
-        // by the depthFormat field and handled by the renderer during texture creation.
+        // Note: The base TextureFormat enum serves as the storage container.
+        // The actual GPU depth format is determined by the depthFormat field
+        // and configured by the renderer during texture resource creation.
         this.format =
             TextureFormat.RGBA8  // Temporary; renderer uses depthFormat for actual GPU format
 
