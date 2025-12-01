@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.dokka)
     alias(libs.plugins.kover)
     id("maven-publish")
+    id("signing")
 }
 
 // Ensure reliable repositories across all modules (mitigate central timeouts)
@@ -46,6 +47,55 @@ subprojects {
 
 group = "io.materia"
 version = "0.1.0-alpha01"
+
+// Maven Publishing Configuration
+publishing {
+    publications.withType<MavenPublication> {
+        pom {
+            name.set("Materia")
+            description.set("Kotlin Multiplatform 3D rendering engine targeting WebGPU, Vulkan, and Metal with Three.js-style ergonomics")
+            url.set("https://github.com/codeyousef/KreeKt")
+            
+            licenses {
+                license {
+                    name.set("Apache License 2.0")
+                    url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                }
+            }
+            
+            developers {
+                developer {
+                    id.set("codeyousef")
+                    name.set("Yousef")
+                    url.set("https://github.com/codeyousef")
+                }
+            }
+            
+            scm {
+                url.set("https://github.com/codeyousef/KreeKt")
+                connection.set("scm:git:git://github.com/codeyousef/KreeKt.git")
+                developerConnection.set("scm:git:ssh://git@github.com/codeyousef/KreeKt.git")
+            }
+        }
+    }
+}
+
+// Signing configuration (required for Maven Central)
+signing {
+    // Only sign if publishing to Maven Central (not mavenLocal)
+    setRequired { gradle.taskGraph.hasTask("publish") }
+    
+    // Use GPG key from environment or gradle.properties
+    // Configure via: ORG_GRADLE_PROJECT_signingKey and ORG_GRADLE_PROJECT_signingPassword
+    val signingKey: String? = findProperty("signingKey") as String?
+    val signingPassword: String? = findProperty("signingPassword") as String?
+    
+    if (signingKey != null && signingPassword != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    }
+    
+    sign(publishing.publications)
+}
 
 kotlin {
     // JVM Target
