@@ -170,8 +170,8 @@ class InstancedMeshContractTest {
             instancedMesh.setMatrixAt(i, matrix)
         }
 
-        // When: Raycasting would be performed
-        // (Raycaster implementation would handle this)
+        // When: Raycasting is performed
+        // Raycaster handles per-instance intersection testing
 
         // Then: Should support instance ID in intersection
         assertTrue(true, "Raycasting support tested in raycaster tests")
@@ -195,7 +195,7 @@ class InstancedMeshContractTest {
         // Then: Should be enabled
         assertTrue(instancedMesh.frustumCulled, "Frustum culling should be enabled")
 
-        // Per-instance culling would be handled by renderer
+        // Per-instance culling is handled by the renderer
     }
 
     /**

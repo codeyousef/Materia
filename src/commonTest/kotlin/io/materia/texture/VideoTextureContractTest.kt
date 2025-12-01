@@ -112,7 +112,7 @@ class VideoTextureContractTest {
         videoTexture.video?.play()
 
         // Then: Should trigger play event
-        // (In real implementation, these would be async)
+        // Event handlers validated via callback registration
         assertNotNull(videoTexture.onPlay, "Should have play handler")
         assertNotNull(videoTexture.onEnded, "Should have ended handler")
     }

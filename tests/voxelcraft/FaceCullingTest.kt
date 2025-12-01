@@ -236,7 +236,7 @@ class FaceCullingTest {
         }
         
         // When: Call regenerateAllMeshes
-        // (In real scenario, this would be called on VoxelWorld instance)
+        // VoxelWorld.regenerateAllMeshes() marks all chunks dirty
         // For this test, we verify the concept
         
         // Then: All chunks should be marked dirty

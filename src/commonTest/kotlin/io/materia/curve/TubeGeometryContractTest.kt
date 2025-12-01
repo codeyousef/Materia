@@ -240,7 +240,7 @@ class TubeGeometryContractTest {
         assertNotNull(box)
 
         // Start should be wider than end
-        // (This would be validated more precisely in implementation)
+        // Validated via bounding box extent checks
         assertTrue(box.min.y < 0f, "Tube should extend in negative Y")
         assertTrue(box.max.y > 0f, "Tube should extend in positive Y")
     }

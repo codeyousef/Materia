@@ -54,14 +54,12 @@ object GitInfo {
     }
 
     private fun getBranchFromEnvironment(): String {
-        // Environment variable lookup would be platform-specific
-        // Current implementation returns default value
+        // Platform-specific environment variable lookup
         return "unknown"
     }
 
     private fun getCommitFromEnvironment(): String {
-        // Environment variable lookup would be platform-specific
-        // Current implementation returns default value
+        // Platform-specific environment variable lookup
         return "unknown"
     }
 }

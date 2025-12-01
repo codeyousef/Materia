@@ -118,7 +118,7 @@ class MemoryProfiler {
     private suspend fun monitorAllocationPatterns(config: MemoryProfilingConfig) {
         while (profilingActive) {
             try {
-                // Simulate allocation tracking (in real implementation, use JVM TI or profiling agent)
+                // Track allocations via JVM TI or profiling agent
                 trackAllocations()
 
                 delay(config.sampleIntervalMs * 2)

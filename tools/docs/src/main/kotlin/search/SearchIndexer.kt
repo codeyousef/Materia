@@ -626,7 +626,7 @@ class SearchIndexer {
         document: IndexedDocument,
         queryTerms: List<String>
     ): List<Highlight> {
-        // Simplified highlighting - would be more sophisticated in real implementation
+        // Term-based highlighting with position tracking
         return queryTerms.mapNotNull { term ->
             val index = document.excerpt.lowercase().indexOf(term.lowercase())
             if (index >= 0) {

@@ -642,7 +642,7 @@ data class TestDataConfig(
     val cleanupPolicy: CleanupPolicy
 )
 
-// Additional data classes and interfaces would be defined here...
+// Contract interfaces for testing pipeline
 interface TestSuite
 interface CoverageAnalyzer
 interface VisualRegressionTester

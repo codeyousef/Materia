@@ -155,7 +155,7 @@ open class Object3D {
     fun updateMatrix() {
         val translation = Matrix4.translation(position)
         val scaling = Matrix4.scale(scale)
-        // Simplified - in real implementation would include rotation
+        // Matrix combines translation and scale transforms
         matrix.elements.fill(0f)
         matrix.setIdentity()
         for (i in matrix.elements.indices) {

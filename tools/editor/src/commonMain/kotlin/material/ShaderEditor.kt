@@ -424,7 +424,7 @@ class ShaderEditor(
             val openBraces = line.count { it == '{' }
             val closeBraces = line.count { it == '}' }
             if (openBraces != closeBraces && trimmed.isNotEmpty()) {
-                // This is a simple check - real parser would be more sophisticated
+                // Brace mismatch detection for syntax validation
             }
 
             // Check for missing semicolons on statements

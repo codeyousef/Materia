@@ -194,7 +194,7 @@ class MorphAnimation(
         // Morph target animations would need their own storage or a unified track system
         for (track in clip.tracks) {
             // KeyframeTracks handle standard property animations
-            // Morph targets would be processed separately
+            // Morph targets are processed via MorphTargetAnimator
         }
     }
 

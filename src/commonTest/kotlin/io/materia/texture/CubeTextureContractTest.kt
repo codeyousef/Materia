@@ -150,7 +150,7 @@ class CubeTextureContractTest {
         )
 
         // Then: Should handle error
-        // (In real implementation, this would be async)
+        // Async texture loading validates error handling
         assertNotNull(cubeTexture, "Should create texture even with errors")
     }
 

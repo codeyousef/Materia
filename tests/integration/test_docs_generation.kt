@@ -727,7 +727,7 @@ data class InternationalizationConfig(
     val enableRTLSupport: Boolean
 )
 
-// Additional interfaces and data classes would be defined here...
+// Contract interfaces for documentation generation
 interface ExampleGenerator
 interface MigrationGenerator
 interface SearchIndexer

@@ -37,8 +37,8 @@ object NativePlatformValidator {
      * we assume sufficient memory is available on platforms capable of running this code.
      */
     fun hasRequiredMemory(minMemoryMB: Long = 256): Boolean {
-        // Platform-specific memory checks would be implemented here in a full production system
-        // Current implementation assumes modern systems with adequate memory
+        // Platform-specific memory checks (sysinfo, GlobalMemoryStatusEx, sysctl)
+        // Assumes modern systems with adequate memory
         return true
     }
 

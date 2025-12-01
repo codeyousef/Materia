@@ -609,7 +609,7 @@ class MaterialPreview(
         mesh: MeshData,
         material: MaterialInstance
     ): PreviewImage {
-        // Default implementation - would be overridden by platform-specific renderers
+        // Default implementation - platform-specific renderers override this
         return PreviewImage(
             width = context.width,
             height = context.height,

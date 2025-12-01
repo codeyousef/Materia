@@ -1,63 +1,100 @@
-# Gradle files
-*.iml
-.gradle
-build
-captures
-.kotlin
+# ===========================================
+# Materia Engine - Git Ignore Configuration
+# ===========================================
 
-# IDE files
-.idea
-.vscode
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Platform specific
-local.properties
-.externalNativeBuild
-.cxx
-xcuserdata
-
-# Private/temp files
-#So we don't accidentally commit our private keys
-*.gpg
-*.log
-*.tmp
-*.bak
-*.orig
-.claude/
-
-# Specs directory (planning docs not for version control)
-specs/
-
-# Log file (local tracking only)
-log.md
-
-# Node.js (for JS target dependencies)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build artifacts
-*.jar
+# ----- Build Outputs -----
+build/
+bin/
 *.class
+*.jar
+*.war
+*.ear
 *.dex
 *.apk
 *.aab
 *.ipa
 
-# Performance and profiling
+# ----- Gradle -----
+.gradle/
+.kotlin/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ----- IDE & Editor -----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.directory
+
+# ----- AI Agent Configurations -----
+# These are local AI assistant configurations
+.claude/
+.codex/
+.gemini/
+.junie/
+.specify/
+.aider*
+CLAUDE.md
+AGENTS.md
+
+# ----- Development Specs -----
+# Internal planning and specification documents
+specs/
+
+# ----- Local Configuration -----
+local.properties
+*.local
+*.env
+*.env.*
+
+# ----- Secrets & Keys -----
+*.gpg
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+
+# ----- Logs & Temporary Files -----
+*.log
+*.tmp
+*.bak
+*.orig
+*.pid
+build_output.log
+log.md
+
+# ----- Debug Artifacts -----
+debug_*.png
 *.hprof
 *.jfr
 
-# OS generated files
+# ----- Node.js -----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ----- Private Documentation -----
+docs/private/
+
+# ----- Third Party Sources -----
+# Dawn WebGPU implementation (submodule or local copy)
+dawn/
+
+# ----- Backup Files -----
+*.bak
+settings.gradle.kts.bak
+
+# ----- OS Generated -----
+.DS_Store
 Thumbs.db
 .directory
-*.pid
-/docs/private/
-.aider*
-/dawn/
-dawn/
-debug_triangle.png
+xcuserdata/

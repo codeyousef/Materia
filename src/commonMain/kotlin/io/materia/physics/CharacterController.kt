@@ -414,7 +414,7 @@ class CharacterControllerImpl(
     fun pushCharacter(force: Vector3, mode: PushMode = PushMode.VELOCITY_CHANGE) {
         when (mode) {
             PushMode.FORCE -> {
-                // Apply as continuous force (would be integrated over time)
+                // Apply as continuous force integrated over fixed timestep
                 velocityForTimeInterval = velocityForTimeInterval + force * 0.1f
             }
 

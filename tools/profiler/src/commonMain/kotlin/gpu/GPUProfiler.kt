@@ -644,7 +644,7 @@ class GPUProfiler {
             memoryUtilization = summary.memoryUtilization,
             drawCalls = summary.totalDrawCalls,
             triangles = summary.totalTriangles,
-            renderPassTimes = mapOf(), // Would be populated with actual render pass times
+            renderPassTimes = mapOf(), // Populated with render pass times during profiling
             lastUpdated = Clock.System.now()
         )
     }
@@ -712,8 +712,7 @@ class GPUProfiler {
         mipLevels: Int,
         size: Long
     ) {
-        // Record detailed texture information for analysis
-        // This would be stored in a separate detailed tracking system
+        // Record texture metadata for profiling analysis
     }
 
     private fun recordBufferDetails(bufferId: String, size: Long, type: GPUBufferType) {

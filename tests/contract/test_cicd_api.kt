@@ -265,7 +265,7 @@ data class BuildArtifact(
     }
 
     private fun isValidChecksum(checksum: String): Boolean {
-        // Simplified validation - would be more sophisticated in real implementation
+        // SHA-256 checksum format validation
         return checksum.matches(Regex("[a-fA-F0-9]{64}"))  // SHA-256 format
     }
 }

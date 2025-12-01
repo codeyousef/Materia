@@ -1,89 +1,103 @@
 package integration
 
+import io.materia.core.Scene
+import io.materia.core.Mesh
+import io.materia.geometry.BoxGeometry
+import io.materia.materials.MeshStandardMaterial
+import io.materia.cameras.PerspectiveCamera
+import io.materia.lights.DirectionalLight
+import io.materia.lights.AmbientLight
+import io.materia.animation.AnimationMixer
+import io.materia.animation.AnimationClip
+import io.materia.animation.tracks.NumberKeyframeTrack
+import io.materia.math.Vector3
+import io.materia.math.Color
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Three.js API compatibility test
- * T024 - This test MUST FAIL until Three.js compatibility is implemented
+ * T024 - Validates Three.js-compatible API patterns
  */
 class ThreeJsCompatibilityTest {
 
     @Test
-    fun testThreeJsSceneCreationContract() {
-        // This test validates Three.js-compatible scene creation patterns
-        // Currently marked as expecting NotImplementedError until API is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when Three.js-compatible API is ready
-            // Expected behavior:
-            // 1. Create scene using Three.js-style API
-            // 2. Create BoxGeometry with standard dimensions
-            // 3. Apply MeshStandardMaterial with PBR properties
-            // 4. Create Mesh combining geometry and material
-            // 5. Add mesh to scene and verify hierarchy
-            //
-            // API requirement: Must match Three.js patterns exactly
-
-            // Contract test - throws expected error until implementation is complete
-            throw NotImplementedError("Three.js scene creation not yet implemented - waiting for Three.js compatibility layer")
+    fun testThreeJsSceneCreation() {
+        // Three.js-style scene creation
+        val scene = Scene()
+        val geometry = BoxGeometry(1f, 1f, 1f)
+        val material = MeshStandardMaterial().apply {
+            color = Color(0x00ff00)
+            metalness = 0.5f
+            roughness = 0.5f
         }
+        val mesh = Mesh(geometry, material)
+        scene.add(mesh)
+
+        // Verify Three.js-compatible API
+        assertEquals(1, scene.children.size, "Scene should contain mesh")
+        assertNotNull(mesh.geometry, "Mesh should have geometry")
+        assertNotNull(mesh.material, "Mesh should have material")
     }
 
     @Test
-    fun testThreeJsCameraContract() {
-        // This test validates Three.js-compatible camera API
-        // Currently marked as expecting NotImplementedError until API is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when Three.js-compatible camera is ready
-            // Expected behavior:
-            // 1. Create PerspectiveCamera with FOV, aspect, near, far
-            // 2. Set camera position using Three.js-style Vector3
-            // 3. Use lookAt method for orientation
-            // 4. Validate all camera parameters
-            //
-            // API requirement: Must match Three.js camera API
+    fun testThreeJsCamera() {
+        // Three.js-style camera setup
+        val camera = PerspectiveCamera(
+            fov = 75f,
+            aspect = 16f / 9f,
+            near = 0.1f,
+            far = 1000f
+        )
 
-            // Contract test - throws expected error until implementation is complete
-            throw NotImplementedError("Three.js camera compatibility not yet implemented - waiting for camera module completion")
-        }
+        camera.position.set(5f, 5f, 5f)
+        camera.lookAt(Vector3(0f, 0f, 0f))
+
+        // Verify camera properties
+        assertEquals(75f, camera.fov, "FOV should match")
+        assertEquals(0.1f, camera.near, "Near plane should match")
+        assertEquals(1000f, camera.far, "Far plane should match")
+        assertNotNull(camera.projectionMatrix, "Should have projection matrix")
     }
 
     @Test
-    fun testThreeJsLightingContract() {
-        // This test validates Three.js-compatible lighting system
-        // Currently marked as expecting NotImplementedError until API is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when Three.js-compatible lights are ready
-            // Expected behavior:
-            // 1. Create DirectionalLight with color and intensity
-            // 2. Configure light position and shadow casting
-            // 3. Create AmbientLight for global illumination
-            // 4. Validate light properties and behavior
-            //
-            // API requirement: Must match Three.js lighting patterns
+    fun testThreeJsLighting() {
+        // Three.js-style lighting setup
+        val scene = Scene()
 
-            // Contract test - throws expected error until implementation is complete
-            throw NotImplementedError("Three.js lighting compatibility not yet implemented - waiting for lighting module completion")
-        }
+        val directionalLight = DirectionalLight(Color(0xffffff), 1.0f)
+        directionalLight.position.set(5f, 10f, 7.5f)
+        directionalLight.castShadow = true
+        scene.add(directionalLight)
+
+        val ambientLight = AmbientLight(Color(0x404040), 0.5f)
+        scene.add(ambientLight)
+
+        // Verify lights added to scene
+        assertEquals(2, scene.children.size, "Scene should have two lights")
+        assertTrue(directionalLight.castShadow, "Directional light should cast shadows")
     }
 
     @Test
-    fun testThreeJsAnimationContract() {
-        // This test validates Three.js-compatible animation system
-        // Currently marked as expecting NotImplementedError until API is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when Three.js-compatible animation is ready
-            // Expected behavior:
-            // 1. Animate mesh rotation properties directly
-            // 2. Create AnimationMixer for managing animations
-            // 3. Define AnimationClip with keyframes
-            // 4. Play animation using clipAction
-            // 5. Validate animation state and playback
-            //
-            // API requirement: Must match Three.js animation API
+    fun testThreeJsAnimation() {
+        // Three.js-style animation setup
+        val mesh = Mesh(BoxGeometry(1f, 1f, 1f), MeshStandardMaterial())
+        val mixer = AnimationMixer(mesh)
 
-            // Contract test - throws expected error until implementation is complete
-            throw NotImplementedError("Three.js animation compatibility not yet implemented - waiting for animation module completion")
-        }
+        // Create rotation animation clip
+        val times = floatArrayOf(0f, 1f, 2f)
+        val values = floatArrayOf(0f, 3.14159f, 6.28318f)
+        val track = NumberKeyframeTrack(".rotation[y]", times, values)
+        val clip = AnimationClip("rotate", 2.0, listOf(track))
+
+        // Play animation
+        val action = mixer.clipAction(clip)
+        action.play()
+
+        // Verify animation state
+        assertTrue(action.isRunning, "Animation should be running")
+        assertNotNull(mixer.getRoot(), "Mixer should have root object")
     }
 }

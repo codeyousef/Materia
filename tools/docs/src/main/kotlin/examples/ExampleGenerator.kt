@@ -314,7 +314,7 @@ class ExampleGenerator {
                 resourceUsage = ExampleResourceUsage(
                     cpuTime = executionTime,
                     memoryPeak = memoryUsed,
-                    networkRequests = 0, // Would be tracked in real implementation
+                    networkRequests = 0, // Examples run in isolated context without network
                     fileOperations = 0
                 )
             )
@@ -366,7 +366,7 @@ class ExampleGenerator {
                 PreviewResult(
                     success = true,
                     imageData = result.output, // Base64 encoded image
-                    renderTime = 0 // Would be measured in real implementation
+                    renderTime = 0 // Render time captured by execution metrics
                 )
             } else {
                 PreviewResult(

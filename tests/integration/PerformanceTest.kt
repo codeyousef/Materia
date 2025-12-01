@@ -14,7 +14,7 @@ class PerformanceTest {
         // This test validates the constitutional 60 FPS performance requirement
         // Currently marked as expecting NotImplementedError until renderer optimization is complete
         assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when performance optimizations are complete
+            // Contract test for 60 FPS performance requirement
             // Expected behavior:
             // 1. Create test surface at 1920x1080 resolution
             // 2. Initialize basic scene with renderer
@@ -34,7 +34,7 @@ class PerformanceTest {
         // This test validates high polygon count performance requirement
         // Currently marked as expecting NotImplementedError until optimization is complete
         assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when performance optimizations are complete
+            // Contract test for 100k triangle rendering
             // Expected behavior:
             // 1. Create scene with 1000 spheres (~1k triangles each = 100k total)
             // 2. Position spheres randomly in 3D space
@@ -53,7 +53,7 @@ class PerformanceTest {
         // This test validates fast initialization requirement
         // Currently marked as expecting NotImplementedError until optimization is complete
         assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when initialization is optimized
+            // Contract test for fast initialization
             // Expected behavior:
             // 1. Measure time to create test surface
             // 2. Measure renderer initialization time
@@ -71,7 +71,7 @@ class PerformanceTest {
         // This test validates memory optimization and leak prevention
         // Currently marked as expecting NotImplementedError until memory management is complete
         assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when memory optimization is complete
+            // Contract test for memory optimization
             // Expected behavior:
             // 1. Measure initial memory usage
             // 2. Initialize scene and render 1000 frames

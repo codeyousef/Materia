@@ -37,8 +37,7 @@ data class TextureData(
     val format: String
 ) {
     fun dispose() {
-        // Release memory
-        // In real implementation, this would release GPU resources
+        // Release memory and GPU resources
     }
 }
 

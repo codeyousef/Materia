@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="docs/private/logo.png" alt="Materia logo" width="180" />
-  <h1>Materia</h1>
-  <p>Kotlin Multiplatform rendering toolkit targeting WebGPU, Vulkan, and emerging XR surfaces with Three.js-style ergonomics.</p>
+  <h1>🎮 Materia</h1>
+  <p><strong>Kotlin Multiplatform 3D Engine</strong></p>
+  <p>Modern rendering toolkit targeting WebGPU, Vulkan, and emerging XR surfaces with Three.js-style ergonomics.</p>
 </div>
 
 <p align="center">
   <a href="https://kotlinlang.org/docs/multiplatform.html">
-    <img src="https://img.shields.io/badge/Kotlin-2.2.20-7F52FF.svg" alt="Kotlin 2.2.20" />
+    <img src="https://img.shields.io/badge/Kotlin-2.1.20-7F52FF.svg" alt="Kotlin 2.1.20" />
   </a>
   <a href="https://kotlinlang.org/docs/multiplatform.html">
     <img src="https://img.shields.io/badge/Targets-JVM%20|%20JS%20|%20Android%20|%20Native-34C759.svg" alt="KMP Targets" />
@@ -18,171 +18,144 @@
 
 ---
 
-## Contents
+## ✨ Highlights
 
-- [Highlights](#highlights)
-- [Targets](#targets)
-- [Quickstart](#quickstart)
-- [Examples](#examples)
-- [Modules](#modules)
-- [Quality Gates](#quality-gates)
-- [Documentation & Roadmap](#documentation--roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+- **Unified Rendering API** – Write once, render everywhere with expect/actual abstractions over WebGPU, Vulkan (LWJGL), and Metal (MoltenVK)
+- **Three.js-Style API** – Familiar scene graph, materials, cameras, and lighting patterns for easy adoption
+- **Performance-First** – Arena allocators, uniform ring buffers, GPU resource pooling, and automatic instancing
+- **Complete Loader Suite** – GLTF 2.0, OBJ, FBX with platform-safe Base64 handling
+- **Cross-Platform Audio** – Positional audio and analyser abstractions aligned with the camera system
+- **Production Ready** – Built-in validation, Kover coverage, and dependency scanning pipelines
 
 ---
 
-## Highlights
+## 🎯 Platform Support
 
-- **Unified rendering API** – Expect/actual layers wrap WebGPU, Vulkan (via LWJGL), and MoltenVK
-  while keeping a single scene graph.
-- **Performance-first design** – Arena allocators, uniform ring buffers, GPU resource pooling, and
-  instancing utilities tuned to maintain 60 FPS.
-- **Loader suite** – GLTF 2.0, OBJ, FBX, and custom asset resolvers with platform-safe data URI +
-  Base64 handling.
-- **Cross-platform audio** – Listener, positional audio, and analyser abstractions aligned with the
-  camera system.
-- **Telemetry & validation** – Built-in readiness validator, Kover coverage, lint, and dependency
-  check pipelines.
+| Platform | Backend | Status |
+|----------|---------|--------|
+| **Browser (JS/WASM)** | WebGPU (WebGL2 fallback) | ✅ Ready |
+| **JVM (Linux/macOS/Windows)** | Vulkan via LWJGL 3.3.6 | ✅ Ready |
+| **Android** | Vulkan (API 24+) | ✅ Ready |
+| **Native (macOS/iOS)** | MoltenVK | 🟡 In Progress |
 
 ---
 
-## Targets
-
-| Target                        | Backend                     | Notes                                                                        | Status         |
-|-------------------------------|-----------------------------|------------------------------------------------------------------------------|----------------|
-| **Browser (wasm/JS)**         | WebGPU with WebGL2 fallback | Uses `@webgpu/types` bindings, webpack dev server                            | ✅ Ready        |
-| **JVM (Linux/macOS/Windows)** | Vulkan via LWJGL 3.3.6      | GLFW windowing, shader compilation through Tint/Naga                         | ✅ Ready        |
-| **Android**                   | Vulkan (API 24+)            | SurfaceView swap chain, compositor sync, Robolectric-friendly fallbacks      | ✅ Ready        |
-| **Native (macOS/iOS)**        | MoltenVK                    | Expect/actual stubs in place, feature parity tracked in `docs/MVP_STATUS.md` | 🟡 In Progress |
-
----
-
-## Quickstart
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - JDK 17+
-- Kotlin 2.2.20 toolchain (handled via Gradle wrapper)
-- Node.js ≥ 18 for JS bundling
-- Android SDK (API 34) if targeting Android
-- Vulkan drivers or WebGPU-enabled browser depending on your platform
+- Node.js ≥ 18 (for JS target)
+- Android SDK API 34 (for Android target)
+- Vulkan drivers or WebGPU-enabled browser
 
-### Build & Test
+### Build
 
 ```bash
-# Clone
-git clone https://github.com/materia-engine/materia.git
-cd materia
+git clone https://github.com/codeyousef/KreeKt.git
+cd KreeKt
 
-# Full build (all targets + default checks)
+# Build all targets
 ./gradlew build
 
-# Unit tests across targets
+# Run tests
 ./gradlew test
 
-# Code coverage verification
-./gradlew koverVerify
-
-# Android-specific lint + unit tests
-./gradlew lintDebug testDebugUnitTest
+# Generate coverage report
+./gradlew koverHtmlReport
 ```
 
-### Common Dev Loops
+---
+
+## 📦 Examples
+
+Run any example with Gradle:
 
 ```bash
-# Generate WGSL → SPIR-V shaders (runs automatically when needed)
-./gradlew compileShaders
+# Triangle demo
+./gradlew :examples:triangle:runJvm          # Desktop
+./gradlew :examples:triangle:jsBrowserRun    # Browser
 
-# Run dependency audit
-./gradlew dependencyCheckAnalyze
+# VoxelCraft (Minecraft-style demo)
+./gradlew :examples:voxelcraft:runJvm
+./gradlew :examples:voxelcraft:jsBrowserRun
 
-# Validate production readiness (telemetry + constitutional checks)
-./gradlew validateProductionReadiness
+# Embedding Galaxy (particle visualization)
+./gradlew :examples:embedding-galaxy:runJvm
+
+# Force Graph (network visualization)  
+./gradlew :examples:force-graph:runJvm
+```
+
+**Browser Requirements:** Chrome 113+, Edge 113+, or Firefox Nightly with WebGPU enabled.
+
+**Android:** Connect a device/emulator with Vulkan support, then run `:examples:triangle-android:installDebug`.
+
+---
+
+## 🏗️ Project Structure
+
+```
+materia-engine/         # Core: scene graph, materials, animation
+materia-gpu/            # GPU abstraction: WebGPU/Vulkan backends
+materia-postprocessing/ # Post-processing effects pipeline
+materia-validation/     # Production readiness validation CLI
+examples/               # Multiplatform example applications
+docs/                   # API reference and guides
 ```
 
 ---
 
-## Examples
+## 📖 Documentation
 
-| Example          | JVM                                           | Browser / JS                                 | Android                                           |
-|------------------|-----------------------------------------------|----------------------------------------------|---------------------------------------------------|
-| Triangle         | `./gradlew :examples:triangle:runJvm`         | `./gradlew :examples:triangle:runJs`         | `./gradlew :examples:triangle:runAndroid`         |
-| Embedding Galaxy | `./gradlew :examples:embedding-galaxy:runJvm` | `./gradlew :examples:embedding-galaxy:runJs` | `./gradlew :examples:embedding-galaxy:runAndroid` |
-| Force Graph      | `./gradlew :examples:force-graph:runJvm`      | `./gradlew :examples:force-graph:runJs`      | `./gradlew :examples:force-graph:runAndroid`      |
-| VoxelCraft       | `./gradlew :examples:voxelcraft:runJvm`       | `./gradlew :examples:voxelcraft:runJs`       | `./gradlew :examples:voxelcraft:runAndroid`       |
-
-- All run targets live under the Gradle `run` task group for quick discovery (
-  `./gradlew :examples:triangle:tasks --group run`).
-- JVM runs default to `stackSize=8192` to keep Vulkan happy on software adapters; VoxelCraft caps
-  itself to a short smoke loop (`VOXELCRAFT_FRAME_BUDGET`, default 60 frames) so the CLI run
-  completes without manual interaction.
-- Android tasks install and launch via `adb`; connect a device or emulator first.
-- For emulators, use an x86_64 system image with Vulkan graphics enabled (Android Studio >
-  Settings > Tools > Emulator > Advanced).
-- Browser runs depend on a WebGPU-capable browser (Chrome Canary, Edge Dev, or Firefox Nightly with
-  flags enabled).
+- [Getting Started Guide](docs/guides/getting-started.md)
+- [API Reference](docs/api-reference/README.md)
+- [Architecture Overview](docs/architecture/overview.md)
+- [Platform-Specific Notes](docs/guides/platform-specific.md)
 
 ---
 
-## Modules
+## 🔧 Development
 
-| Directory                    | Purpose                                                      |
-|------------------------------|--------------------------------------------------------------|
-| `materia-engine`             | Core scene graph, materials, animation, telemetry            |
-| `materia-gpu`                | WebGPU/Vulkan abstraction, swapchains, shader compilation    |
-| `materia-gpu-android-native` | Android Vulkan bootstrap (surface + validation glue)         |
-| `materia-examples-common`    | Shared assets, camera rigs, and debugging overlays           |
-| `materia-validation`         | CLI for readiness checks, lint aggregation, dependency scans |
-| `examples/*`                 | Multiplatform example scenes (JVM, JS, Android wrappers)     |
+### Quality Gates
 
-Additional specs live under `specs/`, while in-depth documentation is located in `docs/`.
+```bash
+./gradlew build                       # Compile + tests
+./gradlew koverVerify                 # Coverage check (50% minimum)
+./gradlew lintDebug                   # Android lint
+./gradlew dependencyCheckAnalyze      # Security audit
+./gradlew validateProductionReadiness # Full validation suite
+```
 
----
+### Shader Compilation
 
-## Quality Gates
+The project uses dual shader sources:
+- **WebGPU (JS):** WGSL strings in Kotlin code
+- **Vulkan (JVM):** Pre-compiled SPIR-V in `src/jvmMain/resources/shaders/`
 
-| Check                | Command                                 | Purpose                                                                |
-|----------------------|-----------------------------------------|------------------------------------------------------------------------|
-| Build + unit tests   | `./gradlew build`                       | Compiles all targets and runs default test suites                      |
-| Coverage             | `./gradlew koverHtmlReport`             | Generates HTML coverage report (`build/reports/kover/html/index.html`) |
-| Lint                 | `./gradlew lintDebug`                   | Android lint with API-level compliance fixes                           |
-| Dependency audit     | `./gradlew dependencyCheckAnalyze`      | OWASP dependency analysis                                              |
-| Production readiness | `./gradlew validateProductionReadiness` | Aggregated performance + compliance validation                         |
-
-CI pipelines should run the full sequence above before merges or releases.
+Run `./gradlew compileShaders` to regenerate SPIR-V from WGSL sources.
 
 ---
 
-## Documentation & Roadmap
+## 🤝 Contributing
 
-- [`docs/`](docs/) – reference guides, performance notes, profiling walkthroughs.
-- [`docs/MVP_STATUS.md`](docs/MVP_STATUS.md) – feature-by-feature status tracker.
-- [`mvp-plan.md`](mvp-plan.md) & [`implementation-plan.md`](implementation-plan.md) – roadmap
-  checkpoints.
-- [`docs/private/`](docs/private/) – internal reports, release summaries, and the library logo.
+Contributions welcome! Please:
 
----
+1. Fork and create a feature branch
+2. Add tests for new functionality
+3. Run quality gates before submitting
+4. Open a PR with clear description
 
-## Contributing
-
-Contributions are welcome! To get started:
-
-1. Fork the repository and create a feature branch.
-2. Implement your change with tests and KDoc updates as needed.
-3. Run the quality gates (`build`, `test`, `lintDebug`, `koverVerify`,
-   `validateProductionReadiness`).
-4. Open a pull request describing scope, validation steps, and relevant issues.
-
-Please read `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` before submitting changes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
-## License
+## 📄 License
 
-Materia is licensed under the [Apache License 2.0](LICENSE). Feel free to use, modify, and
-distribute according to the license terms.
+[Apache License 2.0](LICENSE) – Use freely in commercial and open source projects.
 
 ---
 
-<p align="center"><sub>Built with ❤️ by the Materia team. Reach out via issues or discussions if you need help getting started.</sub></p>
+<p align="center">
+  <sub>Built with ❤️ using Kotlin Multiplatform</sub>
+</p>

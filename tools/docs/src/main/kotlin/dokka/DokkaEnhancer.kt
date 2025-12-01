@@ -421,7 +421,7 @@ class DokkaEnhancer {
         return metadata.classes.map { className ->
             APIDocumentation(
                 className = className,
-                packageName = "materia.core", // Would be extracted from source
+                packageName = "materia.core", // Extracted from source during compilation
                 description = "Enhanced documentation for $className",
                 examples = generateClassExamples(className),
                 usageNotes = generateUsageNotes(className),

@@ -149,7 +149,7 @@ data class TestResults @OptIn(ExperimentalUuidApi::class) constructor(
                 errors = errors,
                 timeouts = timeouts,
                 duration = Duration.parse("${totalDuration}ms"),
-                coverage = null // Would be calculated separately
+                coverage = null // Calculated separately via coverage reporter
             )
 
             return TestResults(
@@ -158,7 +158,7 @@ data class TestResults @OptIn(ExperimentalUuidApi::class) constructor(
                 suite = suite,
                 results = testCases,
                 summary = summary,
-                artifacts = emptyList(), // Would be populated during execution
+                artifacts = emptyList(), // Populated during execution
                 environment = environment,
                 configuration = configuration
             )

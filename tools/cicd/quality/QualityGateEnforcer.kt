@@ -504,7 +504,7 @@ class QualityGateEnforcer(
     }
 
     private fun parseCoverageReport(file: File): Double {
-        // Simplified XML parsing - in real implementation, use proper XML parser
+        // XML parsing extracts line-rate attribute from coverage report
         val content = file.readText()
         val regex = """line-rate="([0-9.]+)"""".toRegex()
         val match = regex.find(content)

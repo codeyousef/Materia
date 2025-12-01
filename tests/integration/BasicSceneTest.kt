@@ -1,62 +1,76 @@
 package integration
 
+import io.materia.core.Scene
+import io.materia.core.Mesh
+import io.materia.geometry.BoxGeometry
+import io.materia.materials.MeshStandardMaterial
+import io.materia.cameras.PerspectiveCamera
+import io.materia.math.Vector3
+import io.materia.math.Color
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Basic spinning cube scenario test
- * T023 - This test MUST FAIL until basic scene functionality is implemented
+ * T023 - Validates basic scene functionality
  */
 class BasicSceneTest {
 
     @Test
-    fun testBasicSpinningCubeContract() {
-        // This test validates the basic spinning cube scenario
-        // Currently marked as expecting NotImplementedError until renderer is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when renderer module is production-ready
-            // Expected behavior:
-            // 1. Create a basic scene with a spinning cube
-            // 2. Initialize with a test surface
-            // 3. Render at 60 FPS
-            // 4. Verify triangle and draw call counts
-
-            // Contract test - throws expected error until renderer module is complete
-            throw NotImplementedError("Basic spinning cube scenario not yet implemented - waiting for renderer module completion")
+    fun testBasicSpinningCubeScenario() {
+        // Create a basic scene with a spinning cube
+        val scene = Scene()
+        val geometry = BoxGeometry(1f, 1f, 1f)
+        val material = MeshStandardMaterial().apply {
+            color = Color(0x00ff00)
         }
+        val cube = Mesh(geometry, material)
+        scene.add(cube)
+
+        // Verify scene setup
+        assertEquals(1, scene.children.size, "Scene should have one child")
+        assertNotNull(cube.geometry, "Cube should have geometry")
+        assertNotNull(cube.material, "Cube should have material")
+
+        // Verify geometry properties
+        assertTrue(geometry.getAttribute("position") != null, "Geometry should have position attribute")
     }
 
     @Test
-    fun testSceneHierarchyContract() {
-        // This test validates scene hierarchy creation and management
-        // Currently marked as expecting NotImplementedError until scene DSL is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when scene DSL module is production-ready
-            // Expected behavior:
-            // 1. Create scene with DSL containing mesh and light
-            // 2. Validate material properties and transformations
-            // 3. Verify shadow casting configuration
-            // 4. Check children count and hierarchy
+    fun testSceneHierarchy() {
+        // Create scene with hierarchy
+        val scene = Scene()
+        val parentMesh = Mesh(BoxGeometry(1f, 1f, 1f), MeshStandardMaterial())
+        val childMesh = Mesh(BoxGeometry(0.5f, 0.5f, 0.5f), MeshStandardMaterial())
 
-            // Contract test - throws expected error until scene DSL module is complete
-            throw NotImplementedError("Scene hierarchy not yet implemented - waiting for scene DSL module completion")
-        }
+        parentMesh.add(childMesh)
+        scene.add(parentMesh)
+
+        // Verify hierarchy
+        assertEquals(1, scene.children.size, "Scene should have one direct child")
+        assertEquals(1, parentMesh.children.size, "Parent should have one child")
+        assertEquals(parentMesh, childMesh.parent, "Child's parent should be parentMesh")
     }
 
     @Test
-    fun testBasicRenderingContract() {
-        // This test validates basic rendering pipeline
-        // Currently marked as expecting NotImplementedError until renderer is complete
-        assertFailsWith<NotImplementedError> {
-            // Implementation will be enabled when renderer module is production-ready
-            // Expected behavior:
-            // 1. Create renderer with platform-appropriate backend
-            // 2. Setup scene and perspective camera
-            // 3. Configure camera position and viewport size
-            // 4. Execute render and validate success result
+    fun testBasicRenderingSetup() {
+        // Create rendering components
+        val scene = Scene()
+        val camera = PerspectiveCamera(
+            fov = 75f,
+            aspect = 16f / 9f,
+            near = 0.1f,
+            far = 1000f
+        )
 
-            // Contract test - throws expected error until renderer module is complete
-            throw NotImplementedError("Basic rendering not yet implemented - waiting for renderer module completion")
-        }
+        camera.position.set(0f, 0f, 5f)
+        camera.lookAt(Vector3(0f, 0f, 0f))
+
+        // Verify camera setup
+        assertEquals(75f, camera.fov, "Camera FOV should be 75")
+        assertEquals(5f, camera.position.z, "Camera should be at z=5")
+        assertNotNull(camera.projectionMatrix, "Camera should have projection matrix")
     }
 }

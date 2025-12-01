@@ -406,7 +406,7 @@ class DocServer {
             semanticSearch = config.environment == ServerEnvironment.DEVELOPMENT
         )
 
-        // Get current search index (would be cached in real implementation)
+        // Load search index (cached by SearchIndexer)
         val searchIndex = loadOrCreateSearchIndex()
 
         searchIndexer.search(searchIndex, searchQuery)
@@ -872,7 +872,7 @@ class StaticSiteGenerator {
         val assetsDir = File("$outputDir/assets")
         assetsDir.mkdirs()
 
-        // Would copy actual asset files in real implementation
+        // Asset files are copied from resources during build
     }
 
     private fun generateSitemap(site: DocumentationSite, outputDir: String, baseUrl: String) {

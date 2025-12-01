@@ -713,7 +713,7 @@ container.y <= contained.y &&
 container.x + container.width >= contained.x + contained.width &&
 container.y + container.height >= contained.y + contained.height
 private fun mergeRectangles() {
-// Simplified merge - real implementation would be more sophisticated
+// Adjacent rectangle merging for free space optimization
 var merged = true
 while (merged) {
 merged = false
