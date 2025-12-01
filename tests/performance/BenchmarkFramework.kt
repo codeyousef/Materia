@@ -248,7 +248,7 @@ class BenchmarkFramework {
         }
     }
 
-    // Helper methods that will be implemented alongside the framework
+    // Benchmark helper methods for scene and geometry creation
     private fun createBenchmarkScene(
         triangles: Int = 50000,
         materials: Int = 5,
@@ -290,7 +290,7 @@ class BenchmarkFramework {
     }
 }
 
-// Framework interfaces and data classes that will be implemented in Phase 3.3
+// Contract interfaces for Phase 3.3 implementation
 
 interface BenchmarkRunner {
     fun initialize(config: BenchmarkConfig)

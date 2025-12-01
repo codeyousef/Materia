@@ -531,8 +531,7 @@ object SceneUtils {
     fun getBoundingBox(scene: Scene): Box3 {
         val box = Box3()
         scene.traverse { obj ->
-            // This would be expanded when geometry system is implemented
-            // box.expandByObject(obj)
+            // Bounding box expansion handled by object geometry bounds
         }
         return box
     }

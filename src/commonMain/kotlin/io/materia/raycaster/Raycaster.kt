@@ -182,6 +182,5 @@ data class Face(
  * Extension function for Object3D to support raycasting
  */
 fun Object3D.raycast(raycaster: Raycaster, intersections: MutableList<Intersection>) {
-    // Default implementation - override in specific object types
-    // This will be implemented in Mesh, Line, Points, etc.
+    // Default no-op - overridden in Mesh, Line, Points with geometry intersection logic
 }

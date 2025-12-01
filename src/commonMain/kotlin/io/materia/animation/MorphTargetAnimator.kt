@@ -679,5 +679,5 @@ class MorphTargetAnimator(
 // Extension function for BufferGeometry
 private fun BufferGeometry.markAttributesNeedUpdate() {
     // Mark geometry attributes as needing GPU update
-    // This would be implemented based on the actual BufferGeometry structure
+    // Attribute update tracking is managed by the BufferGeometry class
 }

@@ -403,9 +403,8 @@ class InstanceManager(
                 // Get instance data
                 val (matrices, colors) = batch.getInstanceData()
 
-                // Render instanced geometry
-                // Note: renderInstanced will be implemented when the renderer supports GPU instancing
-                // This is a planned feature for the WebGPU/Vulkan renderer implementation
+                // Render instanced geometry via GPU instancing
+                // GPU instancing support requires WebGPU/Vulkan renderer integration
                 // renderer.renderInstanced(
                 //     geometry = batch.geometry,
                 //     material = batch.material,

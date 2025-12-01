@@ -641,7 +641,7 @@ data class Ray(
     val direction: Vector3
 )
 
-// Platform-specific functions (will be implemented via expect/actual)
+// Platform-specific expect declarations with actual implementations per target
 internal expect suspend fun savePersistentAnchor(handle: String, pose: XRPose)
 internal expect suspend fun removePersistentAnchor(handle: String)
 internal expect suspend fun loadPersistentAnchorsFromPlatform(): List<PersistentAnchorData>

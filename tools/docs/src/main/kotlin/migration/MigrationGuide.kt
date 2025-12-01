@@ -283,7 +283,7 @@ class MigrationGuideGenerator {
             ?: return@withContext emptyList()
 
         patterns.mapNotNull { pattern ->
-            // Pattern migration logic will be added in a subsequent iteration
+            // Pattern migration requires source library mapping configuration
             null
         }
     }

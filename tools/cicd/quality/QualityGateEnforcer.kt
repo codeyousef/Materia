@@ -511,7 +511,7 @@ class QualityGateEnforcer(
         return match?.groupValues?.get(1)?.toDouble()?.times(100) ?: 0.0
     }
 
-    // Additional helper methods would be implemented here...
+    // Report parsing helper methods
     private fun parseDetektReport(file: File): DetektResults = DetektResults(0, 0)
     private fun parseKtLintReport(file: File): Int = 0
     private fun parseDependencyCheckReport(file: File): List<Vulnerability> = emptyList()

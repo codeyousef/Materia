@@ -1,9 +1,8 @@
 /**
  * JVM implementations for AR system platform functions
- * These are placeholder implementations since AR is not available on JVM
+ * AR is not available on JVM - stubs provided for compilation
  */
 package io.materia.xr
 
-// No AR system functions are implemented on JVM platform
-// All expect declarations should be placed in commonMain and implemented
-// on platforms that support AR (Android, iOS, Web)
+// JVM platform does not support AR - expect declarations are fulfilled
+// by Android, iOS, and Web targets that have AR hardware access

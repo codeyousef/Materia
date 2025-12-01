@@ -208,7 +208,7 @@ class ImplementationValidatorTest {
         return DefaultImplementationValidator()
     }
 
-    // Additional helper functions would be implemented when creating actual tests
+    // Test helper functions for source root and file creation
     private fun createTestSourceRoot(): String = "/tmp/test-source-${currentTimeMillis()}"
     private fun createExpectFile(sourceRoot: String, fileName: String, content: String): String =
         "$sourceRoot/commonMain/kotlin/$fileName"

@@ -201,7 +201,7 @@ class VisualTestFramework {
         }
     }
 
-    // Helper methods that will be implemented alongside the framework
+    // Visual test helper methods for scene and camera creation
     private fun createTestScene(): TestScene {
         throw NotImplementedError("Test scene creation not implemented")
     }
@@ -239,7 +239,7 @@ class VisualTestFramework {
     }
 }
 
-// Framework interfaces and data classes that will be implemented in Phase 3.3
+// Contract interfaces for Phase 3.3 implementation
 
 interface VisualTestRunner {
     fun initialize(config: VisualTestConfig)

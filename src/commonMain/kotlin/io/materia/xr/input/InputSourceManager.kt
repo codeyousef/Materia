@@ -193,7 +193,7 @@ interface XRInputCallback {
     fun onEyeGazeUpdated(direction: Vector3, convergenceDistance: Float)
 }
 
-// Platform-specific functions (will be implemented via expect/actual)
+// Platform-specific expect declarations with actual implementations per target
 internal expect suspend fun getPlatformHandJointPoses(
     hand: DefaultXRHand
 ): Map<XRHandJoint, XRJointPose>
