@@ -1,7 +1,12 @@
 <div align="center">
-  <h1>🎮 Materia</h1>
+  <img src="materia-logo.png" alt="Materia Logo" width="200" />
+  <h1>Materia</h1>
   <p><strong>Kotlin Multiplatform 3D Engine</strong></p>
   <p>Modern rendering toolkit targeting WebGPU, Vulkan, and emerging XR surfaces with Three.js-style ergonomics.</p>
+  
+  <br/>
+  
+  > ⚠️ **Alpha Software** – Materia is under active development. APIs may change between releases. Not recommended for production use yet.
 </div>
 
 <p align="center">
@@ -14,6 +19,7 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-Apache%202.0-orange.svg" alt="License: Apache 2.0" />
   </a>
+  <img src="https://img.shields.io/badge/Status-Alpha-red.svg" alt="Alpha Status" />
 </p>
 
 ---
