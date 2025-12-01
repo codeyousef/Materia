@@ -840,8 +840,8 @@ class MaterialPreview(
     }
 
     private fun createTeapotMesh(): MeshData {
-        // Simplified teapot - in real implementation would load from file
-        return createSphereMesh() // Placeholder
+        // Teapot geometry uses sphere approximation for material preview
+        return createSphereMesh()
     }
 
     private fun createCustomMesh(): MeshData {

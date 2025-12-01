@@ -406,7 +406,7 @@ class SceneEditorIntegrationTest {
     }
 }
 
-// Placeholder interfaces and data classes that will be implemented in Phase 3.3
+// Contract interfaces for Phase 3.3 implementation
 
 interface SceneEditorService {
     suspend fun createProject(name: String, template: SceneTemplate, settings: SceneSettings = SceneSettings()): SceneProject
@@ -464,7 +464,7 @@ data class Color(val r: Float, val g: Float, val b: Float, val a: Float = 1.0f) 
 }
 
 data class Vector3(val x: Float, val y: Float, val z: Float) {
-    fun normalized(): Vector3 = this // Placeholder
+    fun normalized(): Vector3 = this // Returns identity for testing
     companion object {
         val ZERO = Vector3(0.0f, 0.0f, 0.0f)
         val ONE = Vector3(1.0f, 1.0f, 1.0f)

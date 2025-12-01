@@ -197,7 +197,7 @@ class VideoTextureContractTest {
     }
 }
 
-// VideoTexture placeholder
+// Test fixture: VideoTexture for contract testing
 class VideoTexture {
     var source: String? = null
     var video: VideoElement? = null
@@ -225,7 +225,7 @@ class VideoTexture {
     }
 }
 
-// VideoElement placeholder
+// Test fixture: VideoElement for video playback testing
 class VideoElement(
     val src: String,
     val width: Int = 1920,
@@ -250,7 +250,7 @@ class VideoElement(
     }
 }
 
-// VideoImage placeholder
+// Test fixture: VideoImage dimensions
 class VideoImage(
     val width: Int,
     val height: Int

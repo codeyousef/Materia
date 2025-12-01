@@ -40,11 +40,10 @@ actual suspend fun readTextResource(urlOrPath: String): String {
         }
     }
 
-    // For WGSL shader files on Android Vulkan, return a placeholder since the
-    // GpuDevice.createShaderModule() implementation loads SPIR-V from assets
-    // based on the shader label, ignoring the WGSL code parameter.
+    // WGSL shader files on Android Vulkan are handled by the shader module loader
+    // which reads SPIR-V binaries from assets based on the shader label
     if (urlOrPath.endsWith(".wgsl")) {
-        return "// Placeholder: Android Vulkan uses SPIR-V loaded from assets"
+        return "// Android Vulkan: SPIR-V loaded from assets by shader module"
     }
 
     throw IllegalStateException("Resource not found: $urlOrPath")

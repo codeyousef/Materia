@@ -483,7 +483,7 @@ class MaterialLibrary(
     }
 
     suspend fun syncWithRemoteLibrary(remoteUrl: String): SyncResult {
-        // Placeholder for remote synchronization
+        // Remote synchronization requires network client configuration
         return SyncResult(
             success = false,
             syncedMaterials = emptyList(),
@@ -647,7 +647,7 @@ class MaterialLibrary(
     }
 
     private fun importFromGLTF(data: String): ImportResult {
-        // Placeholder for GLTF material import
+        // GLTF import requires glTF parser integration
         return ImportResult(
             success = false,
             importedMaterials = emptyList(),
@@ -656,7 +656,7 @@ class MaterialLibrary(
     }
 
     private fun importFromOBJ(data: String): ImportResult {
-        // Placeholder for OBJ/MTL material import
+        // OBJ/MTL import requires Wavefront parser integration
         return ImportResult(
             success = false,
             importedMaterials = emptyList(),
@@ -709,7 +709,7 @@ class MaterialLibrary(
     }
 
     private fun exportToGLTF(materials: List<MaterialDefinition>): ExportResult {
-        // Placeholder for GLTF export
+        // GLTF export requires glTF serializer integration
         return ExportResult(
             success = false,
             data = "",

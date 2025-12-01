@@ -275,7 +275,7 @@ class InstancedMeshContractTest {
     }
 }
 
-// InstancedMesh placeholder
+// Test fixture: InstancedMesh for contract testing
 class InstancedMesh(
     val geometry: BufferGeometry,
     val material: Material,
@@ -329,7 +329,7 @@ class InstancedMesh(
     }
 }
 
-// Import real classes instead of placeholders
+// Uses real classes from main source
 // (InstancedBufferAttribute is in InstancedBufferAttributeContractTest)
 // (BufferGeometry is imported from io.materia.geometry)
 

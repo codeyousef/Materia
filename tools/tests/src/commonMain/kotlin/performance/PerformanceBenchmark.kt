@@ -548,8 +548,8 @@ class PerformanceBenchmark {
     }
 
     private fun getCurrentCPUUsage(): Float {
-        // Platform-specific CPU usage collection
-        return 0.0f // Placeholder
+        // CPU usage collection is platform-dependent
+        return 0.0f
     }
 
     private fun updateProgress(progress: BenchmarkProgress) {

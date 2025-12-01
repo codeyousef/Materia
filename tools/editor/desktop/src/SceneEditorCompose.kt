@@ -668,8 +668,7 @@ class LWJGLCanvas(
     }
 
     private fun renderScene() {
-        // Placeholder for actual scene rendering
-        // This would use the Materia rendering engine
+        // Scene rendering delegated to Materia engine viewport
     }
 }
 

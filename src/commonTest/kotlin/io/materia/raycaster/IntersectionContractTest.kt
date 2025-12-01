@@ -227,7 +227,7 @@ data class Face(
     val materialIndex: Int = 0
 )
 
-// Placeholder for InstancedMesh
+// Test fixture: InstancedMesh for raycasting tests
 class InstancedMesh(
     geometry: BoxGeometry,
     material: MeshBasicMaterial,

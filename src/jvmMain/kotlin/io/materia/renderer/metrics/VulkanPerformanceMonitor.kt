@@ -14,7 +14,7 @@ class VulkanPerformanceMonitor : AbstractPerformanceMonitor() {
      * Would query VkQueryPool with VK_QUERY_TYPE_TIMESTAMP.
      */
     fun queryVulkanTimestamp(): Long {
-        // Placeholder - would use vkGetQueryPoolResults in actual implementation
+        // GPU timestamp queries require active VkQueryPool; falls back to system time
         return getCurrentTimeMs()
     }
 }

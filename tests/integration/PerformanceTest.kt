@@ -24,7 +24,7 @@ class PerformanceTest {
             //
             // Constitutional requirement: MUST achieve 60 FPS
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("60 FPS performance not yet implemented - waiting for renderer optimization")
         }
     }
@@ -43,7 +43,7 @@ class PerformanceTest {
             //
             // Constitutional requirement: 60 FPS with 100k triangles
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("100k triangles performance not yet implemented - waiting for advanced optimization")
         }
     }
@@ -61,7 +61,7 @@ class PerformanceTest {
             //
             // Performance requirement: Fast startup for responsive applications
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Fast initialization not yet implemented - waiting for startup optimization")
         }
     }
@@ -80,7 +80,7 @@ class PerformanceTest {
             //
             // Constitutional requirement: <5MB library size, efficient runtime memory
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Memory optimization not yet implemented - waiting for memory management improvements")
         }
     }

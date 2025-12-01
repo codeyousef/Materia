@@ -16,7 +16,7 @@ class AndroidPerformanceMonitor : AbstractPerformanceMonitor() {
      * Use Vulkan timestamp queries for GPU timing on Android.
      */
     fun queryVulkanTimestamp(): Long {
-        // Placeholder - would use Vulkan timestamp queries in actual implementation
+        // GPU timestamp queries require active VkQueryPool; falls back to system time
         return getCurrentTimeMs()
     }
 }

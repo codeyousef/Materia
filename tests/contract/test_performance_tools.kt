@@ -165,7 +165,7 @@ class PerformanceToolsContractTest {
     }
 }
 
-// Placeholder interfaces and data classes that will be implemented in Phase 3.3
+// Contract interfaces for Phase 3.3 implementation
 // These are intentionally incomplete to make tests fail initially
 
 interface PerformanceMonitorAPI {

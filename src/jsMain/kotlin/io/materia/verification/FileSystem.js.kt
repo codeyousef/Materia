@@ -51,7 +51,7 @@ actual object FileSystem {
     }
 
     actual suspend fun getLastModified(filePath: String): Long {
-        // Return current time as placeholder - using JS Date for simplicity
+        // Returns current timestamp for browser context where file modification times are unavailable
         val dateNow = js("Date.now()") as? Number
         return dateNow?.toLong() ?: kotlin.js.Date.now().toLong()
     }

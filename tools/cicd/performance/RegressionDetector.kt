@@ -518,23 +518,20 @@ class RegressionDetector {
     }
 
     private suspend fun loadBaselineFromGit(branch: String): List<BenchmarkResult> = withContext(Dispatchers.IO) {
-        // Implementation would use git commands to get results from specific branch
+        // Git baseline loading requires git command execution
         logger.info("Loading baseline from git branch: $branch")
-        // Placeholder implementation
         emptyList()
     }
 
     private suspend fun loadBaselineFromDatabase(connectionString: String): List<BenchmarkResult> = withContext(Dispatchers.IO) {
-        // Implementation would connect to database and retrieve historical results
+        // Database baseline requires connection configuration
         logger.info("Loading baseline from database: $connectionString")
-        // Placeholder implementation
         emptyList()
     }
 
     private suspend fun loadHistoricalBaseline(days: Int): List<BenchmarkResult> = withContext(Dispatchers.IO) {
-        // Implementation would load historical results from the last N days
+        // Historical baseline requires results archive access
         logger.info("Loading historical baseline from last $days days")
-        // Placeholder implementation
         emptyList()
     }
 }

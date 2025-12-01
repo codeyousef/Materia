@@ -177,8 +177,8 @@ class DocumentationApiContractTest {
     }
 }
 
-// Placeholder interfaces and data classes that will be implemented in Phase 3.3
-// These are intentionally incomplete to make tests fail initially
+// Contract interfaces for Phase 3.3 implementation
+// Tests are designed to fail until implementations are complete
 
 interface DocumentationAPI {
     suspend fun generateDocumentation(request: GenerateDocsRequest): String  // Returns artifact ID

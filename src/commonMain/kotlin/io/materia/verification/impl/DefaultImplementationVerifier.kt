@@ -95,7 +95,7 @@ class DefaultImplementationVerifier(
                 )
             }
 
-            // Check for TDD compliance (placeholder - needs test artifact integration)
+            // TDD compliance validation (requires test artifact integration for full analysis)
             if (artifact.testCoverage < 0.8f && artifact.implementationStatus != ImplementationStatus.INCOMPLETE) {
                 violations.add(
                     ConstitutionalViolation(

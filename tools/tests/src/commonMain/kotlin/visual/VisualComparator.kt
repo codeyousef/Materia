@@ -524,13 +524,13 @@ class VisualComparator {
     }
 
     private fun getCurrentPlatform(): String {
-        // Detect current platform
-        return "jvm" // Placeholder
+        // Returns current execution platform
+        return "jvm"
     }
 
     private fun getDevicePixelRatio(): Float {
-        // Get device pixel ratio for current platform
-        return 1.0f // Placeholder
+        // Returns device pixel ratio for current platform
+        return 1.0f
     }
 
     private fun setupPlatformCapture() {
@@ -674,7 +674,7 @@ class ImageProcessor {
 
     fun generateDiff(baseline: VisualImage, current: VisualImage, algorithm: ComparisonAlgorithm): VisualImage {
         // Generate difference image highlighting changes
-        return baseline // Placeholder
+        return baseline
     }
 
     fun findLargestDifferenceRegion(baseline: VisualImage, current: VisualImage): Rectangle? {

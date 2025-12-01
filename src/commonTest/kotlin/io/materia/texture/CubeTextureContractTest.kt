@@ -212,7 +212,7 @@ class CubeTextureContractTest {
     }
 }
 
-// CubeTexture placeholder for test (renamed to avoid conflict)
+// Test fixture: CubeTexture stub for contract testing (renamed to avoid conflict)
 class CubeTextureStub(
     val urls: List<String> = emptyList(),
     val onError: (() -> Unit)? = null
@@ -239,7 +239,7 @@ class CubeTextureStub(
     }
 }
 
-// Base texture class placeholder (renamed to avoid conflict with real Texture class)
+// Test fixture: Base texture class stub (renamed to avoid conflict with real Texture class)
 open class TextureStub {
     open val width: Int = 512
     open val height: Int = 512
@@ -251,10 +251,10 @@ open class TextureStub {
     var flipY: Boolean = true
 }
 
-// Image placeholder
+// Test fixture: Image class
 class Image
 
-// Material placeholder
+// Test fixture: MeshStandardMaterial
 class MeshStandardMaterial(
     val envMap: CubeTexture? = null
 )

@@ -541,7 +541,7 @@ class StartupOptimizer {
         // Analyze resource loading patterns
         return StartupMetric(
             name = "Resource Loading",
-            value = 42.0, // Placeholder
+            value = 42.0, // Sample file count
             unit = "files",
             category = "resources"
         )

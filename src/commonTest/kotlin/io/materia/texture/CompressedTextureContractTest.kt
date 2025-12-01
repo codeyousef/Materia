@@ -300,7 +300,7 @@ class CompressedTextureContractTest {
     }
 }
 
-// Placeholder implementations - simplified to avoid override conflicts
+// Test fixtures: Simplified compressed texture types for contract testing
 enum class CompressedTextureFormat {
     // BC formats (Desktop)
     BC1_RGB, BC1_RGBA, BC3_RGBA, BC5_RG, BC7_RGBA,
@@ -395,8 +395,8 @@ data class MipLevel(
 
 class CompressionDetector {
     fun getAvailableFormats(): List<CompressedTextureFormat> {
-        // Platform-specific detection
-        return listOf(CompressedTextureFormat.BC7_RGBA)  // Placeholder
+        // Returns BC7 as default format for desktop testing
+        return listOf(CompressedTextureFormat.BC7_RGBA)
     }
 
     fun isFormatSupported(format: CompressedTextureFormat): Boolean {

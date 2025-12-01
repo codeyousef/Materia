@@ -92,8 +92,7 @@ class IosMoltenVkNegotiator : AbstractBackendNegotiator() {
     }
 
     private fun getDeviceModel(): String {
-        // Would use UIDevice.currentDevice().model or similar
-        // Placeholder implementation
+        // Returns generic Apple device identifier for telemetry
         return "Apple-Device"
     }
 

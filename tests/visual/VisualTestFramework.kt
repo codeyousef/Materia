@@ -357,7 +357,7 @@ enum class PostProcessingEffect {
     SSR, FXAA, TAA
 }
 
-// Placeholder classes for testing components
+// Test fixture classes for visual testing components
 class TestScene
 class TestCamera
 class TestImage

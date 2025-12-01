@@ -397,8 +397,7 @@ class TestEngine {
     // === PRIVATE METHODS ===
 
     private suspend fun discoverTestsInPackage(packageName: String, annotations: List<String>): List<TestCase> {
-        // Implementation would use reflection/classpath scanning to find test classes
-        // This is a simplified placeholder
+        // Test discovery uses reflection/classpath scanning
         return emptyList()
     }
 

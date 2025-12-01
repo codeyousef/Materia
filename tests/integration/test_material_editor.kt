@@ -453,7 +453,7 @@ class MaterialEditorIntegrationTest {
     }
 }
 
-// Placeholder interfaces and data classes that will be implemented in Phase 3.3
+// Contract interfaces for Phase 3.3 implementation
 
 interface MaterialEditorService {
     suspend fun createMaterial(type: MaterialType, name: String, parameters: Any? = null): MaterialInstance
@@ -686,6 +686,6 @@ data class MaterialImportOptions(
     val validateShaders: Boolean = true
 )
 
-// Placeholder functions
+// Test helper functions for shader generation
 private fun generateComplexVertexShader(): String = "complex vertex shader code"
 private fun generateComplexFragmentShader(): String = "complex fragment shader code"

@@ -477,7 +477,7 @@ enum class BenchmarkPlatform {
     NATIVE_VULKAN, NATIVE_OPENGL
 }
 
-// Placeholder classes for benchmark components
+// Test fixture classes for benchmark components
 class BenchmarkScene
 class BenchmarkGeometry
 class BenchmarkMaterial

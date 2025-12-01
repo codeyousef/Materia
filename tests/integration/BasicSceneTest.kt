@@ -21,7 +21,7 @@ class BasicSceneTest {
             // 3. Render at 60 FPS
             // 4. Verify triangle and draw call counts
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until renderer module is complete
             throw NotImplementedError("Basic spinning cube scenario not yet implemented - waiting for renderer module completion")
         }
     }
@@ -38,7 +38,7 @@ class BasicSceneTest {
             // 3. Verify shadow casting configuration
             // 4. Check children count and hierarchy
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until scene DSL module is complete
             throw NotImplementedError("Scene hierarchy not yet implemented - waiting for scene DSL module completion")
         }
     }
@@ -55,7 +55,7 @@ class BasicSceneTest {
             // 3. Configure camera position and viewport size
             // 4. Execute render and validate success result
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until renderer module is complete
             throw NotImplementedError("Basic rendering not yet implemented - waiting for renderer module completion")
         }
     }

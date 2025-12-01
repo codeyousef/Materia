@@ -16,7 +16,7 @@ class IosPerformanceMonitor : AbstractPerformanceMonitor() {
      * Use Metal timestamp queries via MoltenVK for precise GPU timing.
      */
     fun queryMetalTimestamp(): Long {
-        // Placeholder - would use Metal/MoltenVK timestamp queries
+        // GPU timestamp queries require active Metal command buffer; falls back to system time
         return getCurrentTimeMs()
     }
 }

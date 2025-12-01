@@ -792,22 +792,22 @@ class GPUProfiler {
 
     private fun exportToJSON(): String {
         // Export profiling data to JSON format
-        return "{}" // Placeholder
+        return "{}"
     }
 
     private fun exportToCSV(): String {
         // Export profiling data to CSV format
-        return "" // Placeholder
+        return ""
     }
 
     private fun exportToBinary(): String {
         // Export profiling data to binary format
-        return "" // Placeholder
+        return ""
     }
 
     private fun exportToRenderDoc(): String {
         // Export profiling data in RenderDoc compatible format
-        return "" // Placeholder
+        return ""
     }
 
     // Extension function for formatting

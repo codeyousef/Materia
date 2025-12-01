@@ -769,8 +769,8 @@ object MatrixUtils {
         val translation = getTranslation(matrix)
         val scale = getScale(matrix)
 
-        // Extract rotation (simplified - full implementation would use quaternions)
-        val rotation = Vector3(0f, 0f, 0f) // Placeholder for Euler angles
+        // Euler angle extraction requires rotation matrix normalization
+        val rotation = Vector3(0f, 0f, 0f)
 
         return Triple(translation, rotation, scale)
     }

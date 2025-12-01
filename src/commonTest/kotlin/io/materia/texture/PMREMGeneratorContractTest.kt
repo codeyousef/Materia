@@ -160,7 +160,7 @@ class PMREMGeneratorContractTest {
     }
 }
 
-// Placeholder PMREM implementations for contract testing
+// Test fixtures: PMREM implementations for contract testing
 class PMREMGenerator(private val renderer: Renderer) {
     var isDisposed = false
 

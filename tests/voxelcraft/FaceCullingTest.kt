@@ -192,8 +192,8 @@ class FaceCullingTest {
     
     @Test
     fun `test neighbor dirty marking is called`() {
-        // This test would require integration with VoxelWorld's neighbor marking system
-        // For now, we document the expected behavior
+        // Integration test requires VoxelWorld's neighbor marking system
+        // This documents the expected mesh generation behavior
         
         // Given: Chunk with mesh
         val chunk = Chunk(ChunkPosition(0, 0), world)

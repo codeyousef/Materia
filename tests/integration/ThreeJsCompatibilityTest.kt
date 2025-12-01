@@ -24,7 +24,7 @@ class ThreeJsCompatibilityTest {
             //
             // API requirement: Must match Three.js patterns exactly
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Three.js scene creation not yet implemented - waiting for Three.js compatibility layer")
         }
     }
@@ -43,7 +43,7 @@ class ThreeJsCompatibilityTest {
             //
             // API requirement: Must match Three.js camera API
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Three.js camera compatibility not yet implemented - waiting for camera module completion")
         }
     }
@@ -62,7 +62,7 @@ class ThreeJsCompatibilityTest {
             //
             // API requirement: Must match Three.js lighting patterns
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Three.js lighting compatibility not yet implemented - waiting for lighting module completion")
         }
     }
@@ -82,7 +82,7 @@ class ThreeJsCompatibilityTest {
             //
             // API requirement: Must match Three.js animation API
 
-            // Placeholder implementation that throws expected error
+            // Contract test - throws expected error until implementation is complete
             throw NotImplementedError("Three.js animation compatibility not yet implemented - waiting for animation module completion")
         }
     }
