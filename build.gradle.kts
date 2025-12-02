@@ -1,5 +1,10 @@
 import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import java.security.MessageDigest
+import java.util.*
+
+// Apply version management - sets project.version and project.group from version.properties
+apply(from = "version.gradle.kts")
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -45,16 +50,31 @@ subprojects {
     }
 }
 
-group = "io.materia"
-version = "0.1.0-alpha01"
+// Version and group are set by version.gradle.kts from version.properties
+
+// Load properties from local.properties if it exists
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        load(localFile.inputStream())
+    }
+}
 
 // Maven Publishing Configuration
 publishing {
     publications.withType<MavenPublication> {
+        // Set platform-specific artifact IDs
+        when (name) {
+            "kotlinMultiplatform" -> artifactId = "materia"
+            "jvm" -> artifactId = "materia-jvm"
+            "js" -> artifactId = "materia-js"
+            "androidRelease", "androidDebug" -> artifactId = "materia-android"
+            else -> artifactId = "materia-${name.lowercase()}"
+        }
         pom {
             name.set("Materia")
             description.set("Kotlin Multiplatform 3D rendering engine targeting WebGPU, Vulkan, and Metal with Three.js-style ergonomics")
-            url.set("https://github.com/codeyousef/KreeKt")
+            url.set("https://github.com/codeyousef/Materia")
             
             licenses {
                 license {
@@ -72,9 +92,9 @@ publishing {
             }
             
             scm {
-                url.set("https://github.com/codeyousef/KreeKt")
-                connection.set("scm:git:git://github.com/codeyousef/KreeKt.git")
-                developerConnection.set("scm:git:ssh://git@github.com/codeyousef/KreeKt.git")
+                url.set("https://github.com/codeyousef/Materia")
+                connection.set("scm:git:git://github.com/codeyousef/Materia.git")
+                developerConnection.set("scm:git:ssh://git@github.com/codeyousef/Materia.git")
             }
         }
     }
@@ -561,3 +581,198 @@ tasks.register("quickStart") {
 // tasks.named("mingwX64Test") {
 //     enabled = false
 // }
+
+// Generate Javadocs for Maven Central (required)
+tasks.register<Jar>("javadocJar") {
+    archiveClassifier.set("javadoc")
+    // Create empty javadoc jar as placeholder
+    from("src/main/resources") {
+        include("**/*.md")
+        into(".")
+    }
+    doFirst {
+        // Create a minimal javadoc structure
+        val javadocDir = file("${layout.buildDirectory.get()}/tmp/javadoc")
+        javadocDir.mkdirs()
+        file("$javadocDir/README.md").writeText("# Materia Framework Documentation\n\nDocumentation is available at https://github.com/codeyousef/Materia")
+        from(javadocDir)
+    }
+}
+
+// Maven Central Publishing via Central Portal API
+tasks.register("publishToCentralPortal") {
+    group = "publishing"
+    description = "Publish to Maven Central using Central Portal API"
+    dependsOn("publishToMavenLocal", "javadocJar")
+    
+    doLast {
+        // Load credentials from local.properties
+        val localProperties = Properties().apply {
+            val localFile = rootProject.file("local.properties")
+            if (localFile.exists()) {
+                load(localFile.inputStream())
+            }
+        }
+        
+        val username = localProperties.getProperty("mavenCentralUsername") 
+            ?: throw GradleException("mavenCentralUsername not found in local.properties")
+        val password = localProperties.getProperty("mavenCentralPassword")
+            ?: throw GradleException("mavenCentralPassword not found in local.properties")
+        val signingPassword = localProperties.getProperty("signingPassword")
+            ?: throw GradleException("signingPassword not found in local.properties")
+            
+        println("🚀 Publishing to Maven Central via Central Portal API...")
+        println("📦 Username: $username")
+        
+        // Create bundle directory with proper Maven structure
+        val bundleDir = file("${layout.buildDirectory.get()}/central-portal-bundle")
+        bundleDir.deleteRecursively()
+        
+        // Process each publication type with correct artifact IDs
+        val artifactMappings = mapOf(
+            "materia" to "kotlinMultiplatform",
+            "materia-jvm" to "jvm", 
+            "materia-js" to "js"
+        )
+        
+        val allFilesToProcess = mutableListOf<File>()
+        val groupPath = project.group.toString().replace('.', '/')
+
+        artifactMappings.forEach { (artifactId, _) ->
+            val mavenPath = "$groupPath/$artifactId/${project.version}"
+            val targetDir = file("$bundleDir/$mavenPath")
+            targetDir.mkdirs()
+            
+            // Copy artifacts from local Maven repository
+            val localMavenDir =
+                file("${System.getProperty("user.home")}/.m2/repository/$groupPath/$artifactId/${project.version}")
+            if (localMavenDir.exists()) {
+                println("📦 Processing $artifactId artifacts...")
+                
+                localMavenDir.listFiles()?.forEach { file ->
+                    if ((file.name.endsWith(".jar") || file.name.endsWith(".pom") || file.name.endsWith(".klib") || file.name.endsWith(
+                            ".module"
+                        )) &&
+                        !file.name.endsWith(".md5") && !file.name.endsWith(".sha1") && !file.name.endsWith(".asc")) {
+                        file.copyTo(File(targetDir, file.name), overwrite = true)
+                        allFilesToProcess.add(File(targetDir, file.name))
+                    }
+                }
+                
+                // Add javadoc jar for each platform
+                val javadocJar = file("${layout.buildDirectory.get()}/libs/${project.name}-${project.version}-javadoc.jar")
+                val needsJavadoc = artifactId in listOf("materia", "materia-jvm")
+                if (needsJavadoc && javadocJar.exists()) {
+                    val javadocFileName = "$artifactId-${project.version}-javadoc.jar"
+                    val targetJavadocJar = File(targetDir, javadocFileName)
+                    if (!targetJavadocJar.exists()) {
+                        javadocJar.copyTo(targetJavadocJar, overwrite = true)
+                        allFilesToProcess.add(targetJavadocJar)
+                    }
+                }
+            } else {
+                println("⚠️ No artifacts found for $artifactId at $localMavenDir")
+            }
+        }
+            
+        println("📝 Generating checksums and signatures...")
+        
+        allFilesToProcess.forEach { file ->
+            // Generate MD5 checksum
+            val md5Hash = MessageDigest.getInstance("MD5")
+                .digest(file.readBytes())
+                .joinToString("") { byte -> "%02x".format(byte) }
+            File(file.parent, "${file.name}.md5").writeText(md5Hash)
+            
+            // Generate SHA1 checksum  
+            val sha1Hash = MessageDigest.getInstance("SHA-1")
+                .digest(file.readBytes())
+                .joinToString("") { byte -> "%02x".format(byte) }
+            File(file.parent, "${file.name}.sha1").writeText(sha1Hash)
+            
+            // Generate GPG signature using real key files
+            val sigFile = File(file.parent, "${file.name}.asc")
+            println("   Creating GPG signature for ${file.name}...")
+            
+            try {
+                // Import the private key
+                val privateKeyFile = when {
+                    rootProject.file("private-key-clean.asc").exists() -> rootProject.file("private-key-clean.asc")
+                    rootProject.file("private-key.asc").exists() -> rootProject.file("private-key.asc")
+                    else -> null
+                }
+                if (privateKeyFile == null || !privateKeyFile.exists()) {
+                    throw GradleException("private-key.asc not found. Cannot sign artifacts.")
+                }
+
+                val signScript = rootProject.file("sign-artifact.sh")
+                if (!signScript.exists()) {
+                    throw GradleException("sign-artifact.sh not found. Cannot sign artifacts.")
+                }
+
+                providers.exec {
+                    commandLine(
+                        "bash", signScript.absolutePath,
+                        signingPassword, privateKeyFile.absolutePath,
+                        sigFile.absolutePath, file.absolutePath
+                    )
+                }.result.get().assertNormalExitValue()
+
+                if (!sigFile.exists()) {
+                    throw GradleException("Failed to create signature for ${file.name}")
+                }
+            } catch (e: Exception) {
+                throw GradleException("GPG signing error for ${file.name}: ${e.message}", e)
+            }
+        }
+
+        println("📦 Creating ZIP bundle for Central Portal API")
+
+        // Create ZIP file for Central Portal API
+        val zipFile = file("${bundleDir.parent}/materia-${project.version}-bundle.zip")
+        ant.invokeMethod("zip", mapOf(
+            "destfile" to zipFile.absolutePath,
+            "basedir" to bundleDir.absolutePath
+        ))
+        
+        println("🚀 Uploading to Central Portal via REST API...")
+        println("📦 Bundle: ${zipFile.absolutePath}")
+        println("👤 Username: $username")
+
+        // Upload via Central Portal REST API
+        val authString = Base64.getEncoder().encodeToString("$username:$password".toByteArray())
+
+        val uploadResult = providers.exec {
+            commandLine(
+                "curl", "-v", "-X", "POST",
+                "https://central.sonatype.com/api/v1/publisher/upload",
+                "-H", "Authorization: Basic $authString",
+                "-F", "bundle=@${zipFile.absolutePath}",
+                "--fail-with-body"
+            )
+            isIgnoreExitValue = true
+        }.result.get()
+
+        if (uploadResult.exitValue == 0) {
+            println("✅ Successfully uploaded to Central Portal!")
+            println("🔗 Check status at: https://central.sonatype.com/publishing/deployments")
+            println("💡 The deployment will be validated and published automatically")
+        } else {
+            println("❌ Upload failed with exit code: ${uploadResult.exitValue}")
+            println("📂 ZIP bundle location: ${zipFile.absolutePath}")
+            println("🔗 Manual upload at: https://central.sonatype.com/publishing/deployments")
+            throw GradleException("Failed to upload to Maven Central. Check credentials and try again.")
+        }
+        
+        if (allFilesToProcess.isEmpty()) {
+            throw GradleException("No Maven artifacts found. Make sure to run publishToMavenLocal first.")
+        }
+    }
+}
+
+// Convenience task to publish to local maven repository
+tasks.register("publishLocal") {
+    group = "publishing"
+    description = "Publish all publications to the local Maven repository"
+    dependsOn("publishToMavenLocal")
+}
