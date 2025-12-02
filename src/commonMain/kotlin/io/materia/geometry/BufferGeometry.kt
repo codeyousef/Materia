@@ -1,6 +1,9 @@
 /**
- * Enhanced BufferGeometry implementation with advanced 3D features
- * Extends the basic geometry system with morph targets, instancing, and LOD support
+ * Enhanced BufferGeometry implementation with advanced 3D features.
+ *
+ * Extends the basic geometry system with morph targets, instancing, and LOD support.
+ * This module provides Three.js-compatible buffer geometry patterns for efficient
+ * GPU-based vertex processing.
  */
 package io.materia.geometry
 
@@ -10,8 +13,18 @@ import io.materia.morph.MorphTargetGeometry
 import kotlinx.serialization.Serializable
 
 /**
- * Advanced buffer geometry with morph targets and instancing support
- * Compatible with Three.js BufferGeometry patterns
+ * GPU-optimized geometry container with morph targets and instancing support.
+ *
+ * Stores vertex data in typed arrays for direct GPU upload. Supports:
+ * - Named vertex attributes (position, normal, uv, etc.)
+ * - Optional index buffer for indexed drawing
+ * - Morph targets for blend-shape animation
+ * - Per-instance attributes for hardware instancing
+ * - Geometry groups for multi-material rendering
+ * - Lazy-computed bounding volumes
+ * - Level-of-detail (LOD) variants
+ *
+ * Follows the Three.js BufferGeometry API for compatibility.
  */
 open class BufferGeometry : MorphTargetGeometry {
     // Core attributes
@@ -50,7 +63,17 @@ open class BufferGeometry : MorphTargetGeometry {
     private val _onDisposeCallbacks = mutableListOf<() -> Unit>()
 
     /**
-     * Core attribute management
+     * Sets or replaces a named vertex attribute.
+     *
+     * Common attribute names:
+     * - "position": Vertex positions (vec3)
+     * - "normal": Vertex normals (vec3)
+     * - "uv": Texture coordinates (vec2)
+     * - "color": Vertex colors (vec3 or vec4)
+     *
+     * @param name The attribute name.
+     * @param attribute The buffer attribute data.
+     * @return This geometry for chaining.
      */
     fun setAttribute(name: String, attribute: BufferAttribute): BufferGeometry {
         _attributes[name] = attribute
@@ -58,8 +81,20 @@ open class BufferGeometry : MorphTargetGeometry {
         return this
     }
 
+    /**
+     * Retrieves a vertex attribute by name.
+     *
+     * @param name The attribute name.
+     * @return The attribute, or null if not found.
+     */
     fun getAttribute(name: String): BufferAttribute? = _attributes[name]
 
+    /**
+     * Removes a vertex attribute.
+     *
+     * @param name The attribute name to remove.
+     * @return This geometry for chaining.
+     */
     fun deleteAttribute(name: String): BufferGeometry {
         _attributes.remove(name)
         _markBoundingVolumesNeedUpdate()
@@ -71,7 +106,13 @@ open class BufferGeometry : MorphTargetGeometry {
     val attributes: Map<String, BufferAttribute> get() = _attributes.toMap()
 
     /**
-     * Index buffer management
+     * Sets the index buffer for indexed drawing.
+     *
+     * When set, vertices are reused according to the indices, reducing memory.
+     * Pass null to use non-indexed drawing.
+     *
+     * @param index The index buffer, or null for non-indexed.
+     * @return This geometry for chaining.
      */
     fun setIndex(index: BufferAttribute?): BufferGeometry {
         _index = index
@@ -81,7 +122,14 @@ open class BufferGeometry : MorphTargetGeometry {
     val index: BufferAttribute? get() = _index
 
     /**
-     * Morph target management - backward compatible methods
+     * Sets morph target attributes for blend-shape animation.
+     *
+     * Each target is a buffer attribute representing a deformed state.
+     * Multiple targets can be blended together at runtime.
+     *
+     * @param name The attribute name (e.g., "position", "normal").
+     * @param targets Array of morph target attributes.
+     * @return This geometry for chaining.
      */
     fun setMorphAttribute(name: String, targets: Array<BufferAttribute>): BufferGeometry {
         morphAttributes[name] = targets.toList()
@@ -163,7 +211,14 @@ open class BufferGeometry : MorphTargetGeometry {
     }
 
     /**
-     * Instancing support
+     * Sets a per-instance attribute for hardware instancing.
+     *
+     * Instance attributes are read once per instance rather than per vertex.
+     * Common uses: instance transforms, colors, or custom per-object data.
+     *
+     * @param name The attribute name.
+     * @param attribute The instance attribute data.
+     * @return This geometry for chaining.
      */
     fun setInstancedAttribute(name: String, attribute: BufferAttribute): BufferGeometry {
         _instancedAttributes[name] = attribute
@@ -188,7 +243,14 @@ open class BufferGeometry : MorphTargetGeometry {
     val isInstanced: Boolean get() = _instanceCount > 0
 
     /**
-     * Geometry groups for multi-material rendering
+     * Adds a geometry group for multi-material rendering.
+     *
+     * Groups define ranges of indices/vertices that use different materials.
+     *
+     * @param start Starting index in the index buffer (or vertex buffer if non-indexed).
+     * @param count Number of indices/vertices in this group.
+     * @param materialIndex Index of the material to use for this group.
+     * @return This geometry for chaining.
      */
     fun addGroup(start: Int, count: Int, materialIndex: Int = 0): BufferGeometry {
         _groups.add(GeometryGroup(start, count, materialIndex))
@@ -203,7 +265,12 @@ open class BufferGeometry : MorphTargetGeometry {
     val groups: List<GeometryGroup> get() = _groups.toList()
 
     /**
-     * Bounding volumes with lazy computation
+     * Computes or returns the cached axis-aligned bounding box.
+     *
+     * The bounding box is computed from the "position" attribute.
+     * Automatically invalidated when positions change.
+     *
+     * @return The bounding box enclosing all vertices.
      */
     fun computeBoundingBox(): Box3 {
         if (_boundingBox == null || _boundingBoxNeedsUpdate) {
@@ -235,7 +302,14 @@ open class BufferGeometry : MorphTargetGeometry {
     val boundingSphere: Sphere? get() = if (_boundingSphereNeedsUpdate) null else _boundingSphere
 
     /**
-     * LOD (Level of Detail) management
+     * Adds a level-of-detail variant at a specific distance.
+     *
+     * LOD levels are sorted by distance. Use [getLodLevel] to select
+     * the appropriate geometry based on camera distance.
+     *
+     * @param distance Distance threshold for this LOD level.
+     * @param geometry The simplified geometry for this level.
+     * @return This geometry for chaining.
      */
     fun addLodLevel(distance: Float, geometry: BufferGeometry): BufferGeometry {
         val triangleCount = geometry.getTriangleCount()
@@ -262,7 +336,10 @@ open class BufferGeometry : MorphTargetGeometry {
     val lodLevels: List<LodLevel> get() = _lodLevels.toList()
 
     /**
-     * Utility methods
+     * Returns the number of triangles in this geometry.
+     *
+     * Calculated from the index buffer if present, otherwise from
+     * the position attribute.
      */
     fun getTriangleCount(): Int {
         val index = _index
@@ -286,7 +363,14 @@ open class BufferGeometry : MorphTargetGeometry {
     fun isEmpty(): Boolean = getVertexCount() == 0
 
     /**
-     * Geometry operations
+     * Translates all vertices by the given offset.
+     *
+     * Modifies the "position" attribute in place and invalidates bounding volumes.
+     *
+     * @param x X translation.
+     * @param y Y translation.
+     * @param z Z translation.
+     * @return This geometry for chaining.
      */
     fun translate(x: Float, y: Float, z: Float): BufferGeometry {
         val position = getAttribute("position")
@@ -302,6 +386,16 @@ open class BufferGeometry : MorphTargetGeometry {
         return this
     }
 
+    /**
+     * Scales all vertices by the given factors.
+     *
+     * Modifies the "position" attribute in place.
+     *
+     * @param x X scale factor.
+     * @param y Y scale factor.
+     * @param z Z scale factor.
+     * @return This geometry for chaining.
+     */
     fun scale(x: Float, y: Float, z: Float): BufferGeometry {
         val position = getAttribute("position")
         if (position != null) {
@@ -348,7 +442,11 @@ open class BufferGeometry : MorphTargetGeometry {
     }
 
     /**
-     * Serialization and cloning
+     * Creates a deep copy of this geometry.
+     *
+     * All attributes, morph targets, groups, and LOD levels are cloned.
+     *
+     * @return A new BufferGeometry with copied data.
      */
     fun clone(): BufferGeometry {
         val cloned = BufferGeometry()
@@ -390,7 +488,10 @@ open class BufferGeometry : MorphTargetGeometry {
     }
 
     /**
-     * Resource disposal
+     * Releases resources and notifies dispose callbacks.
+     *
+     * Call when the geometry is no longer needed to allow GPU resources
+     * to be freed.
      */
     fun dispose() {
         _onDisposeCallbacks.forEach { it() }
@@ -408,7 +509,11 @@ open class BufferGeometry : MorphTargetGeometry {
 }
 
 /**
- * Geometry group for multi-material support
+ * Defines a range of vertices for multi-material rendering.
+ *
+ * @property start Starting index in the buffer.
+ * @property count Number of indices/vertices in this group.
+ * @property materialIndex Index of the material to use.
  */
 @Serializable
 data class GeometryGroup(
@@ -418,7 +523,11 @@ data class GeometryGroup(
 )
 
 /**
- * LOD level definition
+ * A level-of-detail variant at a specific distance threshold.
+ *
+ * @property distance Distance at which this LOD level activates.
+ * @property geometry The simplified geometry for this level.
+ * @property triangleCount Cached triangle count for performance budgeting.
  */
 data class LodLevel(
     val distance: Float,
@@ -427,7 +536,16 @@ data class LodLevel(
 )
 
 /**
- * Buffer attribute for storing vertex data
+ * Typed array wrapper for GPU vertex attribute data.
+ *
+ * Stores interleaved or non-interleaved vertex data as floats. Each vertex
+ * has [itemSize] components (e.g., 3 for position, 2 for UV).
+ *
+ * Set [needsUpdate] to true after modifying data to trigger GPU re-upload.
+ *
+ * @property array The underlying float array.
+ * @property itemSize Number of components per vertex.
+ * @property normalized Whether values should be normalized when uploaded.
  */
 open class BufferAttribute(
     open val array: FloatArray,

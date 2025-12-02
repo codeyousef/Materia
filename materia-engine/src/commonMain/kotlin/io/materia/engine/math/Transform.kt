@@ -1,14 +1,37 @@
 package io.materia.engine.math
 
+/**
+ * Encapsulates position, rotation, and scale for scene graph transformations.
+ *
+ * The transform lazily computes its 4x4 matrix via [matrix] and caches the result
+ * until any property changes. Attach a [changeListener] to receive notifications
+ * when the transform becomes dirty.
+ *
+ * Rotation is stored as Euler angles (radians) in XYZ order. For complex rotations
+ * that require gimbal-lock-free interpolation, consider using [Quat] directly.
+ */
 class Transform {
+    /** World-space position of this transform. */
     val position: Vec3 = vec3()
+
+    /** Rotation as Euler angles (radians) applied in XYZ order. */
     val rotationEuler: Vec3 = vec3()
+
+    /** Non-uniform scale factors along each axis. */
     val scale: Vec3 = vec3(1f, 1f, 1f)
 
     private val matrixCache = mat4()
     private var dirty = true
+
+    /**
+     * Optional callback invoked whenever the transform is marked dirty.
+     * Useful for propagating invalidation through a scene hierarchy.
+     */
     var changeListener: (() -> Unit)? = null
 
+    /**
+     * Marks this transform as dirty, triggering matrix recalculation on next [matrix] call.
+     */
     fun markDirty() {
         if (!dirty) {
             dirty = true
@@ -16,6 +39,13 @@ class Transform {
         }
     }
 
+    /**
+     * Returns the cached 4x4 transformation matrix, recomputing if dirty.
+     *
+     * The matrix combines scale, rotation (Euler XYZ), and translation.
+     *
+     * @return The local transformation matrix.
+     */
     fun matrix(): Mat4 {
         if (!dirty) return matrixCache
         val matrix = matrixCache
@@ -69,8 +99,18 @@ class Transform {
         return matrix
     }
 
+    /**
+     * Indicates whether the matrix needs recomputation.
+     *
+     * @return True if position, rotation, or scale has changed since last [matrix] call.
+     */
     fun isDirty(): Boolean = dirty
 
+    /**
+     * Sets the position and marks the transform dirty.
+     *
+     * @return This transform for chaining.
+     */
     fun setPosition(x: Float, y: Float, z: Float): Transform {
         position.set(x, y, z)
         dirty = true
@@ -78,6 +118,11 @@ class Transform {
         return this
     }
 
+    /**
+     * Sets the Euler rotation (radians) and marks the transform dirty.
+     *
+     * @return This transform for chaining.
+     */
     fun setRotationEuler(x: Float, y: Float, z: Float): Transform {
         rotationEuler.set(x, y, z)
         dirty = true
@@ -85,6 +130,11 @@ class Transform {
         return this
     }
 
+    /**
+     * Sets the scale and marks the transform dirty.
+     *
+     * @return This transform for chaining.
+     */
     fun setScale(x: Float, y: Float, z: Float): Transform {
         scale.set(x, y, z)
         dirty = true

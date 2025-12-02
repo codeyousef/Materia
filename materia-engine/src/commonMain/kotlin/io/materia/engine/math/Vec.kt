@@ -6,6 +6,14 @@ import kotlin.math.sqrt
 @PublishedApi
 internal fun vec2Array(x: Float = 0f, y: Float = 0f): FloatArray = floatArrayOf(x, y)
 
+/**
+ * Mutable 2D vector backed by a [FloatArray] for zero-allocation math operations.
+ *
+ * This is an inline value class wrapping a two-element float array, enabling
+ * efficient GPU-compatible data layouts while providing convenient vector operations.
+ *
+ * @see vec2 Factory function for creating instances.
+ */
 @JvmInline
 value class Vec2 @PublishedApi internal constructor(internal val data: FloatArray) {
     init {
@@ -59,20 +67,38 @@ value class Vec2 @PublishedApi internal constructor(internal val data: FloatArra
     fun toFloatArray(copy: Boolean = false): FloatArray = if (copy) data.copyOf() else data
 
     companion object {
+        /** A zero vector (0, 0). Returns a new instance on each access. */
         val Zero: Vec2
             get() = vec2()
 
+        /** A unit vector (1, 1). Returns a new instance on each access. */
         val One: Vec2
             get() = vec2(1f, 1f)
     }
 }
 
+/**
+ * Creates a new [Vec2] with the specified components.
+ *
+ * @param x The X component, defaults to 0.
+ * @param y The Y component, defaults to 0.
+ * @return A new mutable 2D vector.
+ */
 fun vec2(x: Float = 0f, y: Float = 0f): Vec2 = Vec2(vec2Array(x, y))
 
 @PublishedApi
 internal fun vec3Array(x: Float = 0f, y: Float = 0f, z: Float = 0f): FloatArray =
     floatArrayOf(x, y, z)
 
+/**
+ * Mutable 3D vector backed by a [FloatArray] for zero-allocation math operations.
+ *
+ * This is the primary vector type for positions, directions, scales, and colors
+ * (RGB) throughout the engine. Methods like [normalize], [add], and [scale]
+ * mutate in-place and return `this` for chaining.
+ *
+ * @see vec3 Factory function for creating instances.
+ */
 @JvmInline
 value class Vec3 @PublishedApi internal constructor(internal val data: FloatArray) {
     init {
@@ -150,29 +176,49 @@ value class Vec3 @PublishedApi internal constructor(internal val data: FloatArra
     fun toFloatArray(copy: Boolean = false): FloatArray = if (copy) data.copyOf() else data
 
     companion object {
+        /** A zero vector (0, 0, 0). Returns a new instance on each access. */
         val Zero: Vec3
             get() = vec3()
 
+        /** A unit vector (1, 1, 1). Returns a new instance on each access. */
         val One: Vec3
             get() = vec3(1f, 1f, 1f)
 
+        /** World-space up direction (0, 1, 0) in Y-up coordinate system. */
         val Up: Vec3
             get() = vec3(0f, 1f, 0f)
 
+        /** World-space forward direction (0, 0, -1) in right-handed coordinate system. */
         val Forward: Vec3
             get() = vec3(0f, 0f, -1f)
 
+        /** World-space right direction (1, 0, 0). */
         val Right: Vec3
             get() = vec3(1f, 0f, 0f)
     }
 }
 
+/**
+ * Creates a new [Vec3] with the specified components.
+ *
+ * @param x The X component, defaults to 0.
+ * @param y The Y component, defaults to 0.
+ * @param z The Z component, defaults to 0.
+ * @return A new mutable 3D vector.
+ */
 fun vec3(x: Float = 0f, y: Float = 0f, z: Float = 0f): Vec3 = Vec3(vec3Array(x, y, z))
 
 @PublishedApi
 internal fun vec4Array(x: Float = 0f, y: Float = 0f, z: Float = 0f, w: Float = 0f): FloatArray =
     floatArrayOf(x, y, z, w)
 
+/**
+ * Mutable 4D vector backed by a [FloatArray] for zero-allocation math operations.
+ *
+ * Commonly used for homogeneous coordinates, RGBA colors, and quaternion storage.
+ *
+ * @see vec4 Factory function for creating instances.
+ */
 @JvmInline
 value class Vec4 @PublishedApi internal constructor(internal val data: FloatArray) {
     init {
@@ -227,12 +273,23 @@ value class Vec4 @PublishedApi internal constructor(internal val data: FloatArra
     fun toFloatArray(copy: Boolean = false): FloatArray = if (copy) data.copyOf() else data
 
     companion object {
+        /** A zero vector (0, 0, 0, 0). Returns a new instance on each access. */
         val Zero: Vec4
             get() = vec4()
     }
 }
 
+/**
+ * Creates a new [Vec4] with the specified components.
+ *
+ * @param x The X component, defaults to 0.
+ * @param y The Y component, defaults to 0.
+ * @param z The Z component, defaults to 0.
+ * @param w The W component, defaults to 0.
+ * @return A new mutable 4D vector.
+ */
 fun vec4(x: Float = 0f, y: Float = 0f, z: Float = 0f, w: Float = 0f): Vec4 =
     Vec4(vec4Array(x, y, z, w))
 
+/** Alias for [Vec3] for compatibility with APIs expecting Vector3f naming. */
 typealias Vector3f = Vec3

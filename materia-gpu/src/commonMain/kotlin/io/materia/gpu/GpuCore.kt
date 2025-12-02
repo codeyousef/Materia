@@ -3,24 +3,35 @@ package io.materia.gpu
 import io.materia.renderer.RenderSurface
 
 /**
- * Primary GPU backend selector. Mirrors WebGPU semantics while allowing Vulkan/MoltenVK adapters.
+ * Supported GPU backend APIs.
+ *
+ * The engine abstracts over multiple graphics APIs, selecting the appropriate
+ * backend at runtime based on platform and availability.
  */
 enum class GpuBackend {
+    /** WebGPU API, available in browsers and via wgpu-native. */
     WEBGPU,
+    /** Vulkan API for desktop and Android. */
     VULKAN,
+    /** MoltenVK translation layer for Vulkan on Apple platforms. */
     MOLTENVK
 }
 
 /**
- * Preferred power profile when selecting adapters/devices.
+ * Power/performance preference when selecting a GPU adapter.
  */
 enum class GpuPowerPreference {
+    /** Prefer integrated GPU for battery efficiency. */
     LOW_POWER,
+    /** Prefer discrete GPU for maximum performance. */
     HIGH_PERFORMANCE
 }
 
 /**
- * Descriptor used when instantiating a GPU instance.
+ * Configuration for creating a GPU instance.
+ *
+ * @property preferredBackends Ordered list of backends to try.
+ * @property label Optional debug label.
  */
 data class GpuInstanceDescriptor(
     val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
@@ -28,7 +39,12 @@ data class GpuInstanceDescriptor(
 )
 
 /**
- * Options supplied when requesting an adapter from an instance.
+ * Options for requesting a GPU adapter from an instance.
+ *
+ * @property powerPreference Performance vs battery preference.
+ * @property compatibleSurface Optional surface the adapter must support.
+ * @property forceFallbackAdapter If true, request a software/fallback adapter.
+ * @property label Optional debug label.
  */
 data class GpuRequestAdapterOptions(
     val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
@@ -38,7 +54,12 @@ data class GpuRequestAdapterOptions(
 )
 
 /**
- * Hardware metadata surfaced by the adapter.
+ * Hardware metadata exposed by a GPU adapter.
+ *
+ * @property name Human-readable device name (e.g., "NVIDIA GeForce RTX 4090").
+ * @property vendor GPU vendor identifier.
+ * @property architecture GPU architecture name.
+ * @property driverVersion Driver version string.
  */
 data class GpuAdapterInfo(
     val name: String,
@@ -48,7 +69,11 @@ data class GpuAdapterInfo(
 )
 
 /**
- * Descriptor used when creating a logical device.
+ * Configuration for creating a logical GPU device.
+ *
+ * @property requiredFeatures Set of feature names the device must support.
+ * @property requiredLimits Map of limit names to minimum required values.
+ * @property label Optional debug label.
  */
 data class GpuDeviceDescriptor(
     val requiredFeatures: Set<String> = emptySet(),
@@ -57,10 +82,22 @@ data class GpuDeviceDescriptor(
 )
 
 /**
- * Factory for instantiating GPU instances across platforms.
+ * Creates a platform-specific GPU instance.
+ *
+ * This is the entry point for GPU initialization. The instance is used to
+ * enumerate and request adapters.
+ *
+ * @param descriptor Configuration for instance creation.
+ * @return A new GPU instance.
  */
 expect suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor = GpuInstanceDescriptor()): GpuInstance
 
+/**
+ * Top-level GPU context for adapter enumeration.
+ *
+ * Represents the connection to the GPU subsystem. Use [requestAdapter] to obtain
+ * a handle to physical GPU hardware.
+ */
 expect class GpuInstance internal constructor(
     descriptor: GpuInstanceDescriptor
 ) {
@@ -69,6 +106,12 @@ expect class GpuInstance internal constructor(
     fun dispose()
 }
 
+/**
+ * Handle to a physical GPU or graphics adapter.
+ *
+ * An adapter represents a specific piece of GPU hardware. Use [requestDevice]
+ * to create a logical device for issuing commands.
+ */
 expect class GpuAdapter internal constructor(
     backend: GpuBackend,
     options: GpuRequestAdapterOptions,
@@ -80,6 +123,12 @@ expect class GpuAdapter internal constructor(
     suspend fun requestDevice(descriptor: GpuDeviceDescriptor = GpuDeviceDescriptor()): GpuDevice
 }
 
+/**
+ * Logical GPU device for resource creation and command submission.
+ *
+ * A device is the primary interface for creating buffers, textures, pipelines,
+ * and other GPU resources. Commands are submitted via [queue].
+ */
 expect class GpuDevice internal constructor(
     adapter: GpuAdapter,
     descriptor: GpuDeviceDescriptor
@@ -100,6 +149,12 @@ expect class GpuDevice internal constructor(
     fun destroy()
 }
 
+/**
+ * Command submission queue for a GPU device.
+ *
+ * All GPU work is submitted through the queue. Commands are executed in
+ * submission order with respect to other submissions.
+ */
 expect class GpuQueue internal constructor(
     label: String?
 ) {
@@ -107,6 +162,12 @@ expect class GpuQueue internal constructor(
     fun submit(commandBuffers: List<GpuCommandBuffer>)
 }
 
+/**
+ * Presentation surface for rendering to a window or canvas.
+ *
+ * A surface represents the platform's drawable area. Configure it with a device
+ * and format, then acquire frames for rendering.
+ */
 expect class GpuSurface constructor(
     label: String?
 ) {
@@ -118,6 +179,12 @@ expect class GpuSurface constructor(
     fun resize(width: Int, height: Int)
 }
 
+/**
+ * A frame acquired from a surface for rendering.
+ *
+ * @property texture The texture backing the frame.
+ * @property view A view into the frame texture for use as a render target.
+ */
 data class GpuSurfaceFrame(
     val texture: GpuTexture,
     val view: GpuTextureView

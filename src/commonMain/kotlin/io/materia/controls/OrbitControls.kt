@@ -11,9 +11,25 @@ import kotlin.math.pow
 import kotlin.math.tan
 
 /**
- * Orbit camera controls implementation
- * Allows orbiting around a target point with mouse/touch input
- * Similar to Three.js OrbitControls
+ * Spherical orbit camera controller.
+ *
+ * Enables user interaction to orbit, zoom, and pan around a target point.
+ * Supports mouse, touch, and keyboard input with configurable sensitivity,
+ * damping, and constraints.
+ *
+ * Features:
+ * - Left-drag: Rotate around target
+ * - Right-drag: Pan camera
+ * - Scroll wheel: Zoom in/out
+ * - Keyboard: WASD for movement, arrows for rotation
+ * - Auto-rotation when idle
+ * - Smooth damping for natural feel
+ * - Angle and distance constraints
+ *
+ * Compatible with the Three.js OrbitControls API.
+ *
+ * @param camera The camera to control.
+ * @param config Optional configuration for sensitivity and constraints.
  */
 class OrbitControls(
     camera: Camera,
@@ -404,50 +420,68 @@ class OrbitControls(
     }
 
     /**
-     * Get distance to target
+     * Returns the current distance from the camera to the target.
      */
     fun getDistance(): Float = state.spherical.radius
 
     /**
-     * Set distance to target
+     * Sets the distance from the camera to the target.
+     *
+     * Clamped to [ControlsConfig.minDistance] and [ControlsConfig.maxDistance].
+     *
+     * @param distance The desired distance.
      */
     fun setDistance(distance: Float) {
         state.spherical.radius = distance.coerceIn(config.minDistance, config.maxDistance)
     }
 
     /**
-     * Get polar angle (vertical rotation)
+     * Returns the polar (vertical) angle in radians.
+     *
+     * 0 is looking down the Y axis, PI/2 is horizontal.
      */
     fun getPolarAngle(): Float = state.spherical.phi
 
     /**
-     * Set polar angle (vertical rotation)
+     * Sets the polar (vertical) angle.
+     *
+     * Clamped to [ControlsConfig.minPolarAngle] and [ControlsConfig.maxPolarAngle].
+     *
+     * @param angle The angle in radians.
      */
     fun setPolarAngle(angle: Float) {
         state.spherical.phi = angle.coerceIn(config.minPolarAngle, config.maxPolarAngle)
     }
 
     /**
-     * Get azimuth angle (horizontal rotation)
+     * Returns the azimuthal (horizontal) angle in radians.
      */
     fun getAzimuthalAngle(): Float = state.spherical.theta
 
     /**
-     * Set azimuth angle (horizontal rotation)
+     * Sets the azimuthal (horizontal) angle.
+     *
+     * Clamped to [ControlsConfig.minAzimuthAngle] and [ControlsConfig.maxAzimuthAngle].
+     *
+     * @param angle The angle in radians.
      */
     fun setAzimuthalAngle(angle: Float) {
         state.spherical.theta = angle.coerceIn(config.minAzimuthAngle, config.maxAzimuthAngle)
     }
 
     /**
-     * Save current state for restoration
+     * Captures the current control state for later restoration.
+     *
+     * @return A snapshot of the current state.
      */
     fun saveState(): ControlsState {
         return state.copy()
     }
 
     /**
-     * Restore saved state
+     * Restores a previously saved control state.
+     *
+     * @param savedState The state to restore.
      */
     fun restoreState(savedState: ControlsState) {
         state.spherical.radius = savedState.spherical.radius

@@ -5,10 +5,20 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 
 /**
- * Catmull-Rom spline used for driving camera rails and other smooth paths.
+ * Catmull-Rom spline for smooth interpolation through control points.
  *
- * Control points are stored as [Vec3] copies so callers can safely reuse their
- * instances. Sampling never allocates unless the caller requests a copy.
+ * Commonly used for camera rail paths, animation curves, and procedural
+ * geometry. The spline passes through all control points (unlike Bézier),
+ * making it intuitive for path authoring.
+ *
+ * Control points are copied on construction, so the caller may reuse
+ * input vectors. Sampling methods accept optional output vectors to
+ * avoid allocation in hot paths.
+ *
+ * @param controlPoints At least two points defining the spline path.
+ * @param closed If true, the spline loops back to the first point.
+ * @param tension Controls curve tightness (0.5 = standard Catmull-Rom).
+ * @throws IllegalArgumentException If fewer than two control points are provided.
  */
 class CatmullRomSpline(
     controlPoints: List<Vec3>,
@@ -26,8 +36,11 @@ class CatmullRomSpline(
     private val tmp3 = vec3()
 
     /**
-     * Sample a position on the spline for the parameter [t] in [0, 1].
-     * The result is written into [out] and also returned.
+     * Samples a position on the spline.
+     *
+     * @param t Parameter in [0, 1] where 0 is the first point and 1 is the last.
+     * @param out Optional pre-allocated vector for the result.
+     * @return The interpolated position.
      */
     fun point(t: Float, out: Vec3 = vec3()): Vec3 {
         if (points.size == 1) return out.set(points[0])
@@ -50,7 +63,13 @@ class CatmullRomSpline(
     }
 
     /**
-     * Approximate the tangent direction at parameter [t]. The result is normalised.
+     * Computes the normalized tangent direction at a point on the spline.
+     *
+     * Uses numerical differentiation with a small delta.
+     *
+     * @param t Parameter in [0, 1].
+     * @param out Optional pre-allocated vector for the result.
+     * @return The unit tangent vector.
      */
     fun tangent(t: Float, out: Vec3 = vec3()): Vec3 {
         val delta = 1e-3f
@@ -64,8 +83,14 @@ class CatmullRomSpline(
     }
 
     /**
-     * Evenly samples [count] points along the spline. Results are written into
-     * [out], which is cleared beforehand.
+     * Samples the spline at evenly spaced parameter values.
+     *
+     * Useful for generating polyline approximations or placing objects along a path.
+     *
+     * @param count Number of samples to generate.
+     * @param out Optional list to populate (will be cleared).
+     * @return List of sampled positions.
+     * @throws IllegalArgumentException If count is not positive.
      */
     fun sample(count: Int, out: MutableList<Vec3> = mutableListOf()): List<Vec3> {
         require(count > 0) { "Sample count must be positive" }
@@ -81,7 +106,13 @@ class CatmullRomSpline(
     }
 
     /**
-     * Approximates the total length of the spline using [samples] subdivisions.
+     * Approximates the arc length of the spline.
+     *
+     * Uses linear segments between samples; higher sample counts yield more accurate results.
+     *
+     * @param samples Number of subdivisions for length calculation.
+     * @return Approximate total length of the spline.
+     * @throws IllegalArgumentException If samples is not positive.
      */
     fun length(samples: Int = 64): Float {
         require(samples > 0) { "Samples must be positive" }
@@ -140,22 +171,29 @@ class CatmullRomSpline(
 }
 
 /**
- * Minimal easing helpers for remapping progress onto Catmull-Rom splines.
+ * Common easing functions for animation and interpolation.
+ *
+ * All functions accept a linear progress value `t` in [0, 1] and return
+ * a remapped value in [0, 1]. Use with splines to control animation pacing.
  */
 object Easing {
+    /** Linear interpolation (no easing). */
     fun linear(t: Float): Float = t.coerceIn(0f, 1f)
 
+    /** Quadratic ease-in (starts slow). */
     fun easeInQuad(t: Float): Float {
         val clamped = linear(t)
         return clamped * clamped
     }
 
+    /** Quadratic ease-out (ends slow). */
     fun easeOutQuad(t: Float): Float {
         val clamped = linear(t)
         val inv = 1f - clamped
         return 1f - inv * inv
     }
 
+    /** Cubic ease-in-out (slow at both ends). */
     fun easeInOutCubic(t: Float): Float {
         val clamped = linear(t)
         return if (clamped < 0.5f) {
@@ -166,6 +204,7 @@ object Easing {
         }
     }
 
+    /** Sinusoidal ease-in-out (smooth, natural feel). */
     fun easeInOutSine(t: Float): Float {
         val clamped = linear(t)
         return (1f - cos(clamped * PI.toFloat())) * 0.5f

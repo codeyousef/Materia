@@ -6,19 +6,45 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * Mutable axis-aligned bounding box represented by its minimum and maximum corners.
+ * Mutable axis-aligned bounding box (AABB) defined by minimum and maximum corners.
+ *
+ * An AABB is the tightest box with faces parallel to the coordinate axes that
+ * fully contains a set of points or geometry. Use [include] to expand the box
+ * to encompass additional points, and [transform] to compute a new AABB after
+ * applying a matrix transformation.
+ *
+ * By default, the box is "empty" (inverted bounds) until points are included.
+ *
+ * @property min The corner with the smallest X, Y, Z values.
+ * @property max The corner with the largest X, Y, Z values.
  */
 class Aabb(
     val min: Vec3 = vec3(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
     val max: Vec3 = vec3(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY)
 ) {
+    /**
+     * Resets this box to an empty (inverted) state.
+     *
+     * @return This box for chaining.
+     */
     fun reset(): Aabb = apply {
         min.set(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
         max.set(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY)
     }
 
+    /**
+     * Checks whether this box is empty (has no valid extent).
+     *
+     * @return True if min exceeds max on any axis.
+     */
     fun isEmpty(): Boolean = min.x > max.x || min.y > max.y || min.z > max.z
 
+    /**
+     * Expands this box to include the given point.
+     *
+     * @param point The point to include.
+     * @return This box for chaining.
+     */
     fun include(point: Vec3): Aabb = apply {
         min.x = min(min.x, point.x)
         min.y = min(min.y, point.y)
@@ -29,19 +55,44 @@ class Aabb(
         max.z = max(max.z, point.z)
     }
 
+    /**
+     * Expands this box to include another bounding box.
+     *
+     * @param box The box to include.
+     * @return This box for chaining.
+     */
     fun include(box: Aabb): Aabb = apply {
         if (box.isEmpty()) return@apply
         include(box.min)
         include(box.max)
     }
 
+    /**
+     * Sets this box from explicit min/max corners.
+     *
+     * @param minPoint The minimum corner.
+     * @param maxPoint The maximum corner.
+     * @return This box for chaining.
+     */
     fun set(minPoint: Vec3, maxPoint: Vec3): Aabb = apply {
         min.set(minPoint)
         max.set(maxPoint)
     }
 
+    /**
+     * Creates a copy of this bounding box.
+     *
+     * @param out Optional pre-allocated box to write into.
+     * @return A copy of this box.
+     */
     fun copy(out: Aabb = Aabb()): Aabb = out.set(min, max)
 
+    /**
+     * Computes the center point of this box.
+     *
+     * @param out Optional pre-allocated vector to write into.
+     * @return The center of the box.
+     */
     fun center(out: Vec3 = vec3()): Vec3 =
         out.set(
             (min.x + max.x) * 0.5f,
@@ -49,6 +100,12 @@ class Aabb(
             (min.z + max.z) * 0.5f
         )
 
+    /**
+     * Computes the size (extent) of this box along each axis.
+     *
+     * @param out Optional pre-allocated vector to write into.
+     * @return The width, height, and depth of the box.
+     */
     fun size(out: Vec3 = vec3()): Vec3 =
         out.set(
             max.x - min.x,
@@ -56,6 +113,15 @@ class Aabb(
             max.z - min.z
         )
 
+    /**
+     * Computes a new AABB that bounds this box after transformation.
+     *
+     * The result is the smallest axis-aligned box containing all transformed corners.
+     *
+     * @param matrix The transformation matrix to apply.
+     * @param out Optional pre-allocated box to write into.
+     * @return The transformed bounding box.
+     */
     fun transform(matrix: Mat4, out: Aabb = Aabb()): Aabb {
         if (isEmpty()) {
             return out.reset()
@@ -93,8 +159,12 @@ class Aabb(
 }
 
 /**
- * Half space plane represented by its normal and distance to origin.
- * The plane equation is n·p + d >= 0 for inside points.
+ * Half-space plane defined by a unit normal and signed distance to origin.
+ *
+ * The plane equation is `n · p + d = 0` for points on the plane.
+ * Points satisfy `n · p + d > 0` when on the positive (front) side.
+ *
+ * Used primarily for frustum culling where each frustum face is a plane.
  */
 class Plane {
     private val coefficients = vec4()
@@ -116,15 +186,36 @@ class Plane {
         )
     }
 
+    /**
+     * Sets the plane coefficients and normalizes the result.
+     *
+     * @param nx Normal X component.
+     * @param ny Normal Y component.
+     * @param nz Normal Z component.
+     * @param d Distance coefficient.
+     * @return This plane for chaining.
+     */
     fun set(nx: Float, ny: Float, nz: Float, d: Float): Plane = apply {
         coefficients.set(nx, ny, nz, d)
         normal.set(nx, ny, nz)
         normalize()
     }
 
+    /**
+     * Copies values from another plane.
+     *
+     * @param plane The source plane.
+     * @return This plane for chaining.
+     */
     fun setFrom(plane: Plane): Plane =
         set(plane.normal.x, plane.normal.y, plane.normal.z, plane.distance)
 
+    /**
+     * Computes the signed distance from a point to this plane.
+     *
+     * @param point The point to test.
+     * @return Positive if on the front side, negative if behind, zero if on the plane.
+     */
     fun distanceTo(point: Vec3): Float =
         normal.x * point.x + normal.y * point.y + normal.z * point.z + distance
 
@@ -145,17 +236,45 @@ class Plane {
 }
 
 /**
- * View frustum represented by six planes.
+ * View frustum represented by six clipping planes for culling tests.
+ *
+ * Planes are ordered as: left, right, bottom, top, near, far.
+ * Use [fromMatrix] to extract frustum planes from a view-projection matrix,
+ * then [intersects] to test AABB visibility.
  */
 class Frustum internal constructor(
     private val planes: Array<Plane> = Array(6) { Plane() }
 ) {
+    /**
+     * Returns the plane at the specified index.
+     *
+     * @param index Plane index (0=left, 1=right, 2=bottom, 3=top, 4=near, 5=far).
+     * @return The requested plane.
+     */
     fun plane(index: Int): Plane = planes[index]
 
+    /**
+     * Sets a frustum plane by index.
+     *
+     * @param index Plane index.
+     * @param nx Normal X component.
+     * @param ny Normal Y component.
+     * @param nz Normal Z component.
+     * @param distance Distance coefficient.
+     * @return This frustum for chaining.
+     */
     fun setPlane(index: Int, nx: Float, ny: Float, nz: Float, distance: Float): Frustum = apply {
         planes[index].set(nx, ny, nz, distance)
     }
 
+    /**
+     * Tests whether an AABB intersects or is inside this frustum.
+     *
+     * Uses the "p-vertex" optimization for efficient culling.
+     *
+     * @param aabb The bounding box to test.
+     * @return True if the box is at least partially visible.
+     */
     fun intersects(aabb: Aabb): Boolean {
         if (aabb.isEmpty()) return false
         val min = aabb.min
@@ -177,6 +296,16 @@ class Frustum internal constructor(
     }
 
     companion object {
+        /**
+         * Extracts frustum planes from a view-projection matrix.
+         *
+         * Uses the Gribb/Hartmann method to derive planes from the combined
+         * view-projection matrix rows.
+         *
+         * @param matrix The view-projection matrix.
+         * @param out Optional pre-allocated frustum to write into.
+         * @return A frustum with planes extracted from the matrix.
+         */
         fun fromMatrix(matrix: Mat4, out: Frustum = Frustum()): Frustum {
             val m = matrix.data
             val m00 = m[0];

@@ -10,8 +10,27 @@ import io.materia.camera.PerspectiveCamera
 import io.materia.camera.OrthographicCamera
 
 /**
- * Raycaster implementation - T062
- * Performs raycasting for mouse picking and collision detection
+ * GPU-accelerated raycaster for mouse picking and collision detection.
+ *
+ * Projects a ray from screen coordinates through the scene to detect
+ * intersections with 3D objects. Supports both perspective and orthographic
+ * cameras.
+ *
+ * Typical usage:
+ * ```kotlin
+ * val raycaster = Raycaster()
+ * raycaster.setFromCamera(mouseNDC, camera)
+ * val hits = raycaster.intersectObjects(scene.children)
+ * if (hits.isNotEmpty()) {
+ *     val closest = hits.first()
+ *     println("Hit ${closest.`object`.name} at ${closest.point}")
+ * }
+ * ```
+ *
+ * @param origin Ray origin point (default: world origin).
+ * @param direction Ray direction (default: -Z axis).
+ * @param near Minimum intersection distance (default: 0).
+ * @param far Maximum intersection distance (default: infinity).
  */
 class Raycaster(
     origin: Vector3 = Vector3(),
@@ -22,12 +41,22 @@ class Raycaster(
     val ray = Ray(origin, direction)
 
     /**
-     * Parameters for different object types
+     * Type-specific raycasting parameters.
+     *
+     * Customize thresholds for different geometry types (lines, points)
+     * to control intersection sensitivity.
      */
     val params = Params()
 
     /**
-     * Set ray from camera and normalized device coordinates
+     * Configures the ray from camera and screen coordinates.
+     *
+     * Transforms normalized device coordinates (NDC) into a world-space ray
+     * suitable for intersection testing. Handles both perspective and
+     * orthographic projection correctly.
+     *
+     * @param coords Normalized device coordinates (-1 to +1 on both axes).
+     * @param camera The camera defining the projection.
      */
     fun setFromCamera(coords: Vector2, camera: Camera) {
         when (camera) {
@@ -64,14 +93,24 @@ class Raycaster(
     }
 
     /**
-     * Set ray directly
+     * Sets the ray origin and direction directly.
+     *
+     * @param origin The ray origin point.
+     * @param direction The ray direction (should be normalized).
      */
     fun set(origin: Vector3, direction: Vector3) {
         ray.set(origin, direction)
     }
 
     /**
-     * Check intersections with an object and its descendants
+     * Tests for ray intersections with an object and optionally its descendants.
+     *
+     * Returns intersections sorted by distance (closest first).
+     *
+     * @param object3D The root object to test.
+     * @param recursive If true, also tests all descendants.
+     * @param optionalTarget Reusable list to avoid allocation.
+     * @return Sorted list of intersections.
      */
     fun intersectObject(
         object3D: Object3D,
@@ -89,7 +128,14 @@ class Raycaster(
     }
 
     /**
-     * Check intersections with multiple objects
+     * Tests for ray intersections with multiple objects.
+     *
+     * Returns all intersections sorted by distance (closest first).
+     *
+     * @param objects The objects to test.
+     * @param recursive If true, also tests all descendants of each object.
+     * @param optionalTarget Reusable list to avoid allocation.
+     * @return Sorted list of intersections.
      */
     fun intersectObjects(
         objects: List<Object3D>,
@@ -129,30 +175,58 @@ class Raycaster(
     }
 
     /**
-     * Parameters for raycasting different object types
+     * Type-specific raycasting configuration.
+     *
+     * Different geometry types may need different intersection thresholds.
+     * For example, lines and points have no surface area, so a threshold
+     * defines how close the ray must pass to count as a hit.
      */
     class Params {
+        /** Parameters for mesh intersection. */
         val mesh = MeshParams()
+        /** Parameters for line intersection. */
         val line = LineParams()
+        /** Parameters for LOD object intersection. */
         val lod = LODParams()
+        /** Parameters for point cloud intersection. */
         val points = PointsParams()
 
+        /** Mesh-specific parameters. */
         class MeshParams
 
+        /** Line-specific parameters. */
         class LineParams {
+            /** Distance threshold for line hits (world units). */
             var threshold = 1f
         }
 
+        /** LOD-specific parameters. */
         class LODParams
 
+        /** Point cloud-specific parameters. */
         class PointsParams {
+            /** Distance threshold for point hits (world units). */
             var threshold = 1f
         }
     }
 }
 
 /**
- * Intersection result from raycasting
+ * Result of a ray-object intersection test.
+ *
+ * Contains information about where the ray hit the object and
+ * which part of the geometry was intersected.
+ *
+ * @property distance Distance from ray origin to intersection point.
+ * @property point World-space intersection point (null for some geometry types).
+ * @property object The intersected Object3D.
+ * @property face Face data for mesh intersections.
+ * @property faceIndex Index of the intersected face in the geometry.
+ * @property index Vertex index for point/line intersections.
+ * @property instanceId Instance ID for instanced geometry.
+ * @property uv Texture coordinates at the intersection point.
+ * @property uv2 Secondary texture coordinates.
+ * @property normal Surface normal at the intersection point.
  */
 data class Intersection(
     val distance: Float,
@@ -168,7 +242,13 @@ data class Intersection(
 )
 
 /**
- * Face structure for mesh intersections
+ * Triangle face data from a mesh intersection.
+ *
+ * @property a Index of the first vertex.
+ * @property b Index of the second vertex.
+ * @property c Index of the third vertex.
+ * @property normal Face normal vector.
+ * @property materialIndex Index of the material used by this face.
  */
 data class Face(
     val a: Int,
@@ -179,7 +259,13 @@ data class Face(
 )
 
 /**
- * Extension function for Object3D to support raycasting
+ * Performs raycasting against this object.
+ *
+ * Override in subclasses (Mesh, Line, Points) to implement
+ * geometry-specific intersection testing.
+ *
+ * @param raycaster The raycaster to test against.
+ * @param intersections Output list to append any hits.
  */
 fun Object3D.raycast(raycaster: Raycaster, intersections: MutableList<Intersection>) {
     // Default no-op - overridden in Mesh, Line, Points with geometry intersection logic

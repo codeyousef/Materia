@@ -2,12 +2,26 @@ package io.materia.engine.geometry
 
 import io.materia.engine.scene.VertexBuffer
 
+/**
+ * Returns the number of vertices based on buffer size and stride.
+ *
+ * @return The vertex count, or 0 if stride is invalid.
+ */
 fun Geometry.vertexCount(): Int {
     val strideFloats = (layout.stride / Float.SIZE_BYTES).takeIf { it > 0 }
         ?: return 0
     return vertexBuffer.data.size / strideFloats
 }
 
+/**
+ * Source data for building interleaved geometry from separate attribute arrays.
+ *
+ * @property positions Flat XYZ position array (required, size must be multiple of 3).
+ * @property normals Optional flat XYZ normal array.
+ * @property uvs Optional flat UV coordinate array.
+ * @property colors Optional flat RGB color array.
+ * @property indices Optional index array for indexed drawing.
+ */
 data class InterleavedGeometrySource(
     val positions: FloatArray,
     val normals: FloatArray? = null,
@@ -16,6 +30,16 @@ data class InterleavedGeometrySource(
     val indices: ShortArray? = null
 )
 
+/**
+ * Builds a [Geometry] from separate attribute arrays by interleaving them.
+ *
+ * Produces a tightly packed vertex buffer with attributes in order:
+ * position, normal (if provided), uv (if provided), color (if provided).
+ *
+ * @param source The source attribute arrays.
+ * @return A geometry with interleaved vertex data.
+ * @throws IllegalArgumentException If array sizes are inconsistent.
+ */
 fun buildInterleavedGeometry(source: InterleavedGeometrySource): Geometry {
     require(source.positions.size % 3 == 0) { "Positions must be multiple of 3" }
     val vertexCount = source.positions.size / 3

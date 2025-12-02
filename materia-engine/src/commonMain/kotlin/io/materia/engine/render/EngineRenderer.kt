@@ -46,22 +46,69 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.math.max
 
 /**
- * Thin renderer implementation that delegates draw submission to [SceneRenderer].
+ * High-level renderer interface for the Materia engine.
  *
- * This provides a minimal, engine-focused render loop that bypasses the legacy
- * renderer stack and speaks directly to the multiplatform GPU layer.
+ * Provides a minimal, engine-focused render loop that bypasses the legacy
+ * renderer stack and speaks directly to the multiplatform GPU layer. Handles
+ * initialization, frame rendering, resize, and optional FXAA post-processing.
+ *
+ * Obtain an instance via [RendererFactory.createEngineRenderer].
  */
 interface EngineRenderer {
+    /**
+     * Initializes the renderer asynchronously.
+     *
+     * Must be called before [render]. Acquires GPU resources and configures
+     * the rendering pipeline.
+     *
+     * @return Success or an error describing initialization failure.
+     */
     suspend fun initialize(): Result<Unit>
+
+    /**
+     * Renders a scene from the perspective of a camera.
+     *
+     * @param scene The scene graph root to render.
+     * @param camera The camera defining the viewpoint and projection.
+     */
     fun render(scene: Scene, camera: PerspectiveCamera)
+
+    /**
+     * Handles surface resize events.
+     *
+     * @param width New width in pixels.
+     * @param height New height in pixels.
+     */
     fun resize(width: Int, height: Int)
+
+    /**
+     * Releases all GPU resources.
+     *
+     * The renderer cannot be used after this call.
+     */
     fun dispose()
+
+    /** The active graphics backend (WebGPU, Vulkan, etc.). */
     val backend: BackendType
+
+    /** Human-readable GPU device name. */
     val deviceName: String
+
+    /** GPU driver version string. */
     val driverVersion: String
+
+    /** Whether FXAA anti-aliasing is enabled. */
     var fxaaEnabled: Boolean
 }
 
+/**
+ * Configuration options for [EngineRenderer] creation.
+ *
+ * @property preferredBackends Ordered list of GPU backends to attempt.
+ * @property powerPreference GPU selection preference (performance vs battery).
+ * @property clearColor Default RGBA clear color for the background.
+ * @property enableFxaa Whether to enable FXAA anti-aliasing by default.
+ */
 data class EngineRendererOptions(
     val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU),
     val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
@@ -69,6 +116,14 @@ data class EngineRendererOptions(
     val enableFxaa: Boolean = false
 )
 
+/**
+ * Creates an [EngineRenderer] for the given surface.
+ *
+ * @param surface The platform render surface (window, canvas, etc.).
+ * @param config Renderer configuration including backend preferences.
+ * @param options Additional engine renderer options.
+ * @return A result containing the initialized renderer or an error.
+ */
 suspend fun RendererFactory.createEngineRenderer(
     surface: RenderSurface,
     config: RendererConfig = RendererConfig(),

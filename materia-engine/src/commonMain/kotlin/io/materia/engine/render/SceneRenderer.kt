@@ -20,6 +20,17 @@ import io.materia.gpu.GpuTextureFormat
 import io.materia.gpu.gpuBufferUsage
 import kotlin.reflect.KClass
 
+/**
+ * Low-level renderer responsible for GPU resource management and draw command recording.
+ *
+ * Manages caches for geometry uploads, pipelines, and per-mesh resources. Call [prepare]
+ * to update caches for the current frame's renderables, then [record] to emit draw
+ * commands into a render pass.
+ *
+ * @param device The GPU device for resource creation.
+ * @param colorFormat Texture format of the color attachment.
+ * @param depthFormat Optional depth attachment format (null disables depth).
+ */
 class SceneRenderer(
     private val device: GpuDevice,
     private val colorFormat: GpuTextureFormat,
@@ -31,6 +42,15 @@ class SceneRenderer(
     private val meshCache = mutableMapOf<Mesh, MeshResources>()
     private val pointsCache = mutableMapOf<InstancedPoints, PointsResources>()
 
+    /**
+     * Updates resource caches for the given renderables.
+     *
+     * Creates or updates GPU resources (buffers, pipelines, bind groups) for
+     * meshes and instanced points. Removes resources for objects no longer present.
+     *
+     * @param meshes Collection of meshes to prepare.
+     * @param points Collection of instanced point clouds to prepare.
+     */
     fun prepare(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
         val meshSet = meshes.toSet()
         val pointSet = points.toSet()
@@ -57,10 +77,24 @@ class SceneRenderer(
         points.forEach { ensurePointsResources(it) }
     }
 
+    /**
+     * Blocking variant of [prepare] for synchronous rendering loops.
+     */
     fun prepareBlocking(meshes: Collection<Mesh>, points: Collection<InstancedPoints>) {
         prepare(meshes, points)
     }
 
+    /**
+     * Records draw commands for all prepared renderables.
+     *
+     * Binds pipelines, sets uniforms with the view-projection matrix,
+     * and issues draw calls for each mesh and point cloud.
+     *
+     * @param pass The render pass encoder to record into.
+     * @param meshes Collection of meshes to draw.
+     * @param points Collection of instanced points to draw.
+     * @param viewProjection Combined view-projection matrix for the camera.
+     */
     fun record(
         pass: GpuRenderPassEncoder,
         meshes: Collection<Mesh>,
@@ -110,6 +144,11 @@ class SceneRenderer(
         }
     }
 
+    /**
+     * Releases all GPU resources held by this renderer.
+     *
+     * After calling dispose, the renderer should not be used.
+     */
     fun dispose() {
         meshCache.values.forEach { it.uniformBuffer.destroy() }
         pointsCache.values.forEach { it.uniformBuffer.destroy() }

@@ -2,11 +2,22 @@ package io.materia.gpu
 
 import kotlinx.serialization.Serializable
 
+/**
+ * Configuration for creating a command encoder.
+ *
+ * @property label Optional debug label.
+ */
 @Serializable
 data class GpuCommandEncoderDescriptor(
     val label: String? = null
 )
 
+/**
+ * Records GPU commands into a command buffer.
+ *
+ * Create via [GpuDevice.createCommandEncoder], record render passes,
+ * then call [finish] to produce a [GpuCommandBuffer] for submission.
+ */
 expect class GpuCommandEncoder internal constructor(
     device: GpuDevice,
     descriptor: GpuCommandEncoderDescriptor?
@@ -18,6 +29,11 @@ expect class GpuCommandEncoder internal constructor(
     fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder
 }
 
+/**
+ * Recorded GPU commands ready for queue submission.
+ *
+ * Produced by calling [GpuCommandEncoder.finish]. Submit via [GpuQueue.submit].
+ */
 expect class GpuCommandBuffer internal constructor(
     device: GpuDevice,
     label: String?
@@ -26,8 +42,21 @@ expect class GpuCommandBuffer internal constructor(
     val label: String?
 }
 
-enum class GpuLoadOp { LOAD, CLEAR }
-enum class GpuStoreOp { STORE, DISCARD }
+/** How to initialize a render target at the start of a pass. */
+enum class GpuLoadOp {
+    /** Preserve existing contents. */
+    LOAD,
+    /** Clear to a specified value. */
+    CLEAR
+}
+
+/** What to do with render target contents at the end of a pass. */
+enum class GpuStoreOp {
+    /** Write results to the texture. */
+    STORE,
+    /** Discard results (useful for depth). */
+    DISCARD
+}
 
 data class GpuRenderPassColorAttachment(
     val view: GpuTextureView,
@@ -49,17 +78,33 @@ data class GpuRenderPassDepthStencilAttachment(
     val stencilReadOnly: Boolean = false
 )
 
+/**
+ * Configuration for beginning a render pass.
+ *
+ * @property colorAttachments List of color render targets.
+ * @property depthStencilAttachment Optional depth/stencil target.
+ * @property label Optional debug label.
+ */
 data class GpuRenderPassDescriptor(
     val colorAttachments: List<GpuRenderPassColorAttachment>,
     val depthStencilAttachment: GpuRenderPassDepthStencilAttachment? = null,
     val label: String? = null
 )
 
+/** Index buffer element size. */
 enum class GpuIndexFormat {
+    /** 16-bit unsigned indices. */
     UINT16,
+    /** 32-bit unsigned indices. */
     UINT32
 }
 
+/**
+ * Records draw commands within a render pass.
+ *
+ * Obtained from [GpuCommandEncoder.beginRenderPass]. Set pipeline and resources,
+ * issue draw calls, then call [end] to finish the pass.
+ */
 expect class GpuRenderPassEncoder internal constructor(
     encoder: GpuCommandEncoder,
     descriptor: GpuRenderPassDescriptor

@@ -16,6 +16,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+/**
+ * Result of loading a glTF asset.
+ *
+ * Contains the scene graph, materials, and animations extracted from
+ * the glTF file.
+ *
+ * @property scene The default scene (or first scene if no default).
+ * @property scenes All scenes defined in the file.
+ * @property nodes All nodes in the file.
+ * @property materials All materials created during loading.
+ * @property animations Animation clips (if any).
+ */
 data class GLTFAsset(
     val scene: Scene,
     val scenes: List<Scene>,
@@ -24,6 +36,12 @@ data class GLTFAsset(
     val animations: List<AnimationClip>
 )
 
+/**
+ * Progress information for asset loading operations.
+ *
+ * @property loaded Bytes loaded so far.
+ * @property total Total bytes to load (may be 0 if unknown).
+ */
 data class LoadingProgress(
     val loaded: Long,
     val total: Long
@@ -32,6 +50,30 @@ data class LoadingProgress(
         get() = if (total <= 0) 1f else (loaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 }
 
+/**
+ * Loader for glTF 2.0 3D models.
+ *
+ * Supports both .gltf (JSON + external binaries) and embedded data URIs.
+ * Extracts geometry, materials, textures, and animations from glTF files.
+ *
+ * Features:
+ * - Asynchronous loading with progress callbacks
+ * - Automatic base path resolution for relative URIs
+ * - Mesh instancing (shared geometry for repeated nodes)
+ * - Multi-primitive mesh support
+ * - PBR material creation
+ *
+ * ```kotlin
+ * val loader = GLTFLoader()
+ * val asset = loader.load("models/character.gltf") { progress ->
+ *     println("Loading: ${(progress.percentage * 100).toInt()}%")
+ * }
+ * scene.add(asset.scene)
+ * ```
+ *
+ * @param resolver Asset resolver for loading external resources.
+ * @param json JSON parser configuration.
+ */
 class GLTFLoader(
     private val resolver: AssetResolver = AssetResolver.default(),
     private val json: Json = Json {

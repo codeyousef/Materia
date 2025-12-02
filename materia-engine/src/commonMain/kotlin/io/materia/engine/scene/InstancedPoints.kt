@@ -3,6 +3,21 @@ package io.materia.engine.scene
 import io.materia.engine.material.UnlitPointsMaterial
 import io.materia.engine.math.Color
 
+/**
+ * Efficiently renders many points using GPU instancing.
+ *
+ * Each instance stores position (3), color (3), size (1), and extra data (4)
+ * for a total of 11 floats per point. The [instanceData] array is laid out
+ * contiguously and can be updated at runtime via [updateInstance].
+ *
+ * This node is ideal for particle systems, point clouds, and data visualizations
+ * where thousands of points need to be rendered efficiently.
+ *
+ * @param name Identifier for this node.
+ * @param instanceData Flat array containing all instance data.
+ * @param componentsPerInstance Number of floats per instance (must be 11).
+ * @param material Material controlling point appearance.
+ */
 class InstancedPoints(
     name: String,
     val instanceData: FloatArray,
@@ -10,8 +25,21 @@ class InstancedPoints(
     var material: UnlitPointsMaterial
 ) : Node(name) {
 
+    /**
+     * Returns the number of point instances.
+     */
     fun instanceCount(): Int = instanceData.size / componentsPerInstance
 
+    /**
+     * Updates a single instance's attributes in the data array.
+     *
+     * @param index Zero-based instance index.
+     * @param position World-space position (x, y, z).
+     * @param color RGB color components.
+     * @param size Point size in world units.
+     * @param extra Four extra floats for custom data.
+     * @throws IllegalArgumentException If index is out of bounds.
+     */
     fun updateInstance(
         index: Int,
         position: Vec3Components,
@@ -42,8 +70,20 @@ class InstancedPoints(
     }
 
     companion object {
+        /** Number of floats per instance: position(3) + color(3) + size(1) + extra(4). */
         const val COMPONENTS_PER_INSTANCE = 11
 
+        /**
+         * Creates an InstancedPoints node from separate attribute arrays.
+         *
+         * @param name Identifier for the node.
+         * @param positions Flat XYZ position array (size must be multiple of 3).
+         * @param colors Optional RGB color array, defaults to white.
+         * @param sizes Optional per-point sizes, defaults to 1.
+         * @param extras Optional XYZW extra data per point.
+         * @param material Material controlling appearance.
+         * @return A new InstancedPoints node.
+         */
         fun create(
             name: String,
             positions: FloatArray,
@@ -87,5 +127,8 @@ class InstancedPoints(
     }
 }
 
+/** Simple 3-component vector for instance data updates. */
 data class Vec3Components(val x: Float, val y: Float, val z: Float)
+
+/** Simple 4-component vector for instance data updates. */
 data class Vec4Components(val x: Float, val y: Float, val z: Float, val w: Float)
