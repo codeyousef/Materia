@@ -204,6 +204,9 @@ class VoxelWorld(
         }
 
         try {
+            if (dirtyQueue.isEmpty()) {
+                return
+            }
             var processed = 0
             while (processed < maxPerFrame && dirtyQueue.isNotEmpty()) {
                 val chunk = dirtyQueue.removeFirst()

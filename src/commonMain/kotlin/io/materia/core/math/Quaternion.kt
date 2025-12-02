@@ -9,12 +9,49 @@ import kotlin.math.*
  * Quaternions provide a compact way to represent rotations and avoid gimbal lock.
  * They are stored as (x, y, z, w) where w is the scalar component.
  */
-data class Quaternion(
-    var x: Float = 0f,
-    var y: Float = 0f,
-    var z: Float = 0f,
-    var w: Float = 1f
+class Quaternion(
+    x: Float = 0f,
+    y: Float = 0f,
+    z: Float = 0f,
+    w: Float = 1f
 ) {
+    private var _x: Float = x
+    private var _y: Float = y
+    private var _z: Float = z
+    private var _w: Float = w
+    
+    var x: Float
+        get() = _x
+        set(value) {
+            _x = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var y: Float
+        get() = _y
+        set(value) {
+            _y = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var z: Float
+        get() = _z
+        set(value) {
+            _z = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var w: Float
+        get() = _w
+        set(value) {
+            _w = value
+            _onChangeCallback?.invoke()
+        }
+    
+    /**
+     * Internal onChange callback (set by Object3D to sync with Euler)
+     */
+    internal var _onChangeCallback: (() -> Unit)? = null
 
     companion object {
         val IDENTITY: Quaternion
@@ -54,10 +91,11 @@ data class Quaternion(
      * Sets quaternion values
      */
     fun set(x: Float, y: Float, z: Float, w: Float): Quaternion {
-        this.x = x
-        this.y = y
-        this.z = z
-        this.w = w
+        this._x = x
+        this._y = y
+        this._z = z
+        this._w = w
+        _onChangeCallback?.invoke()
         return this
     }
 
@@ -65,17 +103,18 @@ data class Quaternion(
      * Creates a copy of this quaternion
      */
     fun clone(): Quaternion {
-        return Quaternion(x, y, z, w)
+        return Quaternion(_x, _y, _z, _w)
     }
 
     /**
      * Copies values from another quaternion
      */
     fun copy(quaternion: Quaternion): Quaternion {
-        x = quaternion.x
-        y = quaternion.y
-        z = quaternion.z
-        w = quaternion.w
+        _x = quaternion._x
+        _y = quaternion._y
+        _z = quaternion._z
+        _w = quaternion._w
+        _onChangeCallback?.invoke()
         return this
     }
 
@@ -619,6 +658,20 @@ data class Quaternion(
 
     override fun toString(): String {
         return "Quaternion(x=$x, y=$y, z=$z, w=$w)"
+    }
+    
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Quaternion) return false
+        return _x == other._x && _y == other._y && _z == other._z && _w == other._w
+    }
+    
+    override fun hashCode(): Int {
+        var result = _x.hashCode()
+        result = 31 * result + _y.hashCode()
+        result = 31 * result + _z.hashCode()
+        result = 31 * result + _w.hashCode()
+        return result
     }
 
 }

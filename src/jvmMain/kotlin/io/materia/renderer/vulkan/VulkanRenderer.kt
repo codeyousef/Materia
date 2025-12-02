@@ -517,12 +517,29 @@ class VulkanRenderer(
         val drawInfos = mutableListOf<MeshDrawInfo>()
         val retainedIds = mutableSetOf<Int>()
 
+        var meshCount = 0
+        var skippedNoMaterial = 0
+        var skippedNoDescriptor = 0
+        var skippedNoBuffers = 0
+
         scene.traverseVisible { node ->
             if (node is Mesh && node.visible) {
-                val material = node.material ?: return@traverseVisible
-                val descriptor =
-                    MaterialDescriptorRegistry.descriptorFor(material) ?: return@traverseVisible
-                val buffers = ensureMeshBuffers(node, descriptor) ?: return@traverseVisible
+                meshCount++
+                val material = node.material
+                if (material == null) {
+                    skippedNoMaterial++
+                    return@traverseVisible
+                }
+                val descriptor = MaterialDescriptorRegistry.descriptorFor(material)
+                if (descriptor == null) {
+                    skippedNoDescriptor++
+                    return@traverseVisible
+                }
+                val buffers = ensureMeshBuffers(node, descriptor)
+                if (buffers == null) {
+                    skippedNoBuffers++
+                    return@traverseVisible
+                }
 
                 val textureBinding = if (
                     materialTextureDescriptorSetLayout != VK_NULL_HANDLE &&

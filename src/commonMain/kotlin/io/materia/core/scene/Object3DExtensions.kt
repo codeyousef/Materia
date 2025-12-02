@@ -15,18 +15,22 @@ fun Vector3.setFromMatrixPosition(matrix: Matrix4): Vector3 {
 }
 
 /**
- * Adds onChange callback to Euler
+ * Adds onChange callback to Euler (uses internal _onChangeCallback)
  */
 var Euler.onChange: (() -> Unit)?
-    get() = null
-    set(value) { /* Store callback if needed */ }
+    get() = this._onChangeCallback
+    set(value) { 
+        this._onChangeCallback = value
+    }
 
 /**
- * Adds onChange callback to Quaternion
+ * Adds onChange callback to Quaternion (uses internal _onChangeCallback)
  */
 var Quaternion.onChange: (() -> Unit)?
-    get() = null
-    set(value) { /* Store callback if needed */ }
+    get() = this._onChangeCallback
+    set(value) {
+        this._onChangeCallback = value
+    }
 
 // Note: Matrix4.compose() member function exists - this extension is shadowed and removed
 

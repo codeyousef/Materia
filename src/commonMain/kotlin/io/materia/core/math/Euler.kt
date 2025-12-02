@@ -16,12 +16,49 @@ enum class EulerOrder {
  * Euler angles represent rotations as three sequential rotations
  * around coordinate axes. The order of rotations matters!
  */
-data class Euler(
-    var x: Float = 0f,
-    var y: Float = 0f,
-    var z: Float = 0f,
-    var order: EulerOrder = EulerOrder.XYZ
+class Euler(
+    x: Float = 0f,
+    y: Float = 0f,
+    z: Float = 0f,
+    order: EulerOrder = EulerOrder.XYZ
 ) {
+    private var _x: Float = x
+    private var _y: Float = y
+    private var _z: Float = z
+    private var _order: EulerOrder = order
+    
+    var x: Float
+        get() = _x
+        set(value) {
+            _x = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var y: Float
+        get() = _y
+        set(value) {
+            _y = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var z: Float
+        get() = _z
+        set(value) {
+            _z = value
+            _onChangeCallback?.invoke()
+        }
+    
+    var order: EulerOrder
+        get() = _order
+        set(value) {
+            _order = value
+            _onChangeCallback?.invoke()
+        }
+    
+    /**
+     * Internal onChange callback (set by Object3D to sync with quaternion)
+     */
+    internal var _onChangeCallback: (() -> Unit)? = null
 
     companion object {
         /**
@@ -40,11 +77,12 @@ data class Euler(
     /**
      * Sets Euler angle values
      */
-    fun set(x: Float, y: Float, z: Float, order: EulerOrder = this.order): Euler {
-        this.x = x
-        this.y = y
-        this.z = z
-        this.order = order
+    fun set(x: Float, y: Float, z: Float, order: EulerOrder = this._order): Euler {
+        this._x = x
+        this._y = y
+        this._z = z
+        this._order = order
+        _onChangeCallback?.invoke()
         return this
     }
 
@@ -59,10 +97,11 @@ data class Euler(
      * Copies values from another Euler
      */
     fun copy(euler: Euler): Euler {
-        x = euler.x
-        y = euler.y
-        z = euler.z
-        order = euler.order
+        _x = euler._x
+        _y = euler._y
+        _z = euler._z
+        _order = euler._order
+        _onChangeCallback?.invoke()
         return this
     }
 
@@ -245,6 +284,20 @@ data class Euler(
 
     override fun toString(): String {
         return "Euler(x=$x, y=$y, z=$z, order=$order)"
+    }
+    
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Euler) return false
+        return _x == other._x && _y == other._y && _z == other._z && _order == other._order
+    }
+    
+    override fun hashCode(): Int {
+        var result = _x.hashCode()
+        result = 31 * result + _y.hashCode()
+        result = 31 * result + _z.hashCode()
+        result = 31 * result + _order.hashCode()
+        return result
     }
 }
 

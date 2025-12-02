@@ -343,12 +343,26 @@ abstract class Object3D {
         // Event dispatcher system for lifecycle and transform notifications
     }
 
+    private var isUpdatingRotation = false
+    
     private fun updateQuaternionFromEuler() {
-        quaternion.setFromEuler(rotation)
+        if (isUpdatingRotation) return
+        isUpdatingRotation = true
+        try {
+            quaternion.setFromEuler(rotation)
+        } finally {
+            isUpdatingRotation = false
+        }
     }
 
     private fun updateEulerFromQuaternion() {
-        rotation.setFromQuaternion(quaternion)
+        if (isUpdatingRotation) return
+        isUpdatingRotation = true
+        try {
+            rotation.setFromQuaternion(quaternion)
+        } finally {
+            isUpdatingRotation = false
+        }
     }
 
     override fun toString(): String {

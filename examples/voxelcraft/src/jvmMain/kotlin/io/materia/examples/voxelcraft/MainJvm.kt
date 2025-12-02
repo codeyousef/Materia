@@ -360,6 +360,11 @@ class VoxelCraftJVM {
             camera.updateMatrixWorld(true)
             camera.updateProjectionMatrix()
 
+            if (frameCount % 60 == 0) {
+                val camPos = camera.position
+                logInfo("Camera: pos=(${camPos.x.toInt()}, ${camPos.y.toInt()}, ${camPos.z.toInt()})")
+            }
+
             // T023: Render scene using Vulkan renderer
             renderer.render(world.scene, camera)
 
