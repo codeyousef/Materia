@@ -29,7 +29,7 @@ actual class ImageLoader {
         val imageElement = ImageElement()
 
         try {
-            val image = ImageIO.read(URL(fullUrl))
+            val image = ImageIO.read(java.net.URI(fullUrl).toURL())
             imageElement.bufferedImage = image
             imageElement.src = fullUrl
             imageElement.width = image.width

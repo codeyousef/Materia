@@ -365,10 +365,9 @@ private fun Matrix4.invertCopy(): Matrix4 {
 }
 
 /**
- * Extension to get/set XYZW on a buffer attribute.
+ * Extension to set XYZW on a buffer attribute.
+ * Note: getW already exists as a member of BufferAttribute.
  */
-private fun BufferAttribute.getW(index: Int): Float = if (itemSize >= 4) array[index * itemSize + 3] else 0f
-
 private fun BufferAttribute.setXYZW(index: Int, x: Float, y: Float, z: Float, w: Float) {
     val offset = index * itemSize
     array[offset] = x

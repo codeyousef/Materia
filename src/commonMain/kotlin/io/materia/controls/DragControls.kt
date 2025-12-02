@@ -321,26 +321,6 @@ class DragControls(
     }
 }
 
-// Extension functions for Raycaster
-private fun Raycaster.setFromCamera(coords: Vector2, camera: Camera) {
-    // Set up ray from camera through the given screen coordinates
-    val origin = camera.position.clone()
-    val direction = Vector3(coords.x, coords.y, 0.5f)
-        .unproject(camera)
-        .sub(origin)
-        .normalize()
-    
-    ray.origin.copy(origin)
-    ray.direction.copy(direction)
-}
-
-// Extension for Vector3 unproject
-private fun Vector3.unproject(camera: Camera): Vector3 {
-    val matrix = camera.projectionMatrix.clone().invert()
-    matrix.premultiply(camera.matrixWorld)
-    return this.applyMatrix4(matrix)
-}
-
 // Extension for ray distance to plane
 private fun io.materia.core.scene.Ray.distanceToPlane(plane: Plane): Float? {
     val denominator = plane.normal.dot(direction)

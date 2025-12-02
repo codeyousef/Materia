@@ -576,14 +576,3 @@ class TransformControls(
         val mesh: Mesh? = null
     )
 }
-
-// Extension functions for Vector3
-private fun Vector3.project(camera: Camera): Vector3 {
-    return this.applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
-}
-
-private fun Vector3.unproject(camera: Camera): Vector3 {
-    val matrix = camera.projectionMatrix.clone().invert()
-    matrix.premultiply(camera.matrixWorld)
-    return this.applyMatrix4(matrix)
-}

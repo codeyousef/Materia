@@ -410,11 +410,3 @@ class TrackballControls(
 private fun Vector3.setLength(length: Float): Vector3 {
     return this.normalize().multiplyScalar(length)
 }
-
-private fun Vector2.multiplyScalar(scalar: Float): Vector2 {
-    x *= scalar
-    y *= scalar
-    return this
-}
-
-private fun Vector2.lengthSquared(): Float = x * x + y * y

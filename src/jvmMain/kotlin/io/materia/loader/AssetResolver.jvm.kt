@@ -36,7 +36,7 @@ internal class DefaultAssetResolver : AssetResolver {
     }
 
     private fun readRemote(url: String): ByteArray {
-        URL(url).openStream().use { stream ->
+        java.net.URI(url).toURL().openStream().use { stream ->
             return stream.readAllBytesCompat()
         }
     }

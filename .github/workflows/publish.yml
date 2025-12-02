@@ -37,6 +37,13 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Rust and naga-cli for shader compilation
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          cargo install naga-cli
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Cache Gradle and build outputs
         uses: actions/cache@v4
         with:
