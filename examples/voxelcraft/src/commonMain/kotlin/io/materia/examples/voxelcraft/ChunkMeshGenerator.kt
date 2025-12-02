@@ -15,7 +15,37 @@ import kotlinx.coroutines.yield
 object ChunkMeshGenerator {
 
     /**
-     * Generate mesh for chunk using greedy meshing algorithm
+     * Generate mesh for chunk using greedy meshing algorithm (synchronous version)
+     * 
+     * Used on JVM where mesh updates must happen on the same thread as rendering.
+     *
+     * @param chunk The chunk to generate mesh for
+     * @return BufferGeometry ready for rendering with Materia
+     */
+    fun generateSync(chunk: Chunk): BufferGeometry {
+        // Pre-allocate with estimated capacity to reduce ArrayList resizing overhead
+        val estimatedVertices = 4096
+        val vertices = ArrayList<Float>(estimatedVertices)
+        val normals = ArrayList<Float>(estimatedVertices)
+        val uvs = ArrayList<Float>(estimatedVertices * 2 / 3)
+        val colors = ArrayList<Float>(estimatedVertices)
+        val indices = ArrayList<Int>(estimatedVertices * 3 / 2)
+
+        var vertexOffset = 0
+
+        // Generate faces for each of the 6 directions
+        for (direction in FaceDirection.values()) {
+            generateFacesForDirectionSync(
+                chunk, direction, vertices, normals, uvs, colors, indices, vertexOffset
+            )
+            vertexOffset = vertices.size / 3
+        }
+
+        return createGeometry(vertices, normals, uvs, colors, indices)
+    }
+
+    /**
+     * Generate mesh for chunk using greedy meshing algorithm (suspend version)
      *
      * @param chunk The chunk to generate mesh for
      * @return BufferGeometry ready for rendering with Materia
@@ -42,7 +72,19 @@ object ChunkMeshGenerator {
             vertexOffset = vertices.size / 3
         }
 
-        // Create BufferGeometry and set attributes
+        return createGeometry(vertices, normals, uvs, colors, indices)
+    }
+    
+    /**
+     * Create BufferGeometry from collected mesh data
+     */
+    private fun createGeometry(
+        vertices: ArrayList<Float>,
+        normals: ArrayList<Float>,
+        uvs: ArrayList<Float>,
+        colors: ArrayList<Float>,
+        indices: ArrayList<Int>
+    ): BufferGeometry {
         val geometry = BufferGeometry()
 
         geometry.setAttribute("position", BufferAttribute(vertices.toFloatArray(), 3))
@@ -59,6 +101,89 @@ object ChunkMeshGenerator {
         geometry.computeBoundingSphere()
 
         return geometry
+    }
+
+    /**
+     * Generate all faces for a specific direction using greedy meshing (synchronous version)
+     */
+    private fun generateFacesForDirectionSync(
+        chunk: Chunk,
+        direction: FaceDirection,
+        vertices: MutableList<Float>,
+        normals: MutableList<Float>,
+        uvs: MutableList<Float>,
+        colors: MutableList<Float>,
+        indices: MutableList<Int>,
+        vertexOffset: Int
+    ) {
+        // Determine axis-aligned dimensions
+        val (uAxis, vAxis, wAxis) = DirectionHelper.getAxes(direction)
+
+        val (wMax, uMax, vMax) = when (direction) {
+            FaceDirection.UP, FaceDirection.DOWN -> Triple(255, 15, 15)
+            FaceDirection.NORTH, FaceDirection.SOUTH -> Triple(15, 15, 255)
+            FaceDirection.EAST, FaceDirection.WEST -> Triple(15, 15, 255)
+        }
+        val neighborOffset = when (direction) {
+            FaceDirection.UP, FaceDirection.SOUTH, FaceDirection.EAST -> 1
+            FaceDirection.DOWN, FaceDirection.NORTH, FaceDirection.WEST -> -1
+        }
+
+        for (w in 0..wMax) {
+            val mask = Array(uMax + 1) { Array(vMax + 1) { MaskEntry(BlockType.Air, false) } }
+
+            for (u in 0..uMax) {
+                for (v in 0..vMax) {
+                    val pos = DirectionHelper.getPosition(direction, u, v, w)
+                    val neighborPos = DirectionHelper.getPosition(direction, u, v, w + neighborOffset)
+
+                    val block = chunk.getBlockSafe(pos[0], pos[1], pos[2])
+                    val neighbor = chunk.getNeighborBlock(neighborPos[0], neighborPos[1], neighborPos[2])
+
+                    if (shouldRenderFace(block, neighbor)) {
+                        mask[u][v] = MaskEntry(block, true)
+                    }
+                }
+            }
+
+            for (u in 0..uMax) {
+                for (v in 0..vMax) {
+                    if (!mask[u][v].render || mask[u][v].blockType == BlockType.Air) continue
+
+                    val blockType = mask[u][v].blockType
+
+                    var width = 1
+                    while (u + width <= uMax && mask[u + width][v].render &&
+                        mask[u + width][v].blockType == blockType) {
+                        width++
+                    }
+
+                    var height = 1
+                    var canExtend = true
+                    while (v + height <= vMax && canExtend) {
+                        for (du in 0 until width) {
+                            if (!mask[u + du][v + height].render ||
+                                mask[u + du][v + height].blockType != blockType) {
+                                canExtend = false
+                                break
+                            }
+                        }
+                        if (canExtend) height++
+                    }
+
+                    addQuad(
+                        vertices, normals, uvs, colors, indices,
+                        u, v, w, width, height, direction, blockType, vertexOffset
+                    )
+
+                    for (du in 0 until width) {
+                        for (dv in 0 until height) {
+                            mask[u + du][v + dv] = MaskEntry(BlockType.Air, false)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**

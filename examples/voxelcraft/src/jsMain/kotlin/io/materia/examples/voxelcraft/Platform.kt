@@ -10,6 +10,12 @@ import kotlinx.coroutines.Dispatchers
 actual val platformMainDispatcher: CoroutineDispatcher? = Dispatchers.Main
 
 /**
+ * JS with WebGPU can use async mesh processing.
+ * The browser event loop provides synchronization.
+ */
+actual val platformRequiresSyncMeshProcessing: Boolean = false
+
+/**
  * JS mesh generation - runs asynchronously via the event loop.
  */
 actual suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry {

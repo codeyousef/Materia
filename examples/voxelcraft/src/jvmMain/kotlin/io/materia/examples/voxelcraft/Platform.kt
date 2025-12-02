@@ -10,6 +10,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 actual val platformMainDispatcher: CoroutineDispatcher? = null
 
 /**
+ * JVM with Vulkan requires synchronous mesh processing.
+ * Mesh updates must happen on the same thread as rendering.
+ */
+actual val platformRequiresSyncMeshProcessing: Boolean = true
+
+/**
  * JVM mesh generation - runs the generator directly.
  */
 actual suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry {

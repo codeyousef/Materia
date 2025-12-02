@@ -12,6 +12,17 @@ import kotlinx.coroutines.CoroutineDispatcher
 expect val platformMainDispatcher: CoroutineDispatcher?
 
 /**
+ * Whether mesh processing should be done synchronously on the calling thread.
+ * 
+ * On JVM with Vulkan, mesh updates must happen on the same thread as rendering
+ * to avoid race conditions with buffer access. Returns true.
+ * 
+ * On JS with WebGPU, the browser event loop provides synchronization,
+ * so async processing is safe. Returns false.
+ */
+expect val platformRequiresSyncMeshProcessing: Boolean
+
+/**
  * Platform-specific mesh generation.
  */
 expect suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry

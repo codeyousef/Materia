@@ -202,10 +202,12 @@ class VoxelCraftJVM {
         )
 
         // Initialize world and generate terrain
-        logInfo("ðŸŒ Creating world...")
+        logInfo("ðŸŒ Creating world...")
         world = VoxelWorld(seed = 12345L, parentScope = gameScope)
         world.player.position.set(0.0f, 100.0f, 0.0f)
         world.player.isFlying = true
+        // Initial pitch to look down at terrain (negative pitch = look down)
+        world.player.rotation.set(-0.5f, 0.0f, 0.0f)
 
         // Generate terrain asynchronously
         runBlocking {
@@ -400,32 +402,18 @@ class VoxelCraftJVM {
     private fun cleanup() {
         logInfo("Shutting down...")
 
-        // Dispose world first - this cancels async worldJob and stops mesh generation
-        if (::world.isInitialized) {
-            world.dispose()
+        // Force immediate process termination using ProcessBuilder to avoid NVIDIA driver cleanup crashes
+        // Runtime.halt(0) doesn't prevent the crash because NVIDIA driver has threads with signal handlers
+        try {
+            // On Linux, use kill -9 to forcefully terminate without any cleanup
+            val pid = ProcessHandle.current().pid()
+            ProcessBuilder("kill", "-9", pid.toString()).start()
+            // Wait a bit in case kill takes time
+            Thread.sleep(100)
+        } catch (e: Exception) {
+            // Fallback to halt
+            Runtime.getRuntime().halt(0)
         }
-        
-        // Wait for async operations to settle
-        Thread.sleep(100)
-
-        // Force immediate halt BEFORE Vulkan cleanup to prevent NVIDIA driver shutdown crashes
-        // The driver has known issues with cleanup ordering that can cause SIGSEGV
-        // We cannot safely call renderer.dispose() due to driver bugs
-        logInfo("Cleanup complete - forcing immediate halt")
-        Runtime.getRuntime().halt(0)
-        
-        // Note: The following code won't be reached due to halt()
-        // if (::renderer.isInitialized) {
-        //     renderer.dispose()
-        // }
-        // gameScope.cancel()
-        // gameExecutor.shutdown()
-        // if (window != MemoryUtil.NULL) {
-        //     glfwDestroyWindow(window)
-        //     window = MemoryUtil.NULL
-        // }
-        // glfwTerminate()
-        // glfwSetErrorCallback(null)?.free()
     }
 
     private fun handleRendererInitializationFailure(cause: Throwable) {

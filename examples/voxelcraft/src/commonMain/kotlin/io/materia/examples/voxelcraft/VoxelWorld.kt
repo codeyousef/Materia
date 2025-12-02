@@ -213,18 +213,29 @@ class VoxelWorld(
                     continue
                 }
 
-                pendingMeshes.add(chunk.position)
-                scope.launch {
-                    try {
-                        meshSemaphore.withPermit {
-                            val geometry = generateMeshForChunk(chunk)
-                            // Apply mesh update - on JS uses withContext(Main), on JVM runs inline
-                            applyMeshUpdate(chunk, geometry)
-                        }
-                    } finally {
-                        pendingMeshes.remove(chunk.position)
-                        if (chunk.isDirty) {
-                            onChunkDirty(chunk)
+                if (platformRequiresSyncMeshProcessing) {
+                    // JVM: Process synchronously on the main thread to avoid race conditions
+                    // with Vulkan renderer buffer access
+                    val geometry = ChunkMeshGenerator.generateSync(chunk)
+                    doMeshUpdate(chunk, geometry)
+                    if (chunk.isDirty) {
+                        onChunkDirty(chunk)
+                    }
+                } else {
+                    // JS: Launch async - browser event loop provides synchronization
+                    pendingMeshes.add(chunk.position)
+                    scope.launch {
+                        try {
+                            meshSemaphore.withPermit {
+                                val geometry = generateMeshForChunk(chunk)
+                                // Apply mesh update - on JS uses withContext(Main)
+                                applyMeshUpdate(chunk, geometry)
+                            }
+                        } finally {
+                            pendingMeshes.remove(chunk.position)
+                            if (chunk.isDirty) {
+                                onChunkDirty(chunk)
+                            }
                         }
                     }
                 }
