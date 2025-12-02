@@ -1,6 +1,7 @@
 ﻿package io.materia.examples.voxelcraft
 
 import io.materia.core.scene.Scene
+import io.materia.geometry.BufferGeometry
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -26,9 +27,10 @@ class VoxelWorld(
     private val parentJob: Job? = parentScope.coroutineContext[Job]
     private val worldJob = SupervisorJob(parentJob)
     private val scope = CoroutineScope(parentScope.coroutineContext + worldJob)
-    private val mainDispatcher: CoroutineDispatcher =
-        (parentScope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)
-            ?: Dispatchers.Main
+    
+    // Use platform-specific dispatcher if available, otherwise fall back to parent scope
+    private val mainDispatcher: CoroutineDispatcher? = platformMainDispatcher
+        ?: (parentScope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)
 
     private val dirtyQueue = ArrayDeque<Chunk>()
     private val dirtySet = mutableSetOf<ChunkPosition>()
@@ -211,33 +213,55 @@ class VoxelWorld(
                     continue
                 }
 
-                // Generate mesh synchronously to avoid race conditions with renderer
-                // This ensures mesh updates happen on the same thread as rendering
-                val geometry = kotlinx.coroutines.runBlocking { 
-                    ChunkMeshGenerator.generate(chunk) 
-                }
-                val wasNew = chunk.mesh == null
-                chunk.updateMesh(geometry)
-                chunk.mesh?.let { mesh ->
-                    if (wasNew || mesh.parent == null) {
-                        scene.add(mesh)
-                        meshesGeneratedCount++  // T021: Track mesh generation progress
+                pendingMeshes.add(chunk.position)
+                scope.launch {
+                    try {
+                        meshSemaphore.withPermit {
+                            val geometry = generateMeshForChunk(chunk)
+                            // Apply mesh update - on JS uses withContext(Main), on JVM runs inline
+                            applyMeshUpdate(chunk, geometry)
+                        }
+                    } finally {
+                        pendingMeshes.remove(chunk.position)
+                        if (chunk.isDirty) {
+                            onChunkDirty(chunk)
+                        }
                     }
                 }
-
-                // T021: Track regeneration progress to fix missing faces
-                if (isRegeneratingMeshes) {
-                    regenerationCompletedCount++
-                    if (regenerationCompletedCount >= regenerationTargetCount) {
-                        isRegeneratingMeshes = false
-                        logInfo("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
-                    }
-                }
-                
                 processed++
             }
         } finally {
             dirtyQueueMutex.unlock()
+        }
+    }
+    
+    private suspend fun applyMeshUpdate(chunk: Chunk, geometry: BufferGeometry) {
+        val dispatcher = mainDispatcher
+        if (dispatcher != null) {
+            withContext(dispatcher) {
+                doMeshUpdate(chunk, geometry)
+            }
+        } else {
+            // No main dispatcher (JVM) - just run inline
+            doMeshUpdate(chunk, geometry)
+        }
+    }
+    
+    private fun doMeshUpdate(chunk: Chunk, geometry: BufferGeometry) {
+        val wasNew = chunk.mesh == null
+        chunk.updateMesh(geometry)
+        chunk.mesh?.let { mesh ->
+            if (wasNew || mesh.parent == null) {
+                scene.add(mesh)
+                meshesGeneratedCount++
+            }
+        }
+        if (isRegeneratingMeshes) {
+            regenerationCompletedCount++
+            if (regenerationCompletedCount >= regenerationTargetCount) {
+                isRegeneratingMeshes = false
+                logInfo("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
+            }
         }
     }
 

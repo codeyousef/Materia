@@ -9,6 +9,8 @@ import io.materia.renderer.SurfaceFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.concurrent.Executors
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.lwjgl.glfw.GLFW.GLFW_CLIENT_API
@@ -55,7 +57,15 @@ class VoxelCraftJVM {
     private lateinit var camera: PerspectiveCamera
     private lateinit var renderer: Renderer
     private var headlessMode = false
-    private val gameScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    
+    // Use a single-threaded executor for the main game dispatcher
+    // This ensures mesh updates happen on the same thread as rendering
+    private val gameExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "VoxelCraft-Game").apply { isDaemon = true }
+    }
+    private val gameDispatcher = gameExecutor.asCoroutineDispatcher()
+    private val gameScope = CoroutineScope(gameDispatcher + SupervisorJob())
+    
     private var lastFramebufferWidth = 0
     private var lastFramebufferHeight = 0
     private val frameBudget: Int = System.getenv("VOXELCRAFT_FRAME_BUDGET")
@@ -398,27 +408,22 @@ class VoxelCraftJVM {
         // Wait for async operations to settle
         Thread.sleep(100)
 
-        // Dispose renderer
-        if (::renderer.isInitialized) {
-            renderer.dispose()
-        }
-
-        // Cancel coroutine scope (world's job is already cancelled)
-        gameScope.cancel()
-
-        // Destroy window
-        if (window != MemoryUtil.NULL) {
-            glfwDestroyWindow(window)
-            window = MemoryUtil.NULL
-        }
-
-        // Force immediate halt BEFORE GLFW termination to prevent NVIDIA driver shutdown crashes
+        // Force immediate halt BEFORE Vulkan cleanup to prevent NVIDIA driver shutdown crashes
         // The driver has known issues with cleanup ordering that can cause SIGSEGV
-        // Using halt() to skip shutdown hooks entirely
+        // We cannot safely call renderer.dispose() due to driver bugs
         logInfo("Cleanup complete - forcing immediate halt")
         Runtime.getRuntime().halt(0)
         
         // Note: The following code won't be reached due to halt()
+        // if (::renderer.isInitialized) {
+        //     renderer.dispose()
+        // }
+        // gameScope.cancel()
+        // gameExecutor.shutdown()
+        // if (window != MemoryUtil.NULL) {
+        //     glfwDestroyWindow(window)
+        //     window = MemoryUtil.NULL
+        // }
         // glfwTerminate()
         // glfwSetErrorCallback(null)?.free()
     }
