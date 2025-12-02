@@ -501,6 +501,102 @@ val cubeTexture = loader.load(arrayOf(
 
 ---
 
+## ImageLoader
+
+Low-level image loader that returns raw pixel data.
+
+### Constructor
+
+```kotlin
+class ImageLoader(
+    resolver: AssetResolver = AssetResolver.default(),
+    manager: LoadingManager? = null
+)
+```
+
+### Methods
+
+```kotlin
+// Load image data
+suspend fun load(path: String): ImageData
+suspend fun load(path: String, onProgress: ((LoadingProgress) -> Unit)?): ImageData
+
+// Cache management
+fun clearCache()
+fun uncache(path: String)
+```
+
+### ImageData Class
+
+```kotlin
+data class ImageData(
+    val width: Int,
+    val height: Int,
+    val data: ByteArray  // RGBA pixel data
+)
+```
+
+### Example
+
+```kotlin
+val loader = ImageLoader()
+val image = loader.load("textures/sprite.png")
+println("Loaded ${image.width}x${image.height} image")
+
+// Use for custom processing
+val pixels = image.data
+```
+
+---
+
+## HDRCubeTextureLoader
+
+Loads HDR cube textures for environment mapping.
+
+### Constructor
+
+```kotlin
+class HDRCubeTextureLoader(
+    resolver: AssetResolver = AssetResolver.default(),
+    manager: LoadingManager? = null
+)
+```
+
+### Methods
+
+```kotlin
+// Load from 6 face images
+suspend fun load(
+    paths: Array<String>,  // [+X, -X, +Y, -Y, +Z, -Z]
+    onProgress: ((Int, Int) -> Unit)? = null
+): CubeTexture
+
+// Load from equirectangular HDR
+suspend fun loadEquirectangular(
+    path: String,
+    faceSize: Int = 512
+): CubeTexture
+```
+
+### Example
+
+```kotlin
+val loader = HDRCubeTextureLoader()
+
+// Load from 6 HDR faces
+val envMap = loader.load(arrayOf(
+    "px.hdr", "nx.hdr",
+    "py.hdr", "ny.hdr",
+    "pz.hdr", "nz.hdr"
+))
+scene.environment = envMap
+
+// Or from equirectangular panorama
+val envMap2 = loader.loadEquirectangular("studio.hdr")
+```
+
+---
+
 ## KTX2Loader
 
 Loads KTX2 compressed textures.
