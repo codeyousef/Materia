@@ -73,6 +73,9 @@ jobs:
 
       - name: Run tests
         run: ./gradlew --no-daemon --max-workers=4 --console=plain jvmTest --stacktrace
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+        timeout-minutes: 20
 
       - name: Ensure tag does not already exist
         shell: bash

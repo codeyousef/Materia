@@ -1,29 +1,19 @@
 pluginManagement {
     repositories {
-        // Prefer JetBrains cache redirectors to reduce timeouts and improve reliability
-        maven("https://cache-redirector.jetbrains.com/maven-central")
-        maven("https://cache-redirector.jetbrains.com/plugins.gradle.org/m2")
-        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
-
-        // Upstream repos (kept for fallback/compat)
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
 }
 
 dependencyResolutionManagement {
     repositories {
-        // Prefer JetBrains cache redirectors to reduce timeouts and improve reliability
-        maven("https://cache-redirector.jetbrains.com/maven-central")
-        maven("https://maven.pkg.jetbrains.com/kotlin/native") // Additional Kotlin mirror (best-effort)
-        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
-
-        // Upstream repos (kept for fallback/compat)
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
     }
 }
 
