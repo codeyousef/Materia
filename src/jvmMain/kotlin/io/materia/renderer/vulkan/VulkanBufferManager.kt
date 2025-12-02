@@ -51,6 +51,7 @@ class VulkanBufferManager(
         }
 
         val sizeBytes = data.size * Float.SIZE_BYTES
+        // println("VulkanBufferManager: Creating vertex buffer size=$sizeBytes")
 
         return try {
             MemoryStack.stackPush().use { stack ->
@@ -97,7 +98,13 @@ class VulkanBufferManager(
 
                 // 6. Map memory, copy data, unmap
                 val ppData = stack.mallocPointer(1)
-                vkMapMemory(device, memory, 0, sizeBytes.toLong(), 0, ppData)
+                val mapResult = vkMapMemory(device, memory, 0, sizeBytes.toLong(), 0, ppData)
+                if (mapResult != VK_SUCCESS) {
+                     vkFreeMemory(device, memory, null)
+                     vkDestroyBuffer(device, buffer, null)
+                     throw OutOfMemoryException("Failed to map memory: VkResult=$mapResult")
+                }
+                
                 val mappedData = ppData.getByteBuffer(0, sizeBytes)
                 mappedData.asFloatBuffer().put(data)
                 vkUnmapMemory(device, memory)

@@ -21,3 +21,10 @@ actual val platformRequiresSyncMeshProcessing: Boolean = false
 actual suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry {
     return ChunkMeshGenerator.generate(chunk)
 }
+
+/**
+ * JS implementation - should never be called since platformRequiresSyncMeshProcessing is false.
+ */
+actual fun <T> runBlockingPlatform(block: suspend () -> T): T {
+    error("runBlockingPlatform should not be called on JS - use coroutines instead")
+}

@@ -2,6 +2,7 @@ package io.materia.examples.voxelcraft
 
 import io.materia.geometry.BufferGeometry
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.runBlocking
 
 /**
  * JVM: No main dispatcher available for proper synchronization.
@@ -20,4 +21,11 @@ actual val platformRequiresSyncMeshProcessing: Boolean = true
  */
 actual suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry {
     return ChunkMeshGenerator.generate(chunk)
+}
+
+/**
+ * JVM implementation - uses runBlocking.
+ */
+actual fun <T> runBlockingPlatform(block: suspend () -> T): T {
+    return runBlocking { block() }
 }

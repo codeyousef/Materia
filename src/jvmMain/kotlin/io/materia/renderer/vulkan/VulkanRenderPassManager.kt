@@ -55,11 +55,11 @@ class VulkanRenderPassManager(
 
                 // Create clear value from color
                 val clearValues = VkClearValue.calloc(1, stack)
-                clearValues.get(0).color()
-                    .float32(0, clearColor.r)
-                    .float32(1, clearColor.g)
-                    .float32(2, clearColor.b)
-                    .float32(3, clearColor.a)
+                val colorValue = clearValues.get(0).color()
+                colorValue.float32(0, clearColor.r)
+                colorValue.float32(1, clearColor.g)
+                colorValue.float32(2, clearColor.b)
+                colorValue.float32(3, clearColor.a)
 
                 // Create render pass begin info
                 val renderPassInfo = VkRenderPassBeginInfo.calloc(stack)
@@ -70,6 +70,7 @@ class VulkanRenderPassManager(
                         area.offset().set(0, 0)
                         area.extent().set(framebufferData.width, framebufferData.height)
                     }
+                    .clearValueCount(1)  // CRITICAL: Must match pClearValues count for LWJGL
                     .pClearValues(clearValues)
 
                 // Begin render pass

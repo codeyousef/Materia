@@ -53,6 +53,7 @@ import io.materia.renderer.material.MaterialBindingType
 import io.materia.renderer.material.MaterialDescriptor
 import io.materia.renderer.material.MaterialDescriptorRegistry
 import io.materia.renderer.material.MaterialRenderState
+import io.materia.renderer.material.ResolvedMaterialDescriptor
 import io.materia.renderer.material.requiresBinding
 import io.materia.renderer.webgpu.BlendFactor
 import io.materia.renderer.webgpu.BlendOperation
@@ -74,7 +75,9 @@ import org.lwjgl.vulkan.KHRSwapchain.VK_SUBOPTIMAL_KHR
 import org.lwjgl.vulkan.KHRSwapchain.vkQueuePresentKHR
 import org.lwjgl.vulkan.VK12.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
 import org.lwjgl.vulkan.VK12.VK_ACCESS_TRANSFER_READ_BIT
+import org.lwjgl.vulkan.VK12.VK_ACCESS_TRANSFER_WRITE_BIT
 import org.lwjgl.vulkan.VK12.VK_API_VERSION_1_1
+import org.lwjgl.vulkan.VK10.VK_SUBPASS_EXTERNAL
 import org.lwjgl.vulkan.VK12.VK_ATTACHMENT_LOAD_OP_CLEAR
 import org.lwjgl.vulkan.VK12.VK_ATTACHMENT_LOAD_OP_DONT_CARE
 import org.lwjgl.vulkan.VK12.VK_ATTACHMENT_STORE_OP_DONT_CARE
@@ -88,6 +91,7 @@ import org.lwjgl.vulkan.VK12.VK_DESCRIPTOR_TYPE_SAMPLER
 import org.lwjgl.vulkan.VK12.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
 import org.lwjgl.vulkan.VK12.VK_IMAGE_ASPECT_COLOR_BIT
 import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_GENERAL
 import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 import org.lwjgl.vulkan.VK12.VK_IMAGE_LAYOUT_UNDEFINED
 import org.lwjgl.vulkan.VK12.VK_MAKE_VERSION
@@ -137,8 +141,11 @@ import org.lwjgl.vulkan.VK12.vkAllocateMemory
 import org.lwjgl.vulkan.VK12.vkBeginCommandBuffer
 import org.lwjgl.vulkan.VK12.vkBindBufferMemory
 import org.lwjgl.vulkan.VK12.vkCmdBindDescriptorSets
+import org.lwjgl.vulkan.VK12.vkCmdClearColorImage
 import org.lwjgl.vulkan.VK12.vkCmdCopyImageToBuffer
 import org.lwjgl.vulkan.VK12.vkCmdPipelineBarrier
+import org.lwjgl.vulkan.VK12.vkCmdSetViewport
+import org.lwjgl.vulkan.VK12.vkCmdSetScissor
 import org.lwjgl.vulkan.VK12.vkCreateBuffer
 import org.lwjgl.vulkan.VK12.vkCreateCommandPool
 import org.lwjgl.vulkan.VK12.vkCreateDescriptorPool
@@ -189,17 +196,21 @@ import org.lwjgl.vulkan.VkExtent3D
 import org.lwjgl.vulkan.VkImageMemoryBarrier
 import org.lwjgl.vulkan.VkImageSubresourceLayers
 import org.lwjgl.vulkan.VkImageSubresourceRange
+import org.lwjgl.vulkan.VkClearColorValue
 import org.lwjgl.vulkan.VkInstance
 import org.lwjgl.vulkan.VkInstanceCreateInfo
 import org.lwjgl.vulkan.VkMemoryAllocateInfo
 import org.lwjgl.vulkan.VkMemoryRequirements
 import org.lwjgl.vulkan.VkOffset3D
+import org.lwjgl.vulkan.VkViewport
+import org.lwjgl.vulkan.VkRect2D
 import org.lwjgl.vulkan.VkPhysicalDevice
 import org.lwjgl.vulkan.VkPhysicalDeviceFeatures
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties
 import org.lwjgl.vulkan.VkQueue
 import org.lwjgl.vulkan.VkRenderPassCreateInfo
+import org.lwjgl.vulkan.VkSubpassDependency
 import org.lwjgl.vulkan.VkSubpassDescription
 import org.lwjgl.vulkan.VkWriteDescriptorSet
 import java.awt.image.BufferedImage
@@ -530,11 +541,12 @@ class VulkanRenderer(
                     skippedNoMaterial++
                     return@traverseVisible
                 }
-                val descriptor = MaterialDescriptorRegistry.descriptorFor(material)
-                if (descriptor == null) {
+                val resolved = MaterialDescriptorRegistry.resolve(material)
+                if (resolved == null) {
                     skippedNoDescriptor++
                     return@traverseVisible
                 }
+                val descriptor = resolved.descriptor
                 val buffers = ensureMeshBuffers(node, descriptor)
                 if (buffers == null) {
                     skippedNoBuffers++
@@ -573,7 +585,7 @@ class VulkanRenderer(
 
                 drawInfos += MeshDrawInfo(
                     node,
-                    descriptor,
+                    resolved,
                     buffers,
                     textureBinding,
                     environmentBindingForMesh
@@ -583,14 +595,15 @@ class VulkanRenderer(
         }
 
         val staleIds = meshBuffers.keys - retainedIds
-        // Note: Skip explicit buffer destruction during render - it causes NVIDIA driver crashes.
-        // Stale buffers will be cleaned up when the device is destroyed or during dispose().
-        // This trades some memory for stability.
         staleIds.forEach { id ->
-            meshBuffers.remove(id)
+            val buffers = meshBuffers.remove(id)
+            if (buffers != null) {
+                destroyMeshBuffers(buffers)
+            }
         }
-
+        
         val clearColor = determineClearColor(scene)
+        
         var drawCalls = 0
         var triangles = 0
         var frameHasRealEnvironment = false
@@ -634,7 +647,24 @@ class VulkanRenderer(
                 }
 
                 val framebufferHandle = FramebufferHandle(swapchainFramebuffers[image.index])
+                
                 renderPassMgr.beginRenderPass(clearColor, framebufferHandle)
+                
+                // Set dynamic viewport and scissor to match swapchain extent
+                val (extentWidth, extentHeight) = swapchain.getExtent()
+                val viewport = VkViewport.calloc(1, stack)
+                    .x(0f)
+                    .y(0f)
+                    .width(extentWidth.toFloat())
+                    .height(extentHeight.toFloat())
+                    .minDepth(0f)
+                    .maxDepth(1f)
+                vkCmdSetViewport(command, 0, viewport)
+                
+                val scissor = VkRect2D.calloc(1, stack)
+                scissor.offset().set(0, 0)
+                scissor.extent().set(extentWidth, extentHeight)
+                vkCmdSetScissor(command, 0, scissor)
                 
                 // Reset pipeline tracking since beginRenderPass resets pipelineBound
                 activePipelineKey = null
@@ -645,7 +675,9 @@ class VulkanRenderer(
 
                 for (drawInfo in drawInfos) {
                     val buffers = drawInfo.buffers
-                    val materialDescriptor = drawInfo.descriptor
+                    val resolved = drawInfo.resolved
+                    val materialDescriptor = resolved.descriptor
+                    val renderState = resolved.renderState
 
                     val hasMaterialSet = materialTextureDescriptorSetLayout != VK_NULL_HANDLE &&
                             drawInfo.textureBinding.descriptorSet != VK_NULL_HANDLE
@@ -680,19 +712,20 @@ class VulkanRenderer(
 
                     val pipelineKey = createPipelineKey(
                         buffers.vertexLayouts,
-                        materialDescriptor.renderState,
+                        renderState,
                         shaderConfig.features
                     )
                     val pipelineForDraw = pipelineCache.getOrPut(pipelineKey) {
-                        warnDepthStateIfNeeded(materialDescriptor.renderState)
+                        warnDepthStateIfNeeded(renderState)
                         val newPipeline = VulkanPipeline(deviceHandle)
+                        println("[VulkanRenderer] Creating pipeline with extent=${extent.first}x${extent.second}, cullMode=${renderState.cullMode}, frontFace=${renderState.frontFace}")
                         if (!newPipeline.createPipeline(
                                 renderPass,
                                 extent.first,
                                 extent.second,
                                 descriptorSetLayouts,
                                 buffers.vertexLayouts,
-                                materialDescriptor.renderState,
+                                renderState,
                                 shaderConfig.vertexSource,
                                 shaderConfig.fragmentSource
                             )
@@ -869,6 +902,7 @@ class VulkanRenderer(
 
                 val submitInfo = org.lwjgl.vulkan.VkSubmitInfo.calloc(stack)
                     .sType(VK_STRUCTURE_TYPE_SUBMIT_INFO)
+                    .waitSemaphoreCount(waitSemaphores.remaining())
                     .pWaitSemaphores(waitSemaphores)
                     .pWaitDstStageMask(waitStages)
                     .pCommandBuffers(commandBuffers)
@@ -989,7 +1023,7 @@ class VulkanRenderer(
                     .binding(0)
                     .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
                     .descriptorCount(1)
-                    .stageFlags(VK_SHADER_STAGE_VERTEX_BIT)
+                    .stageFlags(VK_SHADER_STAGE_VERTEX_BIT or VK_SHADER_STAGE_FRAGMENT_BIT)
                     .pImmutableSamplers(null)
 
                 val layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
@@ -1064,6 +1098,7 @@ class VulkanRenderer(
                 .dstBinding(0)
                 .dstArrayElement(0)
                 .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                .descriptorCount(1)  // CRITICAL: Must specify count for LWJGL
                 .pBufferInfo(bufferInfo)
 
             vkUpdateDescriptorSets(deviceHandle, descriptorWrite, null)
@@ -1190,10 +1225,12 @@ class VulkanRenderer(
             return existing
         }
 
-        // When updating mesh buffers, remove old entry but DON'T destroy the buffers immediately.
-        // Buffer destruction during render causes NVIDIA driver crashes.
-        // The old buffers will be cleaned up when the device is destroyed.
-        meshBuffers.remove(mesh.id)
+        // When updating mesh buffers, remove old entry and destroy it.
+        // We rely on vkQueueWaitIdle at end of frame to ensure safety.
+        val oldBuffers = meshBuffers.remove(mesh.id)
+        if (oldBuffers != null) {
+             destroyMeshBuffers(oldBuffers)
+        }
         morphWarningMeshes.remove(mesh.id)
 
         val buildOptions = descriptor.buildGeometryOptions(geometry)
@@ -1292,7 +1329,16 @@ class VulkanRenderer(
         fun putMatrix(matrix: Matrix4) {
             val elements = matrix.elements
             for (i in 0 until 16) {
-                byteBuffer.putFloat(elements[i])
+                // T021: Flip Y scaling in projection matrix for Vulkan coordinate system
+                // Vulkan has Y-down clip space, while OpenGL/WebGPU have Y-up (or different conventions)
+                // makePerspectiveWebGPU produces positive Y scale. We need to negate it for Vulkan.
+                // Element [5] is the Y scale factor (1,1).
+                val value = if (matrix === projection && i == 5) {
+                    -elements[i]
+                } else {
+                    elements[i]
+                }
+                byteBuffer.putFloat(value)
             }
         }
 
@@ -1332,7 +1378,7 @@ class VulkanRenderer(
 
     private data class MeshDrawInfo(
         val mesh: Mesh,
-        val descriptor: MaterialDescriptor,
+        val resolved: ResolvedMaterialDescriptor,
         val buffers: VulkanMeshBuffers,
         val textureBinding: VulkanMaterialTextureManager.MaterialTextureBinding,
         val environmentBinding: VulkanEnvironmentManager.EnvironmentBinding?
@@ -1342,21 +1388,20 @@ class VulkanRenderer(
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
         private val UNIFORM_BUFFER_SIZE = MaterialDescriptorRegistry.uniformBlockSizeBytes()
-        private const val MAX_PIPELINE_CACHE_SIZE = 32
+        private const val MAX_PIPELINE_CACHE_SIZE = 1024 // Increased to avoid eviction crashes
         private const val MAX_MATERIAL_TEXTURE_SETS = 256
         private const val MAX_MORPH_TARGETS = 8
     }
 
     private fun determineClearColor(scene: Scene): Color {
-        val defaultColor = Color(0.02f, 0.02f, 0.05f, 1.0f)
-        val background = scene.background ?: return defaultColor
-
-        return when (background) {
+        val defaultColor = Color(0.1f, 0.1f, 0.1f, 1.0f)
+        val background = scene.background
+        
+        val result = if (background == null) defaultColor else when (background) {
             is Background.Color -> {
                 val c = background.color
                 Color(c.r, c.g, c.b, c.a)
             }
-
             is Background.Gradient -> {
                 val top = background.top
                 val bottom = background.bottom
@@ -1367,9 +1412,10 @@ class VulkanRenderer(
                     1.0f
                 )
             }
-
             else -> defaultColor
         }
+        
+        return result
     }
 
     /**
@@ -1496,7 +1542,8 @@ class VulkanRenderer(
                     return null
                 }
                 val memory = pMemory[0]
-
+                
+                // Bind buffer to memory
                 vkBindBufferMemory(deviceHandle, buffer, memory, 0)
 
                 CaptureResources(
@@ -1521,6 +1568,8 @@ class VulkanRenderer(
         width: Int,
         height: Int
     ) {
+        // After render pass ends, image is in PRESENT_SRC layout
+        // We need to transition to TRANSFER_SRC for copying
         val barrierToTransfer = VkImageMemoryBarrier.calloc(1, stack)
             .sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
             .oldLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
@@ -1536,11 +1585,14 @@ class VulkanRenderer(
                     .baseArrayLayer(0)
                     .layerCount(1)
             )
-            .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+            // After render pass, need to wait for all graphics operations to complete
+            // Use 0 for srcAccessMask since render pass has implicit synchronization
+            .srcAccessMask(0)
             .dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT)
 
         vkCmdPipelineBarrier(
             command,
+            // Wait for color attachment output stage to complete
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT,
             0,
@@ -1604,8 +1656,39 @@ class VulkanRenderer(
         val bufferSize = capture.width * capture.height * 4
         MemoryStack.stackPush().use { stack ->
             val ppData = stack.mallocPointer(1)
-            vkMapMemory(deviceHandle, capture.memory, 0, bufferSize.toLong(), 0, ppData)
+            val mapResult = vkMapMemory(deviceHandle, capture.memory, 0, bufferSize.toLong(), 0, ppData)
+            if (mapResult != VK_SUCCESS) {
+                println("[VulkanRenderer] vkMapMemory failed: $mapResult")
+                return
+            }
             val data = MemoryUtil.memByteBuffer(ppData[0], bufferSize)
+            
+            // Debug: Check raw buffer data
+            var nonZeroBytes = 0
+            for (i in 0 until minOf(1000, bufferSize)) {
+                if (data.get(i) != 0.toByte()) nonZeroBytes++
+            }
+            println("[VulkanRenderer] Frame capture debug: first 1000 bytes have $nonZeroBytes non-zero bytes")
+            
+            // Sample some pixels from different positions
+            if (bufferSize >= 16) {
+                val b0 = data.get(0).toInt() and 0xFF
+                val g0 = data.get(1).toInt() and 0xFF
+                val r0 = data.get(2).toInt() and 0xFF
+                val a0 = data.get(3).toInt() and 0xFF
+                println("[VulkanRenderer] First pixel: BGRA($b0,$g0,$r0,$a0)")
+                
+                // Sample middle pixel
+                val midOffset = (capture.height / 2) * capture.width * 4 + (capture.width / 2) * 4
+                if (midOffset + 4 <= bufferSize) {
+                    val bm = data.get(midOffset).toInt() and 0xFF
+                    val gm = data.get(midOffset + 1).toInt() and 0xFF
+                    val rm = data.get(midOffset + 2).toInt() and 0xFF
+                    val am = data.get(midOffset + 3).toInt() and 0xFF
+                    println("[VulkanRenderer] Middle pixel: BGRA($bm,$gm,$rm,$am)")
+                }
+            }
+            
             val image = BufferedImage(capture.width, capture.height, BufferedImage.TYPE_INT_ARGB)
 
             val rowStride = capture.width * 4
@@ -1915,13 +1998,25 @@ class VulkanRenderer(
             // Subpass description
             val subpass = VkSubpassDescription.calloc(1, stack)
                 .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
+                .colorAttachmentCount(1)  // CRITICAL: Must explicitly set count for LWJGL
                 .pColorAttachments(colorAttachmentRef)
+
+            // Subpass dependency: External -> Subpass 0
+            // This ensures the image layout transition happens before we start rendering
+            val dependency = VkSubpassDependency.calloc(1, stack)
+                .srcSubpass(VK_SUBPASS_EXTERNAL)
+                .dstSubpass(0)
+                .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                .srcAccessMask(0)
+                .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
 
             // Render pass create info
             val renderPassInfo = VkRenderPassCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO)
                 .pAttachments(colorAttachment)
                 .pSubpasses(subpass)
+                .pDependencies(dependency)
 
             val pRenderPass = stack.mallocLong(1)
             val result = vkCreateRenderPass(device, renderPassInfo, null, pRenderPass)
@@ -1962,7 +2057,7 @@ class VulkanRenderer(
 
     private data class PipelineCacheKey(
         val vertexLayouts: List<VertexLayoutSignature>,
-        val renderState: RenderStateSignature,
+               val renderState: RenderStateSignature,
         val materialFeatures: MaterialPipelineFeatures
     )
 
@@ -2193,16 +2288,6 @@ class VulkanRenderer(
             }
 
             appendLine()
-            appendLine("layout(location = 0) out vec3 vColor;")
-            appendLine("layout(location = 1) out vec2 vUV;")
-            appendLine("layout(location = 2) out vec3 vNormal;")
-            appendLine("layout(location = 3) out vec3 vTangent;")
-            appendLine("layout(location = 4) out vec3 vBitangent;")
-            appendLine("layout(location = 5) out vec3 vWorldPos;")
-            if (features.usesSecondaryUv) {
-                appendLine("layout(location = 6) out vec2 vUV2;")
-            }
-            appendLine()
             appendLine("layout(set = 0, binding = 0) uniform UniformBufferObject {")
             appendLine("    mat4 uProjection;")
             appendLine("    mat4 uView;")
@@ -2214,6 +2299,17 @@ class VulkanRenderer(
             appendLine("    vec4 uMorphInfluences1;")
             appendLine("} ubo;")
             appendLine()
+
+            appendLine("layout(location = 0) out vec3 vColor;")
+            appendLine("layout(location = 1) out vec2 vUV;")
+            appendLine("layout(location = 2) out vec3 vNormal;")
+            appendLine("layout(location = 3) out vec3 vTangent;")
+            appendLine("layout(location = 4) out vec3 vBitangent;")
+            appendLine("layout(location = 5) out vec3 vWorldPos;")
+            if (features.usesSecondaryUv) {
+                appendLine("layout(location = 6) out vec2 vUV2;")
+            }
+
             appendLine("void main() {")
             if (features.usesInstancing) {
                 val identityColumns = listOf(

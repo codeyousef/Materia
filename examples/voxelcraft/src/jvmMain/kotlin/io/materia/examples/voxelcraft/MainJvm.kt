@@ -68,10 +68,10 @@ class VoxelCraftJVM {
     
     private var lastFramebufferWidth = 0
     private var lastFramebufferHeight = 0
+    // Frame budget: 0 or negative = unlimited, positive = auto-close after N frames (for CI smoke tests)
     private val frameBudget: Int = System.getenv("VOXELCRAFT_FRAME_BUDGET")
         ?.toIntOrNull()
-        ?.takeIf { it > 0 }
-        ?: 600
+        ?: 0  // Default: unlimited (interactive mode)
 
     // Input state
     private val keysPressed = mutableSetOf<Int>()

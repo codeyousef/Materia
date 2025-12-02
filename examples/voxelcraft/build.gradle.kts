@@ -160,8 +160,10 @@ tasks.register<JavaExec>("runJvm") {
         "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
     )
 
+    // Frame budget: 0 = unlimited (interactive), >0 = auto-close after N frames (CI smoke test)
+    // Set VOXELCRAFT_FRAME_BUDGET env var to override
     if (System.getenv("VOXELCRAFT_FRAME_BUDGET").isNullOrBlank()) {
-        environment("VOXELCRAFT_FRAME_BUDGET", "60")
+        environment("VOXELCRAFT_FRAME_BUDGET", "0")
     }
 
     // Enable standard output/error streams
@@ -177,6 +179,36 @@ tasks.register<JavaExec>("runJvm") {
         println("Controls: WASD=Move, Mouse=Look, F=Flight, Space/Shift=Up/Down, ESC=Quit")
         println("OS: ${System.getProperty("os.name")}")
         println("Java: ${System.getProperty("java.version")}")
+    }
+}
+
+tasks.register<JavaExec>("runDiagnostic") {
+    group = "run"
+    description = "Run frame capture diagnostic to debug black screen issue"
+
+    val jvmMain = kotlin.targets.getByName("jvm").compilations.getByName("main")
+    dependsOn(jvmMain.compileKotlinTaskName)
+
+    mainClass.set("io.materia.examples.voxelcraft.FrameCaptureDiagnosticKt")
+
+    classpath = files(
+        jvmMain.output.allOutputs,
+        configurations.named("jvmRuntimeClasspath")
+    )
+
+    jvmArgs = listOf(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+        "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
+    )
+
+    standardInput = System.`in`
+    standardOutput = System.out
+    errorOutput = System.err
+
+    doFirst {
+        println("🔍 Running VoxelCraft Frame Capture Diagnostic")
     }
 }
 

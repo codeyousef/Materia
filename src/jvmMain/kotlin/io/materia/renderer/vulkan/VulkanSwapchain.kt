@@ -40,7 +40,7 @@ class VulkanSwapchain(
     private var currentImageIndex: Int = -1
     private var imageFormat: Int = VK_FORMAT_B8G8R8A8_UNORM
 
-    // Synchronization primitives
+    // Synchronization primitives - single pair since we use vkQueueWaitIdle
     private var imageAvailableSemaphore: Long = VK_NULL_HANDLE
     private var renderFinishedSemaphore: Long = VK_NULL_HANDLE
 
@@ -80,7 +80,7 @@ class VulkanSwapchain(
                 val surfaceFormat = chooseSurfaceFormat()
                 imageFormat = surfaceFormat.format
 
-                // Choose present mode (use FIFO for vsync)
+                // Choose present mode (FIFO is always available and provides V-Sync)
                 val presentMode = VK_PRESENT_MODE_FIFO_KHR
                 val compositeAlpha = chooseCompositeAlpha(capabilities)
 
@@ -96,7 +96,7 @@ class VulkanSwapchain(
                         extent.height(height)
                     }
                     .imageArrayLayers(1)
-                    .imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+                    .imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT or VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
                     .imageSharingMode(VK_SHARING_MODE_EXCLUSIVE)
                     .preTransform(capabilities.currentTransform())
                     .compositeAlpha(compositeAlpha)
@@ -379,7 +379,7 @@ class VulkanSwapchain(
             vkDestroySemaphore(device, imageAvailableSemaphore, null)
             imageAvailableSemaphore = VK_NULL_HANDLE
         }
-
+        
         if (renderFinishedSemaphore != VK_NULL_HANDLE) {
             vkDestroySemaphore(device, renderFinishedSemaphore, null)
             renderFinishedSemaphore = VK_NULL_HANDLE

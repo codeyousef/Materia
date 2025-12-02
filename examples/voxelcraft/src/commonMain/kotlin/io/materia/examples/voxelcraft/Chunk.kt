@@ -134,8 +134,19 @@ class Chunk(
      */
     fun updateMesh(geometry: BufferGeometry) {
         if (mesh == null) {
+            val vertexCount = geometry.getVertexCount()
+            val triangleCount = geometry.getTriangleCount()
+            if (vertexCount > 0) {
+                 println("Chunk $position mesh created: $vertexCount verts, $triangleCount tris")
+            }
+            
             val material = MeshBasicMaterial().apply {
                 vertexColors = true
+                // Disable depth test/write since VulkanRenderer doesn't support depth buffer yet
+                depthTest = false
+                depthWrite = false
+                // Disable backface culling to see all faces (debug)
+                side = io.materia.material.Side.DoubleSide
             }
             mesh = Mesh(geometry, material)
             mesh?.position?.set(

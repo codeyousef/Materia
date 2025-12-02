@@ -74,6 +74,8 @@ class VulkanPipeline(
                 createGraphicsPipeline(renderPass, width, height, vertexLayouts, renderState)
             graphicsPipeline != VK_NULL_HANDLE
         } catch (exc: Exception) {
+            println("VulkanPipeline creation failed: ${exc.message}")
+            exc.printStackTrace()
             dispose()
             false
         }
@@ -196,22 +198,18 @@ class VulkanPipeline(
                     .topology(toVulkanTopology(renderState.topology))
                     .primitiveRestartEnable(false)
 
-            val viewport = org.lwjgl.vulkan.VkViewport.calloc(1, stack)
-                .x(0f)
-                .y(0f)
-                .width(width.toFloat())
-                .height(height.toFloat())
-                .minDepth(0f)
-                .maxDepth(1f)
-
-            val scissor = org.lwjgl.vulkan.VkRect2D.calloc(1, stack)
-            scissor.offset().set(0, 0)
-            scissor.extent().set(width, height)
-
+            // Use dynamic viewport/scissor so we can update them each frame
             val viewportState = org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO)
-                .pViewports(viewport)
-                .pScissors(scissor)
+                .viewportCount(1)
+                .scissorCount(1)
+            // Note: pViewports and pScissors are null because we use dynamic state
+
+            // Enable dynamic viewport and scissor
+            val dynamicStates = stack.ints(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR)
+            val dynamicState = org.lwjgl.vulkan.VkPipelineDynamicStateCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO)
+                .pDynamicStates(dynamicStates)
 
             val rasterizationState =
                 org.lwjgl.vulkan.VkPipelineRasterizationStateCreateInfo.calloc(stack)
@@ -269,6 +267,7 @@ class VulkanPipeline(
                 .pMultisampleState(multisampleState)
                 .pDepthStencilState(null)
                 .pColorBlendState(colorBlendState)
+                .pDynamicState(dynamicState)
                 .layout(pipelineLayout)
                 .renderPass(renderPass)
                 .subpass(0)
@@ -339,6 +338,9 @@ class VulkanPipeline(
         CullMode.BACK -> VK_CULL_MODE_BACK_BIT
     }
 
+    // Note: When Y is negated in projection matrix for Vulkan, triangles with CCW winding
+    // on screen will appear CW in clip space. However, since culling uses NONE for VoxelCraft,
+    // this shouldn't affect visibility. Keep original mapping for now.
     private fun toVulkanFrontFace(frontFace: FrontFace): Int = when (frontFace) {
         FrontFace.CCW -> VK_FRONT_FACE_COUNTER_CLOCKWISE
         FrontFace.CW -> VK_FRONT_FACE_CLOCKWISE

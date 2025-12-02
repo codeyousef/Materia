@@ -155,13 +155,28 @@ fun generateTerrainAsync(
             updateLoadingProgress("Terrain ready, generating meshes...")
 
             // T021: Phase 2 - Wait for initial mesh generation to complete
+            // Note: initialMeshTarget is already set by generateTerrain()
             val initialChunkCount = 81  // 9x9 grid (INITIAL_GENERATION_RADIUS=4)
-            world.setInitialMeshTarget(initialChunkCount)
 
-            // Poll mesh generation progress
+            // Poll mesh generation progress and pump the generation queue
             var lastPercent = 0
+            var lastTime = js("Date.now()") as Double
+            var loopCount = 0
+            logInfo("Starting mesh generation loop, target: $initialChunkCount")
             while (!world.isInitialMeshGenerationComplete) {
-                delay(100)  // Check every 100ms
+                delay(16)  // ~60fps for smooth pumping
+                val now = js("Date.now()") as Double
+                val deltaTime = ((now - lastTime) / 1000.0).toFloat()
+                lastTime = now
+                
+                // Pump the generation queue during loading
+                world.update(deltaTime)
+                
+                loopCount++
+                if (loopCount % 60 == 0) {  // Log every ~1 second
+                    logInfo("Mesh loop iteration $loopCount, progress: ${world.initialMeshGenerationProgress}")
+                }
+                
                 val progress = world.initialMeshGenerationProgress
                 val percent = (progress * 100).toInt()
                 if (percent > lastPercent && percent % 5 == 0) {
@@ -170,6 +185,7 @@ fun generateTerrainAsync(
                     lastPercent = percent
                 }
             }
+            logInfo("Mesh generation complete after $loopCount iterations")
 
             // T021: Phase 3 - All meshes ready, regenerate for correct face culling
             val totalTime = js("Date.now()") as Double - startTime
@@ -181,8 +197,16 @@ fun generateTerrainAsync(
 
             // T021: Wait for regeneration to complete (fixes missing faces bug)
             lastPercent = 0  // Reset for regeneration tracking
+            lastTime = js("Date.now()") as Double  // Reset time for regeneration loop
             while (!world.isRegenerationComplete) {
-                delay(100)  // Check every 100ms
+                delay(16)  // ~60fps for smooth pumping
+                val now = js("Date.now()") as Double
+                val deltaTime = ((now - lastTime) / 1000.0).toFloat()
+                lastTime = now
+                
+                // Pump the dirty chunks during regeneration
+                world.update(deltaTime)
+                
                 val progress = world.regenerationProgress
                 val percent = (progress * 100).toInt()
                 if (percent > lastPercent && percent % 10 == 0) {

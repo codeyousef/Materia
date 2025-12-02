@@ -32,6 +32,7 @@ object ChunkMeshGenerator {
         val indices = ArrayList<Int>(estimatedVertices * 3 / 2)
 
         var vertexOffset = 0
+        var totalFaces = 0
 
         // Generate faces for each of the 6 directions
         for (direction in FaceDirection.values()) {
@@ -365,10 +366,15 @@ object ChunkMeshGenerator {
         val brightness = DirectionHelper.getBrightness(direction)
 
         // Apply brightness as shading multiplier
+        // DEBUG: Force bright colors if TextureAtlas returns black
+        val r = if (baseR == 0f && baseG == 0f && baseB == 0f) 1f else baseR
+        val g = if (baseR == 0f && baseG == 0f && baseB == 0f) 0f else baseG
+        val b = if (baseR == 0f && baseG == 0f && baseB == 0f) 1f else baseB
+
         for (i in 0..3) {
-            colors.add(baseR * brightness)
-            colors.add(baseG * brightness)
-            colors.add(baseB * brightness)
+            colors.add(r * brightness)
+            colors.add(g * brightness)
+            colors.add(b * brightness)
         }
 
         // Add indices for 2 triangles (quad)

@@ -36,7 +36,6 @@ class VoxelWorld(
     private val dirtySet = mutableSetOf<ChunkPosition>()
     private val pendingMeshes = mutableSetOf<ChunkPosition>()
     private val meshSemaphore = Semaphore(4)
-    private val dirtyQueueMutex = Mutex()
 
     private val generationQueue = ArrayDeque<ChunkPosition>()
     private val activeGeneration = mutableSetOf<ChunkPosition>()
@@ -86,36 +85,26 @@ class VoxelWorld(
         isGeneratingTerrain = true
         val center = ChunkPosition(0, 0)
         val initialPositions = ChunkPosition.spiralAround(center, INITIAL_GENERATION_RADIUS)
-        val total = initialPositions.size
-        var processed = 0
-
-        for (pos in initialPositions) {
-            ensureChunkGenerated(pos)
-            processed++
-            onProgress?.invoke(processed, total)
-            if (processed % 2 == 0) {
-                yield()
-            }
-        }
+        
+        // Queue initial chunks for generation instead of blocking
+        generationQueue.addAll(initialPositions)
+        setInitialMeshTarget(initialPositions.size)
 
         lastStreamCenter = center
-        enqueueChunksAround(center, STREAM_RADIUS)
+        // Don't enqueue streaming chunks yet, wait for initial generation
+        // enqueueChunksAround(center, STREAM_RADIUS) 
         streamingInitialized = true
-        isGenerated = true
-        isGeneratingTerrain = false
-
-        logInfo("✅ Terrain generation complete! dirtyQueue=${dirtyQueue.size}, pendingMeshes=${pendingMeshes.size}")
+        
+        logInfo("✅ Terrain generation queued! ${initialPositions.size} chunks")
     }
 
     internal fun onChunkDirty(chunk: Chunk) {
         if (!chunk.isDirty) return
         if (pendingMeshes.contains(chunk.position)) return
-        scope.launch {
-            dirtyQueueMutex.withLock {
-                if (dirtySet.add(chunk.position)) {
-                    dirtyQueue.addLast(chunk)
-                }
-            }
+        
+        // Both platforms can add directly - JS is single-threaded, JVM is synchronous
+        if (dirtySet.add(chunk.position)) {
+            dirtyQueue.addLast(chunk)
         }
     }
 
@@ -149,6 +138,13 @@ class VoxelWorld(
         }
 
         pumpDirtyChunks(MAX_DIRTY_CHUNKS_PER_FRAME)
+
+        // Check if initial generation is complete
+        if (isGeneratingTerrain && generationQueue.isEmpty() && activeGeneration.isEmpty() && dirtyQueue.isEmpty() && pendingMeshes.isEmpty()) {
+            isGeneratingTerrain = false
+            isGenerated = true
+            logInfo("✅ Initial terrain generation complete!")
+        }
 
         // T016b: Only update player physics after initial terrain generation completes
         // This prevents player falling during async mesh generation
@@ -185,67 +181,95 @@ class VoxelWorld(
             }
 
             activeGeneration.add(position)
-            scope.launch {
+            
+            if (platformRequiresSyncMeshProcessing) {
+                // JVM: Generate synchronously to avoid threading issues with Vulkan
                 try {
-                    ensureChunkGenerated(position)
+                    generateChunkSync(chunk)
                 } finally {
                     activeGeneration.remove(position)
+                }
+            } else {
+                // JS: Launch async coroutine
+                scope.launch {
+                    try {
+                        ensureChunkGenerated(position)
+                    } finally {
+                        activeGeneration.remove(position)
+                    }
                 }
             }
             launched++
         }
     }
+    
+    private fun generateChunkSync(chunk: Chunk) {
+        if (chunk.terrainGenerated) return
+        
+        chunk.suppressDirtyEvents = true
+        try {
+            // Use platform-specific runBlocking to call suspend function synchronously
+            // This is safe on JVM since we're already on the main thread
+            runBlockingPlatform {
+                generator.generate(chunk)
+            }
+        } finally {
+            chunk.suppressDirtyEvents = false
+        }
+        chunk.terrainGenerated = true
+        
+        // Mark dirty for mesh generation
+        // Fix: If chunk became dirty while suppressed, we must notify the world now
+        if (chunk.isDirty) {
+            onChunkDirty(chunk)
+        } else {
+            chunk.markDirty()
+        }
+    }
 
     private fun pumpDirtyChunks(maxPerFrame: Int) {
         // Allow mesh generation to proceed even during terrain generation so the user sees progress
-        // Try to acquire lock, skip if busy
-        if (!dirtyQueueMutex.tryLock()) {
+        
+        if (dirtyQueue.isEmpty()) {
             return
         }
+        
+        var processed = 0
+        while (processed < maxPerFrame && dirtyQueue.isNotEmpty()) {
+            val chunk = dirtyQueue.removeFirst()
+            dirtySet.remove(chunk.position)
 
-        try {
-            if (dirtyQueue.isEmpty()) {
-                return
+            if (!chunk.isDirty || pendingMeshes.contains(chunk.position)) {
+                continue
             }
-            var processed = 0
-            while (processed < maxPerFrame && dirtyQueue.isNotEmpty()) {
-                val chunk = dirtyQueue.removeFirst()
-                dirtySet.remove(chunk.position)
 
-                if (!chunk.isDirty || pendingMeshes.contains(chunk.position)) {
-                    continue
+            if (platformRequiresSyncMeshProcessing) {
+                // JVM: Process synchronously on the main thread to avoid race conditions
+                // with Vulkan renderer buffer access
+                val geometry = ChunkMeshGenerator.generateSync(chunk)
+                doMeshUpdate(chunk, geometry)
+                if (chunk.isDirty) {
+                    onChunkDirty(chunk)
                 }
-
-                if (platformRequiresSyncMeshProcessing) {
-                    // JVM: Process synchronously on the main thread to avoid race conditions
-                    // with Vulkan renderer buffer access
-                    val geometry = ChunkMeshGenerator.generateSync(chunk)
-                    doMeshUpdate(chunk, geometry)
-                    if (chunk.isDirty) {
-                        onChunkDirty(chunk)
-                    }
-                } else {
-                    // JS: Launch async - browser event loop provides synchronization
-                    pendingMeshes.add(chunk.position)
-                    scope.launch {
-                        try {
-                            meshSemaphore.withPermit {
-                                val geometry = generateMeshForChunk(chunk)
-                                // Apply mesh update - on JS uses withContext(Main)
-                                applyMeshUpdate(chunk, geometry)
-                            }
-                        } finally {
-                            pendingMeshes.remove(chunk.position)
-                            if (chunk.isDirty) {
-                                onChunkDirty(chunk)
-                            }
+            } else {
+                // JS: Launch async - browser event loop provides synchronization
+                pendingMeshes.add(chunk.position)
+                scope.launch {
+                    try {
+                        meshSemaphore.withPermit {
+                            val geometry = generateMeshForChunk(chunk)
+                            // Apply mesh update - on JS uses withContext(Main)
+                            applyMeshUpdate(chunk, geometry)
+                        }
+                    } finally {
+                        pendingMeshes.remove(chunk.position)
+                        if (chunk.isDirty) {
+                            onChunkDirty(chunk)
                         }
                     }
                 }
-                processed++
             }
-        } finally {
-            dirtyQueueMutex.unlock()
+            processed++
         }
     }
     

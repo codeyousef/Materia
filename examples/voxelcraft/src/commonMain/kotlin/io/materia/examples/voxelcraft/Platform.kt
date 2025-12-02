@@ -26,3 +26,11 @@ expect val platformRequiresSyncMeshProcessing: Boolean
  * Platform-specific mesh generation.
  */
 expect suspend fun generateMeshForChunk(chunk: Chunk): BufferGeometry
+
+/**
+ * Run a suspend function blocking (synchronously).
+ * 
+ * On JVM: Uses runBlocking to execute the suspend function on the current thread.
+ * On JS: Throws an error since this shouldn't be called (platformRequiresSyncMeshProcessing is false).
+ */
+expect fun <T> runBlockingPlatform(block: suspend () -> T): T
