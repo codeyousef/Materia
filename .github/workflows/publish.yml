@@ -138,7 +138,7 @@ jobs:
           rm -rf "$TMP_GNUPGHOME"
 
       - name: Publish Materia to Maven Central
-        run: ./gradlew publishToCentralPortal --stacktrace --info
+        run: ./gradlew publishToCentralPortal --stacktrace --info --no-configuration-cache
 
       - name: Extract latest changelog entry
         id: changelog
