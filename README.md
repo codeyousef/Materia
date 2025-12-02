@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://kotlinlang.org/docs/multiplatform.html">
-    <img src="https://img.shields.io/badge/Kotlin-2.1.20-7F52FF.svg" alt="Kotlin 2.1.20" />
+    <img src="https://img.shields.io/badge/Kotlin-2.2.20-7F52FF.svg" alt="Kotlin 2.2.20" />
   </a>
   <a href="https://kotlinlang.org/docs/multiplatform.html">
     <img src="https://img.shields.io/badge/Targets-JVM%20|%20JS%20|%20Android%20|%20Native-34C759.svg" alt="KMP Targets" />
@@ -27,9 +27,11 @@
 ## ✨ Highlights
 
 - **Unified Rendering API** – Write once, render everywhere with expect/actual abstractions over WebGPU, Vulkan (LWJGL), and Metal (MoltenVK)
-- **Three.js-Style API** – Familiar scene graph, materials, cameras, and lighting patterns for easy adoption
+- **Three.js-Style API** – Familiar scene graph, materials, cameras, controls, and lighting patterns for easy adoption
 - **Performance-First** – Arena allocators, uniform ring buffers, GPU resource pooling, and automatic instancing
-- **Complete Loader Suite** – GLTF 2.0, OBJ, FBX with platform-safe Base64 handling
+- **Comprehensive Loaders** – GLTF 2.0, OBJ, FBX, Collada, PLY, STL, DRACO, KTX2, HDR/EXR textures, fonts
+- **Full Controls Suite** – OrbitControls, FlyControls, PointerLockControls, TrackballControls, DragControls, TransformControls
+- **Debug Helpers** – AxesHelper, GridHelper, BoxHelper, ArrowHelper, CameraHelper, light helpers
 - **Cross-Platform Audio** – Positional audio and analyser abstractions aligned with the camera system
 - **Production Ready** – Built-in validation, Kover coverage, and dependency scanning pipelines
 
