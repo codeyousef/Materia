@@ -96,6 +96,30 @@ publishing {
                 connection.set("scm:git:git://github.com/codeyousef/Materia.git")
                 developerConnection.set("scm:git:ssh://git@github.com/codeyousef/Materia.git")
             }
+            
+            // Fix missing versions in dependencies (required for Maven Central)
+            withXml {
+                val lwjglVersion = "3.3.6"
+                asNode().let { root ->
+                    (root["dependencies"] as? groovy.util.NodeList)?.firstOrNull()?.let { deps ->
+                        (deps as groovy.util.Node).children().forEach { depNode ->
+                            val dep = depNode as groovy.util.Node
+                            val groupId = (dep["groupId"] as? groovy.util.NodeList)?.text()
+                            val version = (dep["version"] as? groovy.util.NodeList)?.text()
+                            
+                            // Add version to LWJGL dependencies if missing
+                            if (groupId == "org.lwjgl" && version.isNullOrBlank()) {
+                                val versionNode = dep["version"] as? groovy.util.NodeList
+                                if (versionNode.isNullOrEmpty()) {
+                                    dep.appendNode("version", lwjglVersion)
+                                } else {
+                                    (versionNode.first() as groovy.util.Node).setValue(lwjglVersion)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
