@@ -72,7 +72,13 @@ jobs:
           fi
 
       - name: Run tests
-        run: ./gradlew --no-daemon --max-workers=4 --console=plain jvmTest --stacktrace
+        run: |
+          ./gradlew --no-daemon --max-workers=4 --console=plain \
+            :materia-gpu:jvmTest \
+            :materia-engine:jvmTest \
+            :materia-validation:jvmTest \
+            :jvmTest \
+            --stacktrace
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
         timeout-minutes: 20
