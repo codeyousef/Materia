@@ -85,11 +85,17 @@ Welcome to the Materia documentation! Materia is a Kotlin Multiplatform 3D rende
 ## Quick Example
 
 ```kotlin
-import io.materia.core.*
-import io.materia.geometry.*
-import io.materia.material.*
-import io.materia.camera.*
-import io.materia.light.*
+import io.materia.engine.scene.Scene
+import io.materia.engine.scene.EngineMesh
+import io.materia.engine.camera.PerspectiveCamera
+import io.materia.engine.material.StandardMaterial
+import io.materia.engine.renderer.WebGPURenderer
+import io.materia.engine.renderer.WebGPURendererConfig
+import io.materia.engine.core.RenderLoop
+import io.materia.engine.core.DisposableContainer
+import io.materia.geometry.BufferGeometry
+import io.materia.core.math.Color
+import io.materia.core.math.Vector3
 
 // Create scene
 val scene = Scene()
@@ -105,29 +111,38 @@ val camera = PerspectiveCamera(
     lookAt(Vector3.ZERO)
 }
 
-// Create a mesh
-val geometry = BoxGeometry(1f, 1f, 1f)
-val material = MeshStandardMaterial().apply {
-    color = Color(0x00ff00)
-    metalness = 0.3f
-    roughness = 0.4f
+// Create a mesh with BufferGeometry
+val geometry = BufferGeometry().apply {
+    setAttribute("position", boxVertices, 3)
 }
-val cube = Mesh(geometry, material)
+val material = StandardMaterial(
+    color = Color(0f, 1f, 0f),
+    metalness = 0.3f,
+    roughness = 0.4f
+)
+val cube = EngineMesh(geometry, material)
 scene.add(cube)
 
-// Add lighting
-val light = DirectionalLight(Color.WHITE, 1.0f)
-light.position.set(5f, 10f, 7.5f)
-scene.add(light)
-
-scene.add(AmbientLight(Color(0x404040), 0.4f))
+// Initialize renderer (works on JVM and JS!)
+val renderer = WebGPURenderer(WebGPURendererConfig(
+    surface = window.surface,
+    width = 1280,
+    height = 720
+))
 
 // Render loop
-fun animate(deltaTime: Float) {
-    cube.rotation.x += deltaTime * 0.5f
-    cube.rotation.y += deltaTime * 0.3f
+val renderLoop = RenderLoop { deltaTime ->
+    cube.rotateY(deltaTime * 0.5f)
     renderer.render(scene, camera)
 }
+renderLoop.start()
+
+// Cleanup
+renderLoop.stop()
+cube.dispose()
+material.dispose()
+geometry.dispose()
+renderer.dispose()
 ```
 
 ---
@@ -148,7 +163,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            implementation("io.materia:materia:0.1.0-alpha01")
+            implementation("io.materia:materia-engine:0.1.0-alpha01")
         }
     }
 }

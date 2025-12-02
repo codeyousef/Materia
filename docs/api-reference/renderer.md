@@ -1,213 +1,235 @@
 # Renderer API Reference
 
-The renderer module provides GPU rendering backends for WebGPU and Vulkan.
+The renderer module provides a unified GPU rendering backend that works identically across WebGPU (JavaScript) and Vulkan (JVM).
 
 ## Overview
 
 ```kotlin
-import io.materia.renderer.*
+import io.materia.engine.renderer.*
 ```
+
+The Materia rendering system provides a **"Write Once, Run Everywhere"** architecture similar to Three.js, where scene graph, materials, and rendering code work identically across all platforms.
 
 ---
 
-## Renderer (Base Interface)
+## WebGPURenderer (Unified Renderer)
 
-Common interface for all renderers.
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `width` | `Int` | Render width in pixels |
-| `height` | `Int` | Render height in pixels |
-| `pixelRatio` | `Float` | Device pixel ratio |
-| `outputColorSpace` | `ColorSpace` | Output color space |
-| `toneMapping` | `ToneMapping` | Tone mapping mode |
-| `toneMappingExposure` | `Float` | Exposure for tone mapping |
-| `shadowMap` | `ShadowMap` | Shadow configuration |
-| `info` | `RendererInfo` | Render statistics |
-
-### Methods
-
-```kotlin
-// Render a scene
-fun render(scene: Scene, camera: Camera)
-
-// Set render size
-fun setSize(width: Int, height: Int)
-
-// Set pixel ratio
-fun setPixelRatio(ratio: Float)
-
-// Set viewport
-fun setViewport(x: Int, y: Int, width: Int, height: Int)
-
-// Set scissor
-fun setScissor(x: Int, y: Int, width: Int, height: Int)
-fun setScissorTest(enabled: Boolean)
-
-// Clear buffers
-fun clear(color: Boolean = true, depth: Boolean = true, stencil: Boolean = true)
-fun setClearColor(color: Color, alpha: Float = 1f)
-
-// Render to texture
-fun setRenderTarget(target: RenderTarget?)
-fun getRenderTarget(): RenderTarget?
-
-// Read pixels
-fun readRenderTargetPixels(
-    target: RenderTarget,
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    buffer: ByteArray
-)
-
-// Dispose resources
-fun dispose()
-```
-
----
-
-## WebGPURenderer
-
-Renderer using the WebGPU API (JavaScript/WASM target).
+The primary renderer class that works on both JS (WebGPU) and JVM (Vulkan) platforms.
 
 ### Constructor
 
 ```kotlin
 class WebGPURenderer(
-    canvas: HTMLCanvasElement,
-    options: WebGPURendererOptions = WebGPURendererOptions()
+    config: WebGPURendererConfig = WebGPURendererConfig()
 )
 ```
 
-### Options
+### Configuration
 
 ```kotlin
-data class WebGPURendererOptions(
-    val antialias: Boolean = true,
-    val alpha: Boolean = true,
-    val depth: Boolean = true,
-    val stencil: Boolean = false,
-    val powerPreference: PowerPreference = PowerPreference.HIGH_PERFORMANCE,
-    val requiredFeatures: List<String> = emptyList(),
-    val requiredLimits: Map<String, Long> = emptyMap()
-)
-
-enum class PowerPreference {
-    LOW_POWER,
-    HIGH_PERFORMANCE
-}
-```
-
-### Initialization
-
-WebGPU requires async initialization:
-
-```kotlin
-// Async creation
-WebGPURenderer.create(canvas, options) { renderer ->
-    // Renderer ready
-    val scene = Scene()
-    val camera = PerspectiveCamera()
-    
-    fun animate() {
-        renderer.render(scene, camera)
-        window.requestAnimationFrame(::animate)
-    }
-    animate()
-}
-
-// Or with coroutines
-suspend fun main() {
-    val renderer = WebGPURenderer.createAsync(canvas, options)
-    // ...
-}
-```
-
-### WebGPU-Specific Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `device` | `GPUDevice` | WebGPU device |
-| `context` | `GPUCanvasContext` | Canvas context |
-| `format` | `GPUTextureFormat` | Preferred format |
-
----
-
-## VulkanRenderer
-
-Renderer using the Vulkan API (JVM target via LWJGL).
-
-### Constructor
-
-```kotlin
-class VulkanRenderer(
-    window: Window,
-    options: VulkanRendererOptions = VulkanRendererOptions()
-)
-```
-
-### Options
-
-```kotlin
-data class VulkanRendererOptions(
-    val antialias: Boolean = true,
-    val vsync: Boolean = true,
-    val validation: Boolean = false,  // Enable validation layers
-    val deviceExtensions: List<String> = emptyList(),
-    val sampleCount: Int = 4  // MSAA samples
+data class WebGPURendererConfig(
+    val depthTest: Boolean = true,
+    val clearColor: Color = Color(0f, 0f, 0f),
+    val clearAlpha: Float = 1f,
+    val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
+    val autoResize: Boolean = true,
+    val preferredFormat: GpuTextureFormat? = null,
+    val antialias: Int = 1,  // MSAA samples (1 = disabled)
+    val debug: Boolean = false
 )
 ```
 
 ### Initialization
 
-```kotlin
-// Create window with Vulkan surface
-val window = Window(
-    title = "My App",
-    width = 1280,
-    height = 720
-)
+The renderer requires async initialization:
 
+```kotlin
 // Create renderer
-val renderer = VulkanRenderer(window, VulkanRendererOptions(
-    antialias = true,
-    vsync = true,
-    validation = BuildConfig.DEBUG  // Enable in debug builds
-))
+val renderer = WebGPURenderer(
+    WebGPURendererConfig(
+        depthTest = true,
+        clearColor = Color(0.1f, 0.1f, 0.15f),
+        antialias = 4
+    )
+)
 
-// Render loop
-window.run { deltaTime ->
+// Initialize with render surface
+renderer.initialize(renderSurface)
+
+// Resize when window changes
+renderer.setSize(width, height)
+```
+
+### Rendering
+
+```kotlin
+// Main render loop
+renderLoop.start { deltaTime ->
+    // Update scene
+    scene.update(deltaTime)
+    
+    // Render
     renderer.render(scene, camera)
 }
 
 // Cleanup
 renderer.dispose()
-window.dispose()
 ```
 
-### Vulkan-Specific Properties
+### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `instance` | `VkInstance` | Vulkan instance |
-| `device` | `VkDevice` | Logical device |
-| `physicalDevice` | `VkPhysicalDevice` | Physical device |
-| `swapchain` | `Swapchain` | Swapchain manager |
+| `stats` | `WebGPURenderStats` | Rendering statistics |
+| `isDisposed` | `Boolean` | Whether renderer has been disposed |
+
+### Render Statistics
+
+```kotlin
+data class WebGPURenderStats(
+    var frameCount: Long = 0,
+    var drawCalls: Int = 0,
+    var triangles: Int = 0,
+    var textureBinds: Int = 0,
+    var pipelineSwitches: Int = 0,
+    var frameTime: Float = 0f
+)
+
+// Usage
+println("Draw calls: ${renderer.stats.drawCalls}")
+println("Triangles: ${renderer.stats.triangles}")
+```
+
+### Resource Management
+
+The renderer implements the `Disposable` interface for proper resource cleanup:
+
+```kotlin
+// Always dispose when done
+renderer.dispose()
+
+// Or use the `use` extension
+renderer.use { r ->
+    // rendering code
+}
+```
 
 ---
 
-## Color Spaces
+## Legacy Renderers
+
+For backward compatibility, the following legacy renderers are still available:
+
+### EngineRenderer
+
+The lower-level engine renderer used by examples:
 
 ```kotlin
-enum class ColorSpace {
-    SRGB,           // Standard sRGB
-    LINEAR_SRGB,    // Linear sRGB
-    DISPLAY_P3      // Display P3 wide gamut
+val renderer = RendererFactory.createEngineRenderer(
+    surface = renderSurface,
+    config = RendererConfig(...),
+    options = EngineRendererOptions(...)
+).getOrThrow()
+```
+
+---
+
+## Platform-Specific Setup
+
+### JavaScript (WebGPU)
+
+```kotlin
+// Get canvas element
+val canvas = document.getElementById("canvas") as HTMLCanvasElement
+
+// Create render surface from canvas
+val surface = CanvasRenderSurface(canvas)
+
+// Initialize renderer
+val renderer = WebGPURenderer()
+renderer.initialize(surface)
+```
+
+### JVM (Vulkan via LWJGL)
+
+```kotlin
+// Create GLFW window
+val window = KmpWindow(WindowConfig(
+    title = "My App",
+    width = 1280,
+    height = 720
+))
+
+// Create renderer with window surface
+val renderer = WebGPURenderer()
+renderer.initialize(window.getRenderSurface())
+```
+
+---
+
+## RenderLoop
+
+Platform-agnostic animation loop:
+
+```kotlin
+// Configure loop
+val config = RenderLoopConfig(
+    targetFps = 60,
+    fixedTimeStep = false
+)
+
+// Create loop
+val renderLoop = RenderLoop(config)
+
+// Start rendering
+renderLoop.start { deltaTime ->
+    scene.update(deltaTime)
+    renderer.render(scene, camera)
 }
+
+// Stop when done
+renderLoop.stop()
+```
+
+### JS Implementation
+Uses `requestAnimationFrame` for smooth browser rendering.
+
+### JVM Implementation
+Uses coroutine-based blocking loop with precise timing.
+
+---
+
+## Disposable Interface
+
+All GPU resources implement the `Disposable` interface:
+
+```kotlin
+interface Disposable {
+    val isDisposed: Boolean
+    fun dispose()
+}
+
+// Extension for try-with-resources pattern
+inline fun <T : Disposable, R> T.use(block: (T) -> R): R
+
+// Check resource state
+fun Disposable.checkNotDisposed(resourceName: String)
+```
+
+### DisposableContainer
+
+Manages multiple disposable resources:
+
+```kotlin
+val container = DisposableContainer()
+
+// Add resources (disposed in reverse order)
+container += texture
+container += buffer
+container += pipeline
+
+// Dispose all at once
+container.dispose()
 ```
 
 ---
@@ -225,22 +247,9 @@ enum class ToneMapping {
 }
 ```
 
-### Example
-
-```kotlin
-// HDR with ACES tone mapping
-renderer.toneMapping = ToneMapping.ACES_FILMIC
-renderer.toneMappingExposure = 1.0f
-
-// Increase exposure for brighter scene
-renderer.toneMappingExposure = 1.5f
-```
-
 ---
 
 ## Shadow Map
-
-### Properties
 
 ```kotlin
 class ShadowMap {
@@ -255,192 +264,6 @@ enum class ShadowMapType {
     PCF,        // Percentage-closer filtering
     PCF_SOFT,   // Soft PCF (default)
     VSM         // Variance shadow mapping
-}
-```
-
-### Example
-
-```kotlin
-// Enable shadows
-renderer.shadowMap.enabled = true
-renderer.shadowMap.type = ShadowMapType.PCF_SOFT
-
-// Manual shadow update
-renderer.shadowMap.autoUpdate = false
-renderer.shadowMap.needsUpdate = true  // Request update
-```
-
----
-
-## Render Targets
-
-### WebGLRenderTarget / RenderTarget
-
-Off-screen render target for effects.
-
-```kotlin
-class RenderTarget(
-    width: Int,
-    height: Int,
-    options: RenderTargetOptions = RenderTargetOptions()
-)
-```
-
-### Options
-
-```kotlin
-data class RenderTargetOptions(
-    val minFilter: TextureFilter = TextureFilter.LINEAR,
-    val magFilter: TextureFilter = TextureFilter.LINEAR,
-    val format: TextureFormat = TextureFormat.RGBA,
-    val type: TextureDataType = TextureDataType.UNSIGNED_BYTE,
-    val depthBuffer: Boolean = true,
-    val stencilBuffer: Boolean = false,
-    val depthTexture: DepthTexture? = null,
-    val samples: Int = 0,  // MSAA samples
-    val colorSpace: ColorSpace = ColorSpace.SRGB
-)
-```
-
-### Example
-
-```kotlin
-// Create render target
-val renderTarget = RenderTarget(1024, 1024, RenderTargetOptions(
-    minFilter = TextureFilter.LINEAR,
-    magFilter = TextureFilter.LINEAR,
-    format = TextureFormat.RGBA,
-    depthBuffer = true
-))
-
-// Render to target
-renderer.setRenderTarget(renderTarget)
-renderer.clear()
-renderer.render(scene, camera)
-
-// Use as texture
-material.map = renderTarget.texture
-
-// Render to screen
-renderer.setRenderTarget(null)
-renderer.render(mainScene, mainCamera)
-```
-
-### Multiple Render Targets (MRT)
-
-```kotlin
-class MultipleRenderTargets(
-    width: Int,
-    height: Int,
-    count: Int,
-    options: RenderTargetOptions = RenderTargetOptions()
-) {
-    val textures: Array<Texture>  // Color attachments
-}
-```
-
----
-
-## Render Info
-
-Statistics about rendering.
-
-```kotlin
-class RendererInfo {
-    val memory: MemoryInfo
-    val render: RenderInfo
-    
-    fun reset()  // Reset frame counters
-}
-
-class MemoryInfo {
-    var geometries: Int = 0
-    var textures: Int = 0
-}
-
-class RenderInfo {
-    var frame: Int = 0
-    var calls: Int = 0
-    var triangles: Int = 0
-    var points: Int = 0
-    var lines: Int = 0
-}
-```
-
-### Example
-
-```kotlin
-// Display stats
-fun logStats() {
-    val info = renderer.info
-    println("Draw calls: ${info.render.calls}")
-    println("Triangles: ${info.render.triangles}")
-    println("Textures: ${info.memory.textures}")
-}
-
-// Reset per-frame stats
-fun animate() {
-    renderer.info.reset()
-    renderer.render(scene, camera)
-    logStats()
-}
-```
-
----
-
-## Capabilities
-
-Check GPU capabilities.
-
-```kotlin
-class Capabilities {
-    val maxTextureSize: Int
-    val maxCubeMapTextureSize: Int
-    val maxAttributes: Int
-    val maxVertexUniforms: Int
-    val maxVaryings: Int
-    val maxFragmentUniforms: Int
-    val maxSamples: Int
-    
-    val floatFragmentTextures: Boolean
-    val floatVertexTextures: Boolean
-    val logarithmicDepthBuffer: Boolean
-}
-```
-
----
-
-## Custom Rendering
-
-### Manual Render Control
-
-```kotlin
-// Begin frame
-renderer.beginFrame()
-
-// Set up state
-renderer.setViewport(0, 0, width, height)
-renderer.setClearColor(Color.BLACK)
-renderer.clear()
-
-// Render multiple scenes/cameras
-renderer.render(backgroundScene, backgroundCamera)
-renderer.render(mainScene, mainCamera)
-renderer.render(uiScene, uiCamera)
-
-// End frame
-renderer.endFrame()
-```
-
-### Render Lists
-
-```kotlin
-// Get current render lists
-val renderLists = renderer.renderLists
-
-// Custom sorting
-renderLists.opaque.sort { a, b ->
-    a.material.id.compareTo(b.material.id)  // Sort by material
 }
 ```
 
@@ -459,49 +282,23 @@ for (i in 0 until 1000) {
     instancedMesh.setMatrixAt(i, matrix)
 }
 scene.add(instancedMesh)
-
-// Merge static geometry
-val mergedGeometry = BufferGeometryUtils.mergeGeometries(geometries)
 ```
 
 ### Reduce State Changes
 
 ```kotlin
-// Sort by material
-renderer.sortObjects = true
-
-// Use texture atlases
-val atlas = TextureAtlas()
-atlas.add("wood", woodTexture)
-atlas.add("metal", metalTexture)
-// Single texture, multiple UVs
+// Sort by material (automatic with unified renderer)
+// Use texture atlases for fewer binds
 ```
 
 ### Optimize Shadows
 
 ```kotlin
 // Use appropriate shadow map sizes
-mainLight.shadow.mapSize.set(1024f, 1024f)  // Main light
-fillLight.shadow.mapSize.set(256f, 256f)    // Fill light
+mainLight.shadow.mapSize.set(1024f, 1024f)
 
 // Limit shadow casters
 distantObject.castShadow = false
-
-// Use cascaded shadow maps for large scenes
-// (Configured via light.shadow.cascade)
-```
-
-### LOD (Level of Detail)
-
-```kotlin
-val lod = LOD()
-lod.addLevel(highDetailMesh, 0f)
-lod.addLevel(mediumDetailMesh, 50f)
-lod.addLevel(lowDetailMesh, 100f)
-scene.add(lod)
-
-// Update LOD in render loop
-lod.update(camera)
 ```
 
 ---
@@ -510,5 +307,5 @@ lod.update(camera)
 
 - [Camera API](camera.md) - Cameras for rendering
 - [Material API](material.md) - Materials and shaders
-- [Advanced: Performance](../advanced/performance.md) - Optimization guide
-- [Advanced: Post-Processing](../advanced/post-processing.md) - Effects pipeline
+- [Core API](core.md) - Math and utilities
+- [Scene API](scene.md) - Scene graph and objects

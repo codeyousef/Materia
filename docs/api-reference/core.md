@@ -1,11 +1,186 @@
 # Core API Reference
 
-The core module provides foundational classes for 3D math, scene graph management, and utilities.
+The core module provides foundational classes for 3D math, scene graph management, resource management, and utilities.
 
 ## Overview
 
 ```kotlin
 import io.materia.core.*
+import io.materia.engine.core.*
+```
+
+---
+
+## Disposable
+
+Interface for objects that hold resources requiring explicit cleanup.
+
+### Interface
+
+```kotlin
+interface Disposable {
+    fun dispose()
+}
+```
+
+### Purpose
+
+GPU resources (textures, buffers, materials) must be explicitly released. The `Disposable` interface provides a consistent pattern for resource cleanup across all platforms.
+
+### Example
+
+```kotlin
+class MyMaterial : Disposable {
+    private val uniformBuffer = createUniformBuffer()
+    
+    override fun dispose() {
+        uniformBuffer.dispose()
+    }
+}
+
+// Usage
+val material = MyMaterial()
+// ... use material ...
+material.dispose()
+```
+
+---
+
+## DisposableContainer
+
+A container that tracks multiple `Disposable` resources and disposes them together.
+
+### Constructor
+
+```kotlin
+class DisposableContainer() : Disposable
+```
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `track(disposable: Disposable)` | Add a resource to be tracked |
+| `track(disposables: Collection<Disposable>)` | Add multiple resources |
+| `untrack(disposable: Disposable)` | Remove a resource from tracking |
+| `dispose()` | Dispose all tracked resources |
+
+### Example
+
+```kotlin
+val container = DisposableContainer()
+
+// Track resources
+val material = BasicMaterial(color = Color.RED)
+val geometry = BufferGeometry()
+val mesh = EngineMesh(geometry, material)
+
+container.track(material)
+container.track(geometry)
+container.track(mesh)
+
+// Or track multiple at once
+container.track(listOf(material, geometry, mesh))
+
+// Later: disposes all tracked resources
+container.dispose()
+```
+
+### Scoped Usage
+
+```kotlin
+fun loadScene(): DisposableContainer {
+    val resources = DisposableContainer()
+    
+    val textures = loadTextures().also { resources.track(it) }
+    val materials = createMaterials(textures).also { resources.track(it) }
+    val meshes = createMeshes(materials).also { resources.track(it) }
+    
+    return resources
+}
+
+// Cleanup entire scene
+val sceneResources = loadScene()
+// ... use scene ...
+sceneResources.dispose()  // Cleans up everything
+```
+
+---
+
+## RenderLoop
+
+Cross-platform animation loop that calls a callback on each frame.
+
+### Constructor
+
+```kotlin
+class RenderLoop(
+    callback: (deltaTime: Float) -> Unit
+)
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isRunning` | `Boolean` | Whether the loop is active |
+| `targetFps` | `Int` | Target frame rate (default: 60) |
+| `actualFps` | `Float` | Measured frames per second |
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `start()` | Begin the render loop |
+| `stop()` | Stop the render loop |
+
+### Platform Behavior
+
+- **JS (Browser)**: Uses `requestAnimationFrame` for smooth, vsync'd rendering
+- **JVM**: Uses a coroutine-based timer loop
+
+### Example
+
+```kotlin
+val renderer = WebGPURenderer(config)
+val scene = Scene()
+val camera = PerspectiveCamera(fov = 75f, aspect = 1.77f)
+
+val renderLoop = RenderLoop { deltaTime ->
+    // Update scene
+    mesh.rotateY(deltaTime)
+    
+    // Render
+    renderer.render(scene, camera)
+}
+
+// Start animation
+renderLoop.start()
+
+// Later: stop animation
+renderLoop.stop()
+```
+
+### Integration with KmpWindow
+
+```kotlin
+val window = KmpWindow(KmpWindowConfig(
+    width = 1280,
+    height = 720,
+    title = "My App"
+))
+
+val renderer = WebGPURenderer(WebGPURendererConfig(
+    surface = window.surface
+))
+
+val renderLoop = RenderLoop { dt ->
+    window.pollEvents()
+    renderer.render(scene, camera)
+}
+
+window.show()
+renderLoop.start()
 ```
 
 ---

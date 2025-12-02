@@ -47,12 +47,15 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.lwjgl.core)
+                implementation(libs.lwjgl.glfw)
             }
         }
 
         val jsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.browser)
             }
         }
 

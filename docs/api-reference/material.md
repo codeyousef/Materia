@@ -1,607 +1,388 @@
-# Material API Reference
+# Material System
 
-The material module provides classes for defining surface appearance, from simple solid colors to physically-based rendering (PBR).
+The material system in Materia provides a unified, Three.js-style approach to defining surface appearance across all platforms. Materials encapsulate shader programs, textures, and render state configuration.
 
 ## Overview
 
+Materia's material system is built on a composable architecture:
+
+- **`EngineMaterial`** - Core interface that all materials implement
+- **`BasicMaterial`** - Simple unlit material for solid colors and textures
+- **`StandardMaterial`** - Full PBR material with metallic-roughness workflow
+
+## EngineMaterial Interface
+
+All materials implement the `EngineMaterial` interface:
+
 ```kotlin
-import io.materia.material.*
+import io.materia.engine.material.EngineMaterial
+
+interface EngineMaterial : Disposable {
+    val shaderId: String
+    val transparent: Boolean
+    val side: Side
+    val depthTest: Boolean
+    val depthWrite: Boolean
+    val blending: Blending
+    
+    fun getUniforms(): Map<String, Any>
+    fun bind(encoder: GPURenderPassEncoder)
+}
 ```
-
----
-
-## Material (Base Class)
-
-Abstract base class for all materials.
 
 ### Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `id` | `Int` | auto | Unique identifier |
-| `uuid` | `String` | auto | UUID string |
-| `name` | `String` | `""` | Optional name |
-| `visible` | `Boolean` | `true` | Render this material |
-| `transparent` | `Boolean` | `false` | Enable transparency |
-| `opacity` | `Float` | `1.0` | Opacity (0-1) |
-| `side` | `Side` | `Side.FRONT` | Which side(s) to render |
-| `blending` | `Blending` | `NormalBlending` | Blend mode |
+| `shaderId` | `String` | - | Unique identifier for shader lookup |
+| `transparent` | `Boolean` | `false` | Enable transparency rendering |
+| `side` | `Side` | `Side.FRONT` | Face culling mode |
 | `depthTest` | `Boolean` | `true` | Enable depth testing |
 | `depthWrite` | `Boolean` | `true` | Write to depth buffer |
-| `colorWrite` | `Boolean` | `true` | Write to color buffer |
-| `alphaTest` | `Float` | `0.0` | Alpha discard threshold |
-| `alphaToCoverage` | `Boolean` | `false` | Enable alpha to coverage |
-| `polygonOffset` | `Boolean` | `false` | Enable polygon offset |
-| `polygonOffsetFactor` | `Float` | `0.0` | Polygon offset factor |
-| `polygonOffsetUnits` | `Float` | `0.0` | Polygon offset units |
-| `wireframe` | `Boolean` | `false` | Render as wireframe |
-| `wireframeLinewidth` | `Float` | `1.0` | Wireframe line width |
-| `needsUpdate` | `Boolean` | `false` | Flag to recompile |
+| `blending` | `Blending` | `Blending.NORMAL` | Blending mode for transparency |
 
-### Enums
+## BasicMaterial
+
+A simple, unlit material that renders objects with a solid color or texture. Ideal for UI elements, debugging, and stylized visuals.
 
 ```kotlin
-enum class Side {
-    FRONT,    // Render front faces only
-    BACK,     // Render back faces only
-    DOUBLE    // Render both sides
-}
+import io.materia.engine.material.BasicMaterial
+import io.materia.core.math.Color
 
-enum class Blending {
-    NO,           // No blending
-    NORMAL,       // Standard alpha blending
-    ADDITIVE,     // Add colors together
-    SUBTRACTIVE,  // Subtract colors
-    MULTIPLY,     // Multiply colors
-    CUSTOM        // Custom blend function
-}
-```
-
-### Methods
-
-```kotlin
-// Clone material
-fun clone(): Material
-
-// Copy properties from another material
-fun copy(source: Material): Material
-
-// Dispose GPU resources
-fun dispose()
-
-// Mark for update
-fun needsUpdate()
-```
-
----
-
-## MeshBasicMaterial
-
-Simple unlit material, renders solid color or texture without lighting.
-
-### Constructor
-
-```kotlin
-class MeshBasicMaterial(
-    color: Color = Color.WHITE,
-    map: Texture? = null
+// Create a basic red material
+val redMaterial = BasicMaterial(
+    color = Color(1f, 0f, 0f)
 )
-```
 
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `WHITE` | Base color |
-| `map` | `Texture?` | `null` | Color/diffuse texture |
-| `alphaMap` | `Texture?` | `null` | Alpha texture |
-| `envMap` | `Texture?` | `null` | Environment map |
-| `envMapIntensity` | `Float` | `1.0` | Environment intensity |
-| `reflectivity` | `Float` | `1.0` | Reflection amount |
-| `combine` | `Combine` | `MULTIPLY` | How to combine with env map |
-
-### Example
-
-```kotlin
-// Simple colored material
-val redMaterial = MeshBasicMaterial().apply {
-    color = Color(0xff0000)
-}
-
-// Textured material
-val texturedMaterial = MeshBasicMaterial().apply {
-    map = textureLoader.load("textures/crate.png")
-}
-
-// Transparent material
-val glassMaterial = MeshBasicMaterial().apply {
-    color = Color(0x88ccff)
+// With transparency
+val transparentMaterial = BasicMaterial(
+    color = Color(1f, 1f, 1f, 0.5f),
     transparent = true
-    opacity = 0.5f
-}
-```
+)
 
----
-
-## MeshLambertMaterial
-
-Material using Lambertian (diffuse-only) shading. Good for non-shiny surfaces.
-
-### Constructor
-
-```kotlin
-class MeshLambertMaterial(
-    color: Color = Color.WHITE
+// With texture (when supported)
+val texturedMaterial = BasicMaterial(
+    color = Color.WHITE,
+    map = myTexture
 )
 ```
 
 ### Properties
 
-Inherits all from `MeshBasicMaterial` plus:
-
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `emissive` | `Color` | `BLACK` | Emissive (glow) color |
-| `emissiveIntensity` | `Float` | `1.0` | Emissive brightness |
-| `emissiveMap` | `Texture?` | `null` | Emissive texture |
+| `color` | `Color` | `Color.WHITE` | Base color of the material |
+| `map` | `Texture?` | `null` | Color/diffuse texture |
+| `opacity` | `Float` | `1.0f` | Overall opacity (0-1) |
+| `alphaTest` | `Float` | `0.0f` | Alpha cutoff threshold |
+| `wireframe` | `Boolean` | `false` | Render as wireframe |
 
-### Example
+### Example Usage
 
 ```kotlin
-val matteMaterial = MeshLambertMaterial().apply {
-    color = Color(0x44aa88)
-    emissive = Color(0x111111)
+import io.materia.engine.material.BasicMaterial
+import io.materia.engine.scene.EngineMesh
+import io.materia.geometry.BufferGeometry
+import io.materia.core.math.Color
+
+// Create geometry
+val geometry = BufferGeometry().apply {
+    setAttribute("position", floatArrayOf(
+        -1f, -1f, 0f,
+         1f, -1f, 0f,
+         0f,  1f, 0f
+    ), 3)
 }
+
+// Create material
+val material = BasicMaterial(color = Color(0.2f, 0.5f, 1.0f))
+
+// Create mesh
+val mesh = EngineMesh(geometry, material)
+scene.add(mesh)
 ```
 
----
+## StandardMaterial
 
-## MeshPhongMaterial
-
-Material using Blinn-Phong shading with specular highlights.
-
-### Constructor
+A physically-based material using the metallic-roughness workflow. Provides realistic lighting with support for environment maps, normal mapping, and emission.
 
 ```kotlin
-class MeshPhongMaterial(
-    color: Color = Color.WHITE
-)
-```
+import io.materia.engine.material.StandardMaterial
+import io.materia.core.math.Color
 
-### Properties
-
-Inherits all from `MeshLambertMaterial` plus:
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `specular` | `Color` | `0x111111` | Specular highlight color |
-| `shininess` | `Float` | `30.0` | Specular exponent (0-1000) |
-| `specularMap` | `Texture?` | `null` | Specular texture |
-| `bumpMap` | `Texture?` | `null` | Bump map texture |
-| `bumpScale` | `Float` | `1.0` | Bump map intensity |
-| `normalMap` | `Texture?` | `null` | Normal map texture |
-| `normalScale` | `Vector2` | `(1,1)` | Normal map intensity |
-| `displacementMap` | `Texture?` | `null` | Displacement texture |
-| `displacementScale` | `Float` | `1.0` | Displacement amount |
-| `displacementBias` | `Float` | `0.0` | Displacement offset |
-
-### Example
-
-```kotlin
-val shinyMaterial = MeshPhongMaterial().apply {
-    color = Color(0x156289)
-    specular = Color(0x222222)
-    shininess = 100f
-    normalMap = textureLoader.load("textures/brick_normal.jpg")
-}
-```
-
----
-
-## MeshStandardMaterial
-
-Physically-based rendering (PBR) material with metalness/roughness workflow.
-
-### Constructor
-
-```kotlin
-class MeshStandardMaterial(
-    color: Color = Color.WHITE
-)
-```
-
-### Properties
-
-Inherits common properties plus:
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `WHITE` | Albedo color |
-| `map` | `Texture?` | `null` | Albedo texture |
-| `roughness` | `Float` | `1.0` | Surface roughness (0-1) |
-| `roughnessMap` | `Texture?` | `null` | Roughness texture |
-| `metalness` | `Float` | `0.0` | Metallic factor (0-1) |
-| `metalnessMap` | `Texture?` | `null` | Metalness texture |
-| `normalMap` | `Texture?` | `null` | Normal map |
-| `normalScale` | `Vector2` | `(1,1)` | Normal intensity |
-| `aoMap` | `Texture?` | `null` | Ambient occlusion map |
-| `aoMapIntensity` | `Float` | `1.0` | AO intensity |
-| `emissive` | `Color` | `BLACK` | Emissive color |
-| `emissiveIntensity` | `Float` | `1.0` | Emissive brightness |
-| `emissiveMap` | `Texture?` | `null` | Emissive texture |
-| `bumpMap` | `Texture?` | `null` | Bump map |
-| `bumpScale` | `Float` | `1.0` | Bump intensity |
-| `displacementMap` | `Texture?` | `null` | Displacement map |
-| `displacementScale` | `Float` | `1.0` | Displacement amount |
-| `displacementBias` | `Float` | `0.0` | Displacement offset |
-| `envMap` | `Texture?` | `null` | Environment map |
-| `envMapIntensity` | `Float` | `1.0` | Environment intensity |
-| `flatShading` | `Boolean` | `false` | Use flat shading |
-
-### Example
-
-```kotlin
-// Shiny metal
-val metalMaterial = MeshStandardMaterial().apply {
-    color = Color(0xffffff)
-    metalness = 1.0f
+// Create a shiny metal material
+val metalMaterial = StandardMaterial(
+    color = Color(0.8f, 0.8f, 0.9f),
+    metalness = 1.0f,
     roughness = 0.2f
-}
+)
 
-// Rough plastic
-val plasticMaterial = MeshStandardMaterial().apply {
-    color = Color(0xff0000)
-    metalness = 0.0f
-    roughness = 0.7f
-}
+// Create a rough plastic material
+val plasticMaterial = StandardMaterial(
+    color = Color(1.0f, 0.2f, 0.2f),
+    metalness = 0.0f,
+    roughness = 0.8f
+)
 
-// Full PBR with textures
-val pbrMaterial = MeshStandardMaterial().apply {
-    map = textureLoader.load("textures/metal_albedo.jpg")
-    normalMap = textureLoader.load("textures/metal_normal.jpg")
-    roughnessMap = textureLoader.load("textures/metal_roughness.jpg")
-    metalnessMap = textureLoader.load("textures/metal_metalness.jpg")
-    aoMap = textureLoader.load("textures/metal_ao.jpg")
-}
-```
-
----
-
-## MeshPhysicalMaterial
-
-Extended PBR material with advanced properties like clearcoat, transmission, and sheen.
-
-### Constructor
-
-```kotlin
-class MeshPhysicalMaterial(
-    color: Color = Color.WHITE
+// Create a glowing material
+val glowingMaterial = StandardMaterial(
+    color = Color(0.1f, 0.1f, 0.1f),
+    emissive = Color(0f, 1f, 0.5f),
+    emissiveIntensity = 2.0f
 )
 ```
 
 ### Properties
-
-Inherits all from `MeshStandardMaterial` plus:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `clearcoat` | `Float` | `0.0` | Clearcoat layer intensity |
-| `clearcoatRoughness` | `Float` | `0.0` | Clearcoat roughness |
-| `clearcoatMap` | `Texture?` | `null` | Clearcoat intensity map |
-| `clearcoatRoughnessMap` | `Texture?` | `null` | Clearcoat roughness map |
-| `clearcoatNormalMap` | `Texture?` | `null` | Clearcoat normal map |
-| `clearcoatNormalScale` | `Vector2` | `(1,1)` | Clearcoat normal scale |
-| `transmission` | `Float` | `0.0` | Light transmission (glass) |
-| `transmissionMap` | `Texture?` | `null` | Transmission map |
-| `thickness` | `Float` | `0.0` | Thickness for refraction |
-| `thicknessMap` | `Texture?` | `null` | Thickness map |
-| `attenuationColor` | `Color` | `WHITE` | Absorption color |
-| `attenuationDistance` | `Float` | `Infinity` | Absorption distance |
-| `ior` | `Float` | `1.5` | Index of refraction |
-| `sheen` | `Float` | `0.0` | Sheen layer intensity |
-| `sheenRoughness` | `Float` | `1.0` | Sheen roughness |
-| `sheenColor` | `Color` | `BLACK` | Sheen tint |
-| `sheenColorMap` | `Texture?` | `null` | Sheen color map |
-| `sheenRoughnessMap` | `Texture?` | `null` | Sheen roughness map |
-| `iridescence` | `Float` | `0.0` | Iridescence intensity |
-| `iridescenceIOR` | `Float` | `1.3` | Iridescence IOR |
-| `iridescenceThicknessRange` | `Pair<Float,Float>` | `(100,400)` | Thin-film range |
-| `specularIntensity` | `Float` | `1.0` | Specular intensity |
-| `specularColor` | `Color` | `WHITE` | Specular tint |
+| `color` | `Color` | `Color.WHITE` | Base albedo color |
+| `metalness` | `Float` | `0.0f` | Metallic factor (0-1) |
+| `roughness` | `Float` | `1.0f` | Surface roughness (0-1) |
+| `emissive` | `Color` | `Color.BLACK` | Emissive color |
+| `emissiveIntensity` | `Float` | `1.0f` | Emissive strength multiplier |
+| `normalScale` | `Float` | `1.0f` | Normal map intensity |
+| `aoIntensity` | `Float` | `1.0f` | Ambient occlusion intensity |
 
-### Example
-
-```kotlin
-// Car paint with clearcoat
-val carPaint = MeshPhysicalMaterial().apply {
-    color = Color(0x880000)
-    metalness = 0.9f
-    roughness = 0.5f
-    clearcoat = 1.0f
-    clearcoatRoughness = 0.1f
-}
-
-// Glass
-val glass = MeshPhysicalMaterial().apply {
-    transmission = 1.0f
-    roughness = 0.0f
-    ior = 1.5f
-    thickness = 0.5f
-}
-
-// Velvet fabric with sheen
-val velvet = MeshPhysicalMaterial().apply {
-    color = Color(0x880088)
-    sheen = 1.0f
-    sheenRoughness = 0.4f
-    sheenColor = Color(0xff00ff)
-}
-
-// Soap bubble (iridescence)
-val bubble = MeshPhysicalMaterial().apply {
-    transmission = 1.0f
-    iridescence = 1.0f
-    iridescenceIOR = 1.3f
-}
-```
-
----
-
-## ShaderMaterial
-
-Material with custom vertex and fragment shaders.
-
-### Constructor
-
-```kotlin
-class ShaderMaterial(
-    vertexShader: String? = null,
-    fragmentShader: String? = null,
-    uniforms: MutableMap<String, Uniform> = mutableMapOf()
-)
-```
-
-### Properties
+### Texture Maps
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `vertexShader` | `String?` | Custom vertex shader (WGSL/GLSL) |
-| `fragmentShader` | `String?` | Custom fragment shader |
-| `uniforms` | `Map<String, Uniform>` | Custom uniform values |
-| `defines` | `Map<String, String>` | Preprocessor defines |
-| `extensions` | `ShaderExtensions` | Required extensions |
-| `lights` | `Boolean` | Include light uniforms |
-| `fog` | `Boolean` | Include fog uniforms |
+| `map` | `Texture?` | Albedo/diffuse texture |
+| `metalnessMap` | `Texture?` | Metalness texture (uses blue channel) |
+| `roughnessMap` | `Texture?` | Roughness texture (uses green channel) |
+| `normalMap` | `Texture?` | Tangent-space normal map |
+| `aoMap` | `Texture?` | Ambient occlusion map |
+| `emissiveMap` | `Texture?` | Emissive texture |
+| `envMap` | `Texture?` | Environment/reflection map |
 
-### Uniform Types
+### PBR Example
 
 ```kotlin
-sealed class Uniform {
-    data class Float(val value: kotlin.Float) : Uniform()
-    data class Int(val value: kotlin.Int) : Uniform()
-    data class Vector2(val value: io.materia.core.Vector2) : Uniform()
-    data class Vector3(val value: io.materia.core.Vector3) : Uniform()
-    data class Vector4(val value: io.materia.core.Vector4) : Uniform()
-    data class Color(val value: io.materia.core.Color) : Uniform()
-    data class Matrix3(val value: io.materia.core.Matrix3) : Uniform()
-    data class Matrix4(val value: io.materia.core.Matrix4) : Uniform()
-    data class Texture(val value: io.materia.texture.Texture?) : Uniform()
-    data class FloatArray(val value: kotlin.FloatArray) : Uniform()
+import io.materia.engine.material.StandardMaterial
+import io.materia.engine.scene.EngineMesh
+import io.materia.geometry.primitives.SphereGeometry
+import io.materia.core.math.Color
+
+// Create a grid of materials with varying properties
+val sphereGeometry = SphereGeometry(radius = 0.4f, segments = 32)
+
+for (row in 0 until 5) {
+    for (col in 0 until 5) {
+        val material = StandardMaterial(
+            color = Color(0.9f, 0.9f, 0.9f),
+            metalness = col / 4f,  // 0 to 1 across columns
+            roughness = row / 4f   // 0 to 1 across rows
+        )
+        
+        val mesh = EngineMesh(sphereGeometry, material).apply {
+            position.set(col - 2f, row - 2f, 0f)
+        }
+        scene.add(mesh)
+    }
 }
 ```
 
-### Example
+## Enumerations
+
+### Side
+
+Controls which faces of geometry are rendered:
 
 ```kotlin
-// Custom shader material
-val customMaterial = ShaderMaterial(
-    vertexShader = """
-        struct Uniforms {
-            modelViewProjection: mat4x4<f32>,
-            time: f32,
-        }
-        @binding(0) @group(0) var<uniform> uniforms: Uniforms;
-        
-        struct VertexInput {
-            @location(0) position: vec3<f32>,
-            @location(1) uv: vec2<f32>,
-        }
-        
-        struct VertexOutput {
-            @builtin(position) position: vec4<f32>,
-            @location(0) vUv: vec2<f32>,
-        }
-        
-        @vertex
-        fn main(input: VertexInput) -> VertexOutput {
-            var output: VertexOutput;
-            var pos = input.position;
-            pos.y += sin(pos.x * 10.0 + uniforms.time) * 0.1;
-            output.position = uniforms.modelViewProjection * vec4<f32>(pos, 1.0);
-            output.vUv = input.uv;
-            return output;
-        }
-    """,
-    fragmentShader = """
-        struct Uniforms {
-            color: vec3<f32>,
-        }
-        @binding(1) @group(0) var<uniform> uniforms: Uniforms;
-        
-        @fragment
-        fn main(@location(0) vUv: vec2<f32>) -> @location(0) vec4<f32> {
-            return vec4<f32>(uniforms.color, 1.0);
-        }
-    """,
-    uniforms = mutableMapOf(
-        "time" to Uniform.Float(0f),
-        "color" to Uniform.Color(Color(0x00ff00))
+enum class Side {
+    FRONT,      // Render front faces only (default)
+    BACK,       // Render back faces only
+    DOUBLE      // Render both faces (no culling)
+}
+```
+
+### Blending
+
+Defines how materials blend with the background:
+
+```kotlin
+enum class Blending {
+    NONE,           // No blending (opaque)
+    NORMAL,         // Standard alpha blending
+    ADDITIVE,       // Additive blending (good for glow effects)
+    SUBTRACTIVE,    // Subtractive blending
+    MULTIPLY        // Multiply blending
+}
+```
+
+## Transparency
+
+To enable transparency, set `transparent = true` and configure blending:
+
+```kotlin
+// Alpha transparency
+val glassMaterial = BasicMaterial(
+    color = Color(0.8f, 0.9f, 1.0f, 0.3f),
+    transparent = true,
+    blending = Blending.NORMAL,
+    depthWrite = false  // Often needed for proper transparency
+)
+
+// Additive glow effect
+val glowMaterial = BasicMaterial(
+    color = Color(1f, 0.5f, 0f),
+    transparent = true,
+    blending = Blending.ADDITIVE
+)
+```
+
+### Transparency Best Practices
+
+1. **Sorting**: Transparent objects should be rendered back-to-front
+2. **Depth Write**: Usually disable `depthWrite` for transparent materials
+3. **Double-sided**: Consider using `side = Side.DOUBLE` for glass-like surfaces
+4. **Premultiplied Alpha**: Some blending modes expect premultiplied alpha
+
+## Custom Materials
+
+Create custom materials by implementing `EngineMaterial`:
+
+```kotlin
+import io.materia.engine.material.EngineMaterial
+import io.materia.engine.shader.ShaderLibrary
+
+class GradientMaterial(
+    val topColor: Color,
+    val bottomColor: Color
+) : EngineMaterial {
+    
+    override val shaderId = "gradient"
+    override val transparent = false
+    override val side = Side.FRONT
+    override val depthTest = true
+    override val depthWrite = true
+    override val blending = Blending.NONE
+    
+    override fun getUniforms(): Map<String, Any> = mapOf(
+        "topColor" to topColor.toVec4(),
+        "bottomColor" to bottomColor.toVec4()
     )
-)
-
-// Update uniform in render loop
-fun animate(time: Float) {
-    customMaterial.uniforms["time"] = Uniform.Float(time)
+    
+    override fun bind(encoder: GPURenderPassEncoder) {
+        // Bind uniform buffer
+    }
+    
+    override fun dispose() {
+        // Clean up GPU resources
+    }
+    
+    companion object {
+        init {
+            // Register shader with ShaderLibrary
+            ShaderLibrary.register("gradient", gradientShaderSource)
+        }
+    }
 }
 ```
 
----
+## ShaderLibrary Integration
 
-## RawShaderMaterial
-
-Like ShaderMaterial but without automatic uniforms injection.
+Materials work with the `ShaderLibrary` to manage shader compilation:
 
 ```kotlin
-class RawShaderMaterial(
-    vertexShader: String,
-    fragmentShader: String,
-    uniforms: MutableMap<String, Uniform> = mutableMapOf()
+import io.materia.engine.shader.ShaderLibrary
+
+// Register a custom shader
+ShaderLibrary.register("myShader", """
+    @vertex
+    fn vs_main(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
+        return vec4<f32>(position, 1.0);
+    }
+    
+    @fragment
+    fn fs_main() -> @location(0) vec4<f32> {
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+""")
+
+// Retrieve compiled shader
+val shader = ShaderLibrary.get("myShader")
+```
+
+## Material Disposal
+
+Materials hold GPU resources and must be disposed when no longer needed:
+
+```kotlin
+// Manual disposal
+material.dispose()
+
+// Using DisposableContainer
+val container = DisposableContainer()
+val material = BasicMaterial(color = Color.RED)
+container.track(material)
+
+// Later: disposes material and all tracked resources
+container.dispose()
+```
+
+## Platform Considerations
+
+### WebGPU (JS)
+
+Materials compile WGSL shaders at runtime. First-time compilation may cause a brief stall.
+
+```kotlin
+// JS: Shaders are WGSL strings compiled on first use
+val material = StandardMaterial(color = Color.BLUE)
+```
+
+### Vulkan (JVM)
+
+Materials reference pre-compiled SPIR-V binaries from the resources directory.
+
+```kotlin
+// JVM: Shaders loaded from src/jvmMain/resources/shaders/
+val material = StandardMaterial(color = Color.BLUE)
+```
+
+### Cross-Platform Usage
+
+The API is identical across platforms:
+
+```kotlin
+// Works on both JS and JVM
+val material = StandardMaterial(
+    color = Color(0.8f, 0.2f, 0.3f),
+    metalness = 0.5f,
+    roughness = 0.4f
 )
+
+val mesh = EngineMesh(geometry, material)
+scene.add(mesh)
+
+// Cleanup
+mesh.dispose()
+material.dispose()
 ```
 
----
+## Performance Tips
 
-## PointsMaterial
+1. **Batch Materials**: Use the same material instance for multiple meshes when possible
+2. **Limit Transparency**: Transparent objects are more expensive to render
+3. **Texture Atlases**: Combine textures to reduce material switches
+4. **LOD Materials**: Use simpler materials for distant objects
+5. **Shader Caching**: ShaderLibrary caches compiled shaders automatically
 
-Material for rendering point clouds.
+## Migration from Legacy Materials
 
-### Constructor
+If migrating from older Materia material APIs:
 
-```kotlin
-class PointsMaterial(
-    color: Color = Color.WHITE,
-    size: Float = 1f
-)
-```
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `WHITE` | Point color |
-| `size` | `Float` | `1.0` | Point size in pixels |
-| `sizeAttenuation` | `Boolean` | `true` | Scale with distance |
-| `map` | `Texture?` | `null` | Sprite texture |
-| `alphaMap` | `Texture?` | `null` | Alpha texture |
-
-### Example
-
-```kotlin
-val pointsMaterial = PointsMaterial().apply {
-    color = Color(0x88ccff)
-    size = 0.05f
-    sizeAttenuation = true
-    transparent = true
-    opacity = 0.8f
-}
-
-val points = Points(geometry, pointsMaterial)
-```
-
----
-
-## LineBasicMaterial
-
-Material for rendering lines.
-
-### Constructor
-
-```kotlin
-class LineBasicMaterial(
-    color: Color = Color.WHITE
-)
-```
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `WHITE` | Line color |
-| `linewidth` | `Float` | `1.0` | Line width (limited support) |
-| `linecap` | `String` | `"round"` | Line cap style |
-| `linejoin` | `String` | `"round"` | Line join style |
-
----
-
-## LineDashedMaterial
-
-Material for dashed lines.
-
-### Constructor
-
-```kotlin
-class LineDashedMaterial(
-    color: Color = Color.WHITE
-)
-```
-
-### Properties
-
-Inherits from `LineBasicMaterial` plus:
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `dashSize` | `Float` | `3.0` | Dash length |
-| `gapSize` | `Float` | `1.0` | Gap length |
-| `scale` | `Float` | `1.0` | Pattern scale |
-
----
-
-## SpriteMaterial
-
-Material for sprites (always camera-facing billboards).
-
-### Constructor
-
-```kotlin
-class SpriteMaterial(
-    map: Texture? = null
-)
-```
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `WHITE` | Tint color |
-| `map` | `Texture?` | `null` | Sprite texture |
-| `rotation` | `Float` | `0.0` | Rotation in radians |
-| `sizeAttenuation` | `Boolean` | `true` | Scale with distance |
-
----
-
-## ShadowMaterial
-
-Transparent material that only receives shadows.
-
-```kotlin
-class ShadowMaterial(
-    color: Color = Color.BLACK
-)
-```
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `color` | `Color` | `BLACK` | Shadow color |
-
-### Example
-
-```kotlin
-// Invisible ground that shows shadows
-val shadowPlane = Mesh(
-    PlaneGeometry(100f, 100f),
-    ShadowMaterial().apply { opacity = 0.5f }
-)
-shadowPlane.receiveShadow = true
-```
-
----
+| Legacy | Unified API |
+|--------|-------------|
+| `MeshBasicMaterial` | `BasicMaterial` |
+| `MeshStandardMaterial` | `StandardMaterial` |
+| `material.color = 0xFF0000` | `material.color = Color(1f, 0f, 0f)` |
+| `material.needsUpdate = true` | Automatic uniform updates |
 
 ## See Also
 
-- [Texture API](texture.md) - Loading and configuring textures
-- [Geometry API](geometry.md) - Geometry for materials
-- [Lighting API](lighting.md) - Lights that affect materials
-- [Advanced: Custom Shaders](../advanced/custom-shaders.md) - Writing shaders
+- [Renderer](renderer.md) - WebGPU renderer configuration
+- [Core](core.md) - Disposable and resource management
+- [Geometry](geometry.md) - Geometry and BufferGeometry
