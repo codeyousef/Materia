@@ -211,38 +211,29 @@ class VoxelWorld(
                     continue
                 }
 
-                pendingMeshes.add(chunk.position)
-                scope.launch {
-                    try {
-                        meshSemaphore.withPermit {
-                            val geometry = ChunkMeshGenerator.generate(chunk)
-                            withContext(mainDispatcher) {
-                                val wasNew = chunk.mesh == null
-                                chunk.updateMesh(geometry)
-                                chunk.mesh?.let { mesh ->
-                                    if (wasNew || mesh.parent == null) {
-                                        scene.add(mesh)
-                                        meshesGeneratedCount++  // T021: Track mesh generation progress
-                                    }
-                                }
-
-                                // T021: Track regeneration progress to fix missing faces
-                                if (isRegeneratingMeshes) {
-                                    regenerationCompletedCount++
-                                    if (regenerationCompletedCount >= regenerationTargetCount) {
-                                        isRegeneratingMeshes = false
-                                        logInfo("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
-                                    }
-                                }
-                            }
-                        }
-                    } finally {
-                        pendingMeshes.remove(chunk.position)
-                        if (chunk.isDirty) {
-                            onChunkDirty(chunk)
-                        }
+                // Generate mesh synchronously to avoid race conditions with renderer
+                // This ensures mesh updates happen on the same thread as rendering
+                val geometry = kotlinx.coroutines.runBlocking { 
+                    ChunkMeshGenerator.generate(chunk) 
+                }
+                val wasNew = chunk.mesh == null
+                chunk.updateMesh(geometry)
+                chunk.mesh?.let { mesh ->
+                    if (wasNew || mesh.parent == null) {
+                        scene.add(mesh)
+                        meshesGeneratedCount++  // T021: Track mesh generation progress
                     }
                 }
+
+                // T021: Track regeneration progress to fix missing faces
+                if (isRegeneratingMeshes) {
+                    regenerationCompletedCount++
+                    if (regenerationCompletedCount >= regenerationTargetCount) {
+                        isRegeneratingMeshes = false
+                        logInfo("✅ Mesh regeneration complete! $regenerationCompletedCount/$regenerationTargetCount chunks")
+                    }
+                }
+                
                 processed++
             }
         } finally {

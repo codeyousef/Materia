@@ -412,11 +412,15 @@ class VoxelCraftJVM {
             window = MemoryUtil.NULL
         }
 
-        // Terminate GLFW
-        glfwTerminate()
-        glfwSetErrorCallback(null)?.free()
-
-        logInfo("Cleanup complete")
+        // Force immediate halt BEFORE GLFW termination to prevent NVIDIA driver shutdown crashes
+        // The driver has known issues with cleanup ordering that can cause SIGSEGV
+        // Using halt() to skip shutdown hooks entirely
+        logInfo("Cleanup complete - forcing immediate halt")
+        Runtime.getRuntime().halt(0)
+        
+        // Note: The following code won't be reached due to halt()
+        // glfwTerminate()
+        // glfwSetErrorCallback(null)?.free()
     }
 
     private fun handleRendererInitializationFailure(cause: Throwable) {

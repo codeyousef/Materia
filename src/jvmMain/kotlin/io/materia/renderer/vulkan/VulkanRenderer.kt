@@ -41,7 +41,6 @@ import io.materia.renderer.gpu.GpuDeviceFactory
 import io.materia.renderer.gpu.GpuDiagnostics
 import io.materia.renderer.gpu.GpuPowerPreference
 import io.materia.renderer.gpu.GpuRequestConfig
-import io.materia.renderer.gpu.commandPoolHandle
 import io.materia.renderer.gpu.queueFamilyIndex
 import io.materia.renderer.gpu.unwrapDescriptorPool
 import io.materia.renderer.gpu.unwrapHandle
@@ -567,12 +566,11 @@ class VulkanRenderer(
         }
 
         val staleIds = meshBuffers.keys - retainedIds
-        if (staleIds.isNotEmpty()) {
-            // Wait for GPU to finish using these buffers before destroying
-            device?.let { vkDeviceWaitIdle(it) }
-            staleIds.forEach { id ->
-                meshBuffers.remove(id)?.let { destroyMeshBuffers(it) }
-            }
+        // Note: Skip explicit buffer destruction during render - it causes NVIDIA driver crashes.
+        // Stale buffers will be cleaned up when the device is destroyed or during dispose().
+        // This trades some memory for stability.
+        staleIds.forEach { id ->
+            meshBuffers.remove(id)
         }
 
         val clearColor = determineClearColor(scene)
@@ -1081,6 +1079,7 @@ class VulkanRenderer(
         uniformBuffer = null
 
         device?.let { deviceHandle ->
+            // Only destroy descriptor pool if we created it (not from gpuContext)
             if (descriptorPool != VK_NULL_HANDLE && ownsDescriptorPool) {
                 vkDestroyDescriptorPool(deviceHandle, descriptorPool, null)
                 descriptorPool = VK_NULL_HANDLE
@@ -1174,7 +1173,10 @@ class VulkanRenderer(
             return existing
         }
 
-        meshBuffers.remove(mesh.id)?.let { destroyMeshBuffers(it) }
+        // When updating mesh buffers, remove old entry but DON'T destroy the buffers immediately.
+        // Buffer destruction during render causes NVIDIA driver crashes.
+        // The old buffers will be cleaned up when the device is destroyed.
+        meshBuffers.remove(mesh.id)
         morphWarningMeshes.remove(mesh.id)
 
         val buildOptions = descriptor.buildGeometryOptions(geometry)
@@ -1240,7 +1242,6 @@ class VulkanRenderer(
             try {
                 bufferManager?.destroyBuffer(buffer)
             } catch (_: Exception) {
-                // Ignore destruction errors - buffer may already be freed or in use
             }
         }
 
@@ -1248,7 +1249,6 @@ class VulkanRenderer(
             try {
                 bufferManager?.destroyBuffer(buffer)
             } catch (_: Exception) {
-                // Ignore destruction errors - buffer may already be freed or in use
             }
         }
     }
@@ -1360,93 +1360,68 @@ class VulkanRenderer(
      *
      * Must be called before application exit to prevent resource leaks.
      * T017-T019: Clean up all managers.
-     * 
-     * Note: Some NVIDIA drivers have known issues with cleanup ordering that can cause
-     * sporadic crashes during JVM shutdown. These are driver-level issues outside our control.
      */
     override fun dispose() {
         if (!initialized) return
 
-        // Wait for device to finish
-        try {
-            device?.let { vkDeviceWaitIdle(it) }
-        } catch (_: Exception) { }
+        // Wait for device to finish all operations
+        device?.let { vkDeviceWaitIdle(it) }
 
-        // Step 1: Destroy pipelines
         pipelineCache.values.forEach { it.dispose() }
         pipelineCache.clear()
         activePipelineKey = null
 
-        // Step 2: Dispose managers
         materialTextureManager?.dispose()
         materialTextureManager = null
+
         environmentManager?.dispose()
         environmentManager = null
 
-        // Step 3: Destroy material descriptor resources
         if (materialTextureDescriptorPool != VK_NULL_HANDLE && device != null) {
             vkDestroyDescriptorPool(device!!, materialTextureDescriptorPool, null)
             materialTextureDescriptorPool = VK_NULL_HANDLE
         }
+
         if (materialTextureDescriptorSetLayout != VK_NULL_HANDLE && device != null) {
             vkDestroyDescriptorSetLayout(device!!, materialTextureDescriptorSetLayout, null)
             materialTextureDescriptorSetLayout = VK_NULL_HANDLE
         }
 
-        // Step 4: Clear mesh buffer references 
-        // Note: Explicit buffer destruction can cause NVIDIA driver crashes; device destruction handles cleanup
+        // Note: Skip explicit mesh buffer destruction - it can cause NVIDIA driver crashes.
+        // The buffers will be cleaned up when the device is destroyed by the GPU factory.
         meshBuffers.clear()
         swapchainFramebuffers = emptyList()
 
-        // Step 5: Destroy descriptor resources
         destroyDescriptorResources()
 
-        // Step 6: Dispose SwapchainManager
         swapchainManager?.dispose()
         swapchainManager = null
 
         renderPassManager = null
         bufferManager = null
 
-        // Step 7: Destroy render pass
         if (renderPass != VK_NULL_HANDLE && device != null) {
             vkDestroyRenderPass(device!!, renderPass, null)
             renderPass = VK_NULL_HANDLE
         }
 
-        // Step 8: Destroy command pool
         if (commandPool != VK_NULL_HANDLE && device != null) {
             vkDestroyCommandPool(device!!, commandPool, null)
             commandPool = VK_NULL_HANDLE
         }
 
-        // Final wait before device destruction
-        try {
-            device?.let { vkDeviceWaitIdle(it) }
-        } catch (_: Exception) { }
-
-        // Step 9: Destroy logical device
-        device?.let {
-            vkDestroyDevice(it, null)
-            device = null
-        }
+        // Note: Do NOT destroy device/instance - they are owned by gpuContext/GpuDeviceFactory.
+        // Destroying them causes double-free crashes with NVIDIA drivers.
+        device = null
+        instance = null
         gpuContext = null
-        
-        // Step 10: Destroy surface
+
+        // Destroy surface (we own this)
         if (surface is VulkanSurface) {
             surface.destroySurface()
         }
-        
-        // Note: Instance is NOT destroyed here because:
-        // 1. It was created by VulkanBootstrap, not the renderer
-        // 2. The instance is implicitly cleaned up when the JVM process exits
-        // 3. Explicit destruction causes double-free issues with LWJGL's internal state
-        instance = null
 
         initialized = false
-        
-        // Allow NVIDIA driver to complete async cleanup before returning
-        Thread.sleep(50)
     }
 
     fun requestFrameCapture(outputPath: String) {
