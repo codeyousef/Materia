@@ -91,12 +91,9 @@ class FontLoader(
 
     companion object {
         /**
-         * Parses a typeface.js JSON font.
+         * Parses a typeface.js JSON font using regex extraction.
          */
         internal fun parseFont(json: String): Font {
-            // Simple JSON parsing for font data
-            // In production, use kotlinx.serialization
-
             val glyphs = mutableMapOf<Char, FontGlyph>()
             var familyName = ""
             var resolution = 1000

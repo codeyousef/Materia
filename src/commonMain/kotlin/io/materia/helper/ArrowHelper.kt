@@ -81,8 +81,8 @@ class ArrowHelper(
 
         line = Group()
         line.name = "ArrowHelper_Line"
-        // Note: In a real implementation, this would be a Line object
-        // For now we store geometry info on the object
+        line.userData["geometry"] = lineGeometry
+        line.userData["material"] = lineMaterial
         add(line)
 
         // Create cone (head)
@@ -202,8 +202,13 @@ class ArrowHelper(
      * Disposes of the arrow's resources.
      */
     fun dispose() {
-        // Cleanup geometries and materials
-        // Materials are cleaned up when no longer referenced
+        // Dispose geometries stored in userData
+        (line.userData["geometry"] as? BufferGeometry)?.dispose()
+        (cone.userData["geometry"] as? BufferGeometry)?.dispose()
+
+        // Remove children to allow garbage collection
+        remove(line)
+        remove(cone)
     }
 
     companion object {
@@ -269,12 +274,13 @@ class PlaneHelper(
 
     private var _color = color.clone()
     private val material: LineBasicMaterial
+    private var geometry: BufferGeometry
 
     init {
         name = "PlaneHelper"
 
         // Create plane grid geometry
-        val geometry = createPlaneGeometry(_size)
+        geometry = createPlaneGeometry(_size)
 
         material = LineBasicMaterial(color = color.clone(), toneMapped = false)
 
@@ -351,14 +357,16 @@ class PlaneHelper(
      */
     fun setSize(size: Float) {
         _size = size
-        // Would need to regenerate geometry
+        // Regenerate geometry with new size
+        geometry.dispose()
+        geometry = createPlaneGeometry(_size)
     }
 
     /**
      * Disposes of resources.
      */
     fun dispose() {
-        // Materials are cleaned up when no longer referenced
+        geometry.dispose()
     }
 }
 

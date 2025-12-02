@@ -43,8 +43,8 @@ class LoadingManager(
     private var itemsLoaded = 0
     private var itemsTotal = 0
 
-    private val handlers = mutableMapOf<String, String>()
-    private val urlModifier: ((String) -> String)? = null
+    private val handlers = mutableListOf<Pair<Regex, (String) -> String>>()
+    private var urlModifier: ((String) -> String)? = null
 
     /**
      * Default manager instance for convenience.
@@ -102,30 +102,43 @@ class LoadingManager(
      * @return The resolved URL.
      */
     fun resolveURL(url: String): String {
-        val handler = handlers[url]
-        if (handler != null) return handler
+        // Check handlers first - find first matching regex
+        for ((regex, handler) in handlers) {
+            if (regex.matches(url)) {
+                return handler(url)
+            }
+        }
 
+        // Apply URL modifier if set
         return urlModifier?.invoke(url) ?: url
     }
 
     /**
-     * Registers a URL handler.
+     * Registers a URL handler for URLs matching a pattern.
+     *
+     * Handlers are checked in order of registration. The first matching
+     * handler's transform function is applied to the URL.
      *
      * @param regex Pattern to match URLs.
-     * @param handler The handler function.
+     * @param handler Function to transform matching URLs.
+     * @return This manager for chaining.
      */
-    fun addHandler(regex: Regex, handler: (String) -> String) {
-        // Store handlers for URL processing
+    fun addHandler(regex: Regex, handler: (String) -> String): LoadingManager {
+        handlers.add(Pair(regex, handler))
+        return this
     }
 
     /**
-     * Sets a URL modifier function.
+     * Sets a URL modifier function applied to all URLs.
+     *
+     * The modifier is applied after handler processing. Use this for
+     * global URL transformations like adding base paths or cache busting.
      *
      * @param transform Function to modify URLs before loading.
      * @return This manager for chaining.
      */
     fun setURLModifier(transform: (String) -> String): LoadingManager {
-        // Store URL modifier
+        urlModifier = transform
         return this
     }
 
