@@ -40,7 +40,7 @@ class VulkanBufferManager(
      * 5. Bind buffer to memory
      * 6. Map memory, copy data, unmap
      *
-     * @param data Vertex data (position + color, interleaved)
+     * @param data Vertex data (interleaved attributes, any stride)
      * @return Buffer handle with VkBuffer
      * @throws IllegalArgumentException if data is empty
      * @throws OutOfMemoryException if allocation fails
@@ -48,13 +48,6 @@ class VulkanBufferManager(
     override fun createVertexBuffer(data: FloatArray): BufferHandle {
         if (data.isEmpty()) {
             throw IllegalArgumentException("Vertex data cannot be empty")
-        }
-
-        // Data must be multiple of 6 floats (position + color)
-        if (data.size % 6 != 0) {
-            throw IllegalArgumentException(
-                "vertexData.size must be multiple of 6 (position + color), got ${data.size}"
-            )
         }
 
         val sizeBytes = data.size * Float.SIZE_BYTES

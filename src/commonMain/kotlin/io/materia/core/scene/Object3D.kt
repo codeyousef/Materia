@@ -289,7 +289,9 @@ abstract class Object3D {
 
         // Performance: Only update children if this object's world matrix changed
         if (forceChildren) {
-            for (child in children) {
+            // Take snapshot to avoid ConcurrentModificationException
+            val childrenSnapshot = children.toList()
+            for (child in childrenSnapshot) {
                 child.updateMatrixWorld(forceChildren)
             }
         }

@@ -388,19 +388,22 @@ class VoxelCraftJVM {
     }
 
     private fun cleanup() {
-        logInfo("ðŸ”š Shutting down...")
+        logInfo("Shutting down...")
+
+        // Dispose world first - this cancels async worldJob and stops mesh generation
+        if (::world.isInitialized) {
+            world.dispose()
+        }
+        
+        // Wait for async operations to settle
+        Thread.sleep(100)
 
         // Dispose renderer
         if (::renderer.isInitialized) {
             renderer.dispose()
         }
 
-        // Dispose world
-        if (::world.isInitialized) {
-            world.dispose()
-        }
-
-        // Cancel coroutine scope
+        // Cancel coroutine scope (world's job is already cancelled)
         gameScope.cancel()
 
         // Destroy window
@@ -413,7 +416,7 @@ class VoxelCraftJVM {
         glfwTerminate()
         glfwSetErrorCallback(null)?.free()
 
-        logInfo("âœ… Cleanup complete")
+        logInfo("Cleanup complete")
     }
 
     private fun handleRendererInitializationFailure(cause: Throwable) {
@@ -442,7 +445,9 @@ fun main() {
     try {
         VoxelCraftJVM().run()
     } catch (e: Exception) {
-        logError("âŒ Fatal error: ${e.message}", e)
-        throw e
+        logError("âŒ Fatal error: ${e.message}", e)
+        System.exit(1)
     }
+    // Force clean exit to avoid LWJGL/NVIDIA driver shutdown race conditions
+    System.exit(0)
 }

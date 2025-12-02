@@ -141,12 +141,16 @@ tasks.register<JavaExec>("runJvm") {
     group = "run"
     description = "Run VoxelCraft on JVM with LWJGL/OpenGL"
 
-    val runtimeClasspath = configurations.named("jvmRuntimeClasspath")
-    val jvmClasses = tasks.named("jvmMainClasses")
-
-    dependsOn(jvmClasses)
+    val jvmMain = kotlin.targets.getByName("jvm").compilations.getByName("main")
+    dependsOn(jvmMain.compileKotlinTaskName)
 
     mainClass.set("io.materia.examples.voxelcraft.MainJvmKt")
+
+    // Set classpath at configuration time (required for configuration cache)
+    classpath = files(
+        jvmMain.output.allOutputs,
+        configurations.named("jvmRuntimeClasspath")
+    )
 
     // Add JVM args for LWJGL native access on Java 17+
     jvmArgs = listOf(
@@ -169,7 +173,6 @@ tasks.register<JavaExec>("runJvm") {
     isIgnoreExitValue = false
 
     doFirst {
-        classpath = files(runtimeClasspath.get(), jvmClasses.get().outputs.files)
         println("🎮 Starting VoxelCraft (JVM/LWJGL)")
         println("Controls: WASD=Move, Mouse=Look, F=Flight, Space/Shift=Up/Down, ESC=Quit")
         println("OS: ${System.getProperty("os.name")}")

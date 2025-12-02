@@ -84,7 +84,9 @@ internal fun Object3D.attachChild(object3d: Object3D): Object3D {
 internal fun Object3D.findObjectByName(name: String): Object3D? {
     if (this.name == name) return this
 
-    for (child in children) {
+    // Take a snapshot to avoid ConcurrentModificationException
+    val childrenSnapshot = children.toList()
+    for (child in childrenSnapshot) {
         val result = child.getObjectByName(name)
         if (result != null) return result
     }
@@ -98,7 +100,9 @@ internal fun Object3D.findObjectByName(name: String): Object3D? {
 internal fun Object3D.findObjectById(id: Int): Object3D? {
     if (this.id == id) return this
 
-    for (child in children) {
+    // Take a snapshot to avoid ConcurrentModificationException
+    val childrenSnapshot = children.toList()
+    for (child in childrenSnapshot) {
         val result = child.getObjectById(id)
         if (result != null) return result
     }
@@ -118,7 +122,9 @@ internal fun Object3D.findObjectByProperty(name: String, value: Any): Object3D? 
         "receiveShadow" -> if (receiveShadow == value) return this
     }
 
-    for (child in children) {
+    // Take a snapshot to avoid ConcurrentModificationException
+    val childrenSnapshot = children.toList()
+    for (child in childrenSnapshot) {
         val result = child.getObjectByProperty(name, value)
         if (result != null) return result
     }
@@ -131,7 +137,9 @@ internal fun Object3D.findObjectByProperty(name: String, value: Any): Object3D? 
  */
 internal fun Object3D.traverseAll(callback: (Object3D) -> Unit) {
     callback(this)
-    for (child in children) {
+    // Take a snapshot to avoid ConcurrentModificationException
+    val childrenSnapshot = children.toList()
+    for (child in childrenSnapshot) {
         child.traverse(callback)
     }
 }
@@ -142,7 +150,9 @@ internal fun Object3D.traverseAll(callback: (Object3D) -> Unit) {
 internal fun Object3D.traverseOnlyVisible(callback: (Object3D) -> Unit) {
     if (!visible) return
     callback(this)
-    for (child in children) {
+    // Take a snapshot of children to avoid ConcurrentModificationException
+    val childrenSnapshot = children.toList()
+    for (child in childrenSnapshot) {
         child.traverseVisible(callback)
     }
 }

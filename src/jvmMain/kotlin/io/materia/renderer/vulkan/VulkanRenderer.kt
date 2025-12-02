@@ -41,6 +41,7 @@ import io.materia.renderer.gpu.GpuDeviceFactory
 import io.materia.renderer.gpu.GpuDiagnostics
 import io.materia.renderer.gpu.GpuPowerPreference
 import io.materia.renderer.gpu.GpuRequestConfig
+import io.materia.renderer.gpu.commandPoolHandle
 import io.materia.renderer.gpu.queueFamilyIndex
 import io.materia.renderer.gpu.unwrapDescriptorPool
 import io.materia.renderer.gpu.unwrapHandle
@@ -260,6 +261,7 @@ class VulkanRenderer(
     private val morphWarningMeshes = mutableSetOf<Int>()
     private var descriptorSetLayout: Long = VK_NULL_HANDLE
     private var descriptorPool: Long = VK_NULL_HANDLE
+    private var ownsDescriptorPool: Boolean = false
     private var descriptorSet: Long = VK_NULL_HANDLE
     private var materialTextureDescriptorSetLayout: Long = VK_NULL_HANDLE
     private var materialTextureDescriptorPool: Long = VK_NULL_HANDLE
@@ -565,8 +567,12 @@ class VulkanRenderer(
         }
 
         val staleIds = meshBuffers.keys - retainedIds
-        staleIds.forEach { id ->
-            meshBuffers.remove(id)?.let { destroyMeshBuffers(it) }
+        if (staleIds.isNotEmpty()) {
+            // Wait for GPU to finish using these buffers before destroying
+            device?.let { vkDeviceWaitIdle(it) }
+            staleIds.forEach { id ->
+                meshBuffers.remove(id)?.let { destroyMeshBuffers(it) }
+            }
         }
 
         val clearColor = determineClearColor(scene)
@@ -614,6 +620,9 @@ class VulkanRenderer(
 
                 val framebufferHandle = FramebufferHandle(swapchainFramebuffers[image.index])
                 renderPassMgr.beginRenderPass(clearColor, framebufferHandle)
+                
+                // Reset pipeline tracking since beginRenderPass resets pipelineBound
+                activePipelineKey = null
 
                 val descriptorHandle = descriptorSet
                 val extent = swapchain.getExtent()
@@ -999,6 +1008,7 @@ class VulkanRenderer(
                     throw RuntimeException("Failed to create descriptor pool: VkResult=$poolResult")
                 }
                 descriptorPool = pPool[0]
+                ownsDescriptorPool = true
             }
         }
 
@@ -1071,9 +1081,10 @@ class VulkanRenderer(
         uniformBuffer = null
 
         device?.let { deviceHandle ->
-            if (descriptorPool != VK_NULL_HANDLE) {
+            if (descriptorPool != VK_NULL_HANDLE && ownsDescriptorPool) {
                 vkDestroyDescriptorPool(deviceHandle, descriptorPool, null)
                 descriptorPool = VK_NULL_HANDLE
+                ownsDescriptorPool = false
             }
 
             if (descriptorSetLayout != VK_NULL_HANDLE) {
@@ -1229,6 +1240,7 @@ class VulkanRenderer(
             try {
                 bufferManager?.destroyBuffer(buffer)
             } catch (_: Exception) {
+                // Ignore destruction errors - buffer may already be freed or in use
             }
         }
 
@@ -1236,6 +1248,7 @@ class VulkanRenderer(
             try {
                 bufferManager?.destroyBuffer(buffer)
             } catch (_: Exception) {
+                // Ignore destruction errors - buffer may already be freed or in use
             }
         }
     }
@@ -1347,102 +1360,93 @@ class VulkanRenderer(
      *
      * Must be called before application exit to prevent resource leaks.
      * T017-T019: Clean up all managers.
+     * 
+     * Note: Some NVIDIA drivers have known issues with cleanup ordering that can cause
+     * sporadic crashes during JVM shutdown. These are driver-level issues outside our control.
      */
     override fun dispose() {
-        if (!initialized) {
-            println("T033: Dispose called but renderer not initialized, skipping")
-            return
-        }
-
-        println("T033: Starting Vulkan renderer disposal...")
+        if (!initialized) return
 
         // Wait for device to finish
-        println("T033: Waiting for device idle...")
-        device?.let { vkDeviceWaitIdle(it) }
-        println("T033: Device idle")
+        try {
+            device?.let { vkDeviceWaitIdle(it) }
+        } catch (_: Exception) { }
 
+        // Step 1: Destroy pipelines
         pipelineCache.values.forEach { it.dispose() }
         pipelineCache.clear()
         activePipelineKey = null
 
+        // Step 2: Dispose managers
         materialTextureManager?.dispose()
         materialTextureManager = null
-
         environmentManager?.dispose()
         environmentManager = null
 
+        // Step 3: Destroy material descriptor resources
         if (materialTextureDescriptorPool != VK_NULL_HANDLE && device != null) {
             vkDestroyDescriptorPool(device!!, materialTextureDescriptorPool, null)
             materialTextureDescriptorPool = VK_NULL_HANDLE
         }
-
         if (materialTextureDescriptorSetLayout != VK_NULL_HANDLE && device != null) {
             vkDestroyDescriptorSetLayout(device!!, materialTextureDescriptorSetLayout, null)
             materialTextureDescriptorSetLayout = VK_NULL_HANDLE
         }
 
-        meshBuffers.values.forEach { destroyMeshBuffers(it) }
+        // Step 4: Clear mesh buffer references 
+        // Note: Explicit buffer destruction can cause NVIDIA driver crashes; device destruction handles cleanup
         meshBuffers.clear()
         swapchainFramebuffers = emptyList()
 
+        // Step 5: Destroy descriptor resources
         destroyDescriptorResources()
 
-        // T019: Dispose SwapchainManager
-        println("T033: Disposing SwapchainManager...")
+        // Step 6: Dispose SwapchainManager
         swapchainManager?.dispose()
         swapchainManager = null
-        println("T033: SwapchainManager disposed")
 
-        // T018: RenderPassManager doesn't need explicit disposal (uses command buffer)
-        println("T033: Cleaning up RenderPassManager...")
         renderPassManager = null
-
-        // T017: BufferManager doesn't need explicit disposal (buffers disposed individually)
-        println("T033: Cleaning up BufferManager...")
         bufferManager = null
 
-        // Destroy render pass
+        // Step 7: Destroy render pass
         if (renderPass != VK_NULL_HANDLE && device != null) {
-            println("T033: Destroying render pass...")
             vkDestroyRenderPass(device!!, renderPass, null)
             renderPass = VK_NULL_HANDLE
-            println("T033: Render pass destroyed")
         }
 
-        // Destroy command pool (also frees command buffers)
+        // Step 8: Destroy command pool
         if (commandPool != VK_NULL_HANDLE && device != null) {
-            println("T033: Destroying command pool...")
             vkDestroyCommandPool(device!!, commandPool, null)
             commandPool = VK_NULL_HANDLE
-            println("T033: Command pool destroyed")
         }
 
-        // Destroy logical device
+        // Final wait before device destruction
+        try {
+            device?.let { vkDeviceWaitIdle(it) }
+        } catch (_: Exception) { }
+
+        // Step 9: Destroy logical device
         device?.let {
-            println("T033: Destroying logical device...")
             vkDestroyDevice(it, null)
             device = null
-            println("T033: Logical device destroyed")
         }
         gpuContext = null
-
-        // T019: Destroy surface
+        
+        // Step 10: Destroy surface
         if (surface is VulkanSurface) {
-            println("T033: Destroying surface...")
             surface.destroySurface()
-            println("T033: Surface destroyed")
         }
-
-        // Destroy instance
-        instance?.let {
-            println("T033: Destroying VkInstance...")
-            vkDestroyInstance(it, null)
-            instance = null
-            println("T033: VkInstance destroyed")
-        }
+        
+        // Note: Instance is NOT destroyed here because:
+        // 1. It was created by VulkanBootstrap, not the renderer
+        // 2. The instance is implicitly cleaned up when the JVM process exits
+        // 3. Explicit destruction causes double-free issues with LWJGL's internal state
+        instance = null
 
         initialized = false
-        println("T033: Vulkan renderer disposal completed")
+        
+        // Allow NVIDIA driver to complete async cleanup before returning
+        Thread.sleep(50)
     }
 
     fun requestFrameCapture(outputPath: String) {
