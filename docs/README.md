@@ -175,8 +175,8 @@ kotlin {
 
 ```bash
 # Clone the repository
-git clone https://github.com/codeyousef/KreeKt.git
-cd KreeKt
+git clone https://github.com/codeyousef/Materia.git
+cd Materia
 
 # Run Triangle demo
 ./gradlew :examples:triangle:runJvm          # Desktop
@@ -195,8 +195,8 @@ cd KreeKt
 
 - Check the documentation in this repository
 - Browse the [examples/](../examples/) directory
-- [Open an issue](https://github.com/codeyousef/KreeKt/issues) for bugs
-- [Start a discussion](https://github.com/codeyousef/KreeKt/discussions) for questions
+- [Open an issue](https://github.com/codeyousef/Materia/issues) for bugs
+- [Start a discussion](https://github.com/codeyousef/Materia/discussions) for questions
 
 ---
 

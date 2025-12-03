@@ -60,8 +60,8 @@
 ### Build
 
 ```bash
-git clone https://github.com/codeyousef/KreeKt.git
-cd KreeKt
+git clone https://github.com/codeyousef/Materia.git
+cd Materia
 
 # Build all targets
 ./gradlew build
