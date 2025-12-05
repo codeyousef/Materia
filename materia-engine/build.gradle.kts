@@ -32,7 +32,9 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                // materia-gpu provides abstract GPU types
                 implementation(project(":materia-gpu"))
+                // Root project provides wgpu4k and korlibs-math
                 implementation(project(":"))
                 implementation(libs.kotlinx.coroutines.core)
             }

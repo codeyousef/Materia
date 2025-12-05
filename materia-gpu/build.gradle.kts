@@ -67,6 +67,7 @@ kotlin {
 
         val androidMain by getting {
             dependencies {
+                // Native Vulkan library for Android
                 implementation(project(":materia-gpu-android-native"))
             }
         }

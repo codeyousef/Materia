@@ -70,7 +70,9 @@ class WebGPUBackendNegotiator : AbstractBackendNegotiator() {
 
     private suspend fun requestWebGPUAdapter(): dynamic {
         val gpu = js("navigator.gpu")
-        val promise: Promise<dynamic> = gpu.requestAdapter()
+        // Request high-performance GPU to avoid SwiftShader software fallback
+        val options = js("({ powerPreference: 'high-performance' })")
+        val promise: Promise<dynamic> = gpu.requestAdapter(options)
         return promise.await()
     }
 

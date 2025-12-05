@@ -42,7 +42,8 @@ internal class UniformBufferManager(
         }
 
         if (enableDiagnostics && frameInfo.frameCount < 50 && frameInfo.drawCallCount == 0) {
-            console.log("T021 Frame ${frameInfo.frameCount}: updateUniforms called, drawCallCount=${frameInfo.drawCallCount}")
+            // T021 Frame logging disabled for performance
+            // console.log("T021 Frame ${frameInfo.frameCount}: updateUniforms called, drawCallCount=${frameInfo.drawCallCount}")
         }
 
         val projMatrix = camera.projectionMatrix.elements

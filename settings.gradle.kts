@@ -38,6 +38,8 @@ include(":materia-validation")
 include(":materia-examples-common")
 
 // Core MVP modules
+// NOTE: materia-gpu is kept for abstract GPU types used by materia-engine
+// The actual rendering backend is now wgpu4k
 include(":materia-gpu")
 include(":materia-gpu-android-native")
 include(":materia-engine")

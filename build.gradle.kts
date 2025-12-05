@@ -217,6 +217,12 @@ kotlin {
                 // Asset loading and compression
                 implementation(libs.okio)
 
+                // wgpu4k for unified graphics backend
+                implementation(libs.wgpu4k)
+
+                // korlibs-math for math (Vector3, Matrix4, Quaternion, etc.)
+                implementation(libs.korlibs.math)
+
                 // Production readiness validation dependencies
                 implementation("org.jetbrains.kotlinx:kotlinx-io-core:0.3.0")
                 implementation("org.jetbrains.kotlin:kotlin-reflect:${libs.versions.kotlin.get()}")
@@ -535,14 +541,12 @@ val syncAndroidShaders = tasks.register<Sync>("syncAndroidShaders") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-gradle.projectsEvaluated {
-    project(":materia-gpu").extensions.configure<LibraryExtension>("android") {
-        sourceSets.getByName("main").assets.srcDir(androidShaderAssetsDir)
-    }
-    project(":materia-gpu").tasks.matching { it.name == "preBuild" }.configureEach {
-        dependsOn(syncAndroidShaders)
-    }
-}
+// NOTE: materia-gpu module removed - shader assets handling moved to wgpu4k-based setup
+// The following was removed:
+// gradle.projectsEvaluated {
+//     project(":materia-gpu").extensions.configure<LibraryExtension>("android") { ... }
+//     project(":materia-gpu").tasks.matching { it.name == "preBuild" }.configureEach { ... }
+// }
 
 tasks.register("listExamples") {
     group = "materia"

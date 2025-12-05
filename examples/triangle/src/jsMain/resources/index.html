@@ -107,7 +107,7 @@
     </style>
 </head>
 <body>
-<canvas id="materia-canvas"></canvas>
+<canvas id="materia-canvas" width="1280" height="720"></canvas>
 
 <div class="info-overlay">
     <h3>🚀 Materia 3D Engine</h3>
@@ -181,8 +181,26 @@
 </script>
 
 <script>
-    const canvas = document.getElementById('materia-canvas');
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    // WebGL fallback - only runs if WebGPU is not available
+    (async function() {
+        // Check for WebGPU first
+        if (navigator.gpu) {
+            try {
+                const adapter = await navigator.gpu.requestAdapter();
+                if (adapter) {
+                    console.log('WebGPU available, Kotlin/JS will handle rendering');
+                    return; // WebGPU is available, let Kotlin/JS handle it
+                }
+            } catch (e) {
+                console.warn('WebGPU adapter request failed:', e);
+            }
+        }
+        
+        // WebGPU not available, use WebGL fallback
+        console.log('WebGPU not available, using WebGL fallback');
+        
+        const canvas = document.getElementById('materia-canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
 
     if (gl) {
         document.getElementById('renderer').textContent = 'WebGL (Fallback)';
@@ -472,6 +490,7 @@
         console.error('WebGL not supported!');
         document.getElementById('renderer').textContent = 'Not Available';
     }
+    })();
 </script>
 </body>
 </html>

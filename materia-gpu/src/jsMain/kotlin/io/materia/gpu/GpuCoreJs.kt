@@ -67,26 +67,56 @@ actual class GpuInstance actual constructor(
     actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter =
         ensureActive {
             val gpu = requireWebGpu()
+            
+            // First, try to get a high-performance hardware adapter
             val jsOptions = emptyObject()
-            jsOptions.powerPreference = when (options.powerPreference) {
-                GpuPowerPreference.LOW_POWER -> "low-power"
-                GpuPowerPreference.HIGH_PERFORMANCE -> "high-performance"
+            jsOptions.powerPreference = "high-performance"
+            // Explicitly set forceFallbackAdapter to false to prefer hardware
+            jsOptions.forceFallbackAdapter = false
+            
+            console.log("[GpuInstance] Requesting adapter with powerPreference=high-performance, forceFallback=false")
+            
+            var adapterHandle = (gpu.requestAdapter(jsOptions) as Promise<dynamic>).awaitJs()
+            
+            // Check if we got a fallback adapter
+            val isFallback = adapterHandle?.isFallbackAdapter as? Boolean ?: false
+            val info = adapterHandle?.info
+            val isSwiftShader = (info?.architecture as? String)?.contains("swiftshader", ignoreCase = true) == true ||
+                               (info?.vendor as? String)?.contains("google", ignoreCase = true) == true
+            
+            // If we got SwiftShader, try requesting without any options (let browser choose)
+            if (isFallback || isSwiftShader) {
+                console.warn("[GpuInstance] Got software adapter, trying default adapter request...")
+                val defaultAdapter = (gpu.requestAdapter() as Promise<dynamic>).awaitJs()
+                val defaultInfo = defaultAdapter?.info
+                val defaultIsSwiftShader = (defaultInfo?.architecture as? String)?.contains("swiftshader", ignoreCase = true) == true
+                
+                if (defaultAdapter != null && !defaultIsSwiftShader) {
+                    console.log("[GpuInstance] Default adapter is hardware, using it")
+                    adapterHandle = defaultAdapter
+                } else {
+                    console.warn("[GpuInstance] ⚠️ No hardware GPU available - browser is forcing software rendering")
+                    console.warn("[GpuInstance] Check chrome://gpu for WebGPU status")
+                }
             }
-            if (options.forceFallbackAdapter) {
-                jsOptions.forceFallbackAdapter = true
+            
+            if (adapterHandle == null) {
+                error("Failed to acquire WebGPU adapter")
             }
-            val adapterHandle = (gpu.requestAdapter(jsOptions) as Promise<dynamic>).awaitJs()
-                ?: error("Failed to acquire WebGPU adapter")
 
-            val info = adapterHandle.info
+            val finalInfo = adapterHandle.info
+            console.log("[GpuInstance] Adapter info: device=${finalInfo?.device}, vendor=${finalInfo?.vendor}, architecture=${finalInfo?.architecture}, driver=${finalInfo?.driver}")
+            
             val adapterInfo = GpuAdapterInfo(
-                name = info?.device as? String
-                    ?: info?.name as? String
+                name = finalInfo?.device as? String
+                    ?: finalInfo?.name as? String
                     ?: "WebGPU Adapter",
-                vendor = info?.vendor as? String,
-                architecture = info?.architecture as? String,
-                driverVersion = info?.driver as? String ?: info?.driverVersion as? String
+                vendor = finalInfo?.vendor as? String,
+                architecture = finalInfo?.architecture as? String,
+                driverVersion = finalInfo?.driver as? String ?: finalInfo?.driverVersion as? String
             )
+            
+            console.log("[GpuInstance] Using adapter: ${adapterInfo.name} (${adapterInfo.vendor})")
 
             GpuAdapter(
                 backend = descriptor.preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,

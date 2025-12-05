@@ -34,6 +34,12 @@ fun main() {
         )
         console.log("Boot complete with dimensions: ${width}x${height}")
 
+        // Warn if using software renderer (SwiftShader)
+        if (boot.log.driverVersion.contains("SwiftShader", ignoreCase = true)) {
+            console.warn("⚠️ Running on SwiftShader (software renderer). Performance will be degraded.")
+            console.warn("To enable hardware WebGPU: chrome://flags/#enable-unsafe-webgpu")
+        }
+
         val runtime = boot.runtime
         println(boot.log.pretty())
 

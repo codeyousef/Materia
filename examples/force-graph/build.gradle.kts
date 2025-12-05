@@ -17,7 +17,12 @@ kotlin {
         browser {
             commonWebpackConfig {
                 outputFileName = "force-graph.js"
+                devServer = devServer?.copy(
+                    open = false,
+                    port = 8082
+                )
             }
+            binaries.executable()
             testTask {
                 enabled = false
             }

@@ -18,7 +18,12 @@ kotlin {
         browser {
             commonWebpackConfig {
                 outputFileName = "triangle.js"
+                devServer = devServer?.copy(
+                    open = false,
+                    port = 8081
+                )
             }
+            binaries.executable()
             testTask {
                 enabled = false
             }
