@@ -50,7 +50,6 @@ kotlin {
 dependencies {
     implementation(project(":examples:force-graph"))
     implementation(project(":materia-examples-common"))
-    implementation(project(":materia-gpu-android-native"))
     implementation(project(":materia-gpu"))
     implementation(project(":"))
 

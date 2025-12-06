@@ -1,5 +1,6 @@
 package io.materia.examples.forcegraph
 
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -19,6 +20,7 @@ fun main() {
     scope.launch {
         val canvas = ensureCanvas()
         val surface = WebGPUSurface(canvas)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
         val example = ForceGraphExample()
         val boot = example.boot(
             renderSurface = surface,
@@ -135,11 +137,23 @@ fun main() {
 
 private fun ensureCanvas(): HTMLCanvasElement {
     val existing = document.getElementById("force-graph-canvas")
-    if (existing is HTMLCanvasElement) return existing
+    if (existing is HTMLCanvasElement) {
+        // Set actual render dimensions from viewport
+        val width = window.innerWidth
+        val height = window.innerHeight
+        existing.width = width
+        existing.height = height
+        return existing
+    }
     val canvas = document.createElement("canvas") as HTMLCanvasElement
     canvas.id = "force-graph-canvas"
-    canvas.style.width = "100vw"
-    canvas.style.height = "100vh"
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    canvas.style.position = "absolute"
+    canvas.style.top = "0"
+    canvas.style.left = "0"
+    canvas.style.width = "100%"
+    canvas.style.height = "100%"
     canvas.style.display = "block"
     canvas.style.backgroundColor = "#0b1020"
     document.body?.appendChild(canvas)

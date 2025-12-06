@@ -50,7 +50,6 @@ kotlin {
 dependencies {
     implementation(project(":examples:embedding-galaxy"))
     implementation(project(":materia-examples-common"))
-    implementation(project(":materia-gpu-android-native"))
     implementation(project(":materia-gpu"))
     implementation(project(":materia-engine"))
     implementation(project(":"))

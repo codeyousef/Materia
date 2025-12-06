@@ -1,7 +1,6 @@
 package io.materia.performance
 
 import io.materia.camera.PerspectiveCamera
-import io.materia.core.math.MathObjectPools
 import io.materia.core.math.Vector3
 import io.materia.core.math.VectorBatch
 import io.materia.core.math.normalizeFast
@@ -73,94 +72,30 @@ class PerformanceOptimizationTest {
     }
 
     @Test
-    fun testObjectPoolingPerformance() {
+    fun testVectorOperationsPerformance() {
         // JVM warmup to avoid JIT compilation overhead
         repeat(1000) {
             val v1 = Vector3(1f, 2f, 3f)
             val v2 = Vector3(4f, 5f, 6f)
             v1.add(v2)
         }
-        repeat(1000) {
-            MathObjectPools.withVector3 { v1 ->
-                v1.set(1f, 2f, 3f)
-                MathObjectPools.withVector3 { v2 ->
-                    v2.set(4f, 5f, 6f)
-                    v1.add(v2)
-                }
-            }
-        }
 
-        // Benchmark: WITHOUT pooling (allocating new objects)
-        val timeWithoutPooling = measureTime {
+        // Benchmark: Vector operations (Korma-backed, mutable pattern)
+        val timeOperations = measureTime {
             repeat(10000) {
                 val v1 = Vector3(1f, 2f, 3f)
                 val v2 = Vector3(4f, 5f, 6f)
-                val result = v1.add(v2)
+                v1.add(v2)
             }
         }
 
-        println("Vector operations (no pooling): ${timeWithoutPooling.inWholeMilliseconds}ms")
+        println("Vector operations: ${timeOperations.inWholeMilliseconds}ms")
 
-        // Benchmark: WITH pooling
-        val timeWithPooling = measureTime {
-            repeat(10000) {
-                MathObjectPools.withVector3 { v1 ->
-                    v1.set(1f, 2f, 3f)
-                    MathObjectPools.withVector3 { v2 ->
-                        v2.set(4f, 5f, 6f)
-                        v1.add(v2)
-                    }
-                }
-            }
-        }
-
-        println("Vector operations (with pooling): ${timeWithPooling.inWholeMilliseconds}ms")
-
-        // Pooling should reduce allocations and improve performance
-        // Note: JVM escape analysis may optimize allocations, making pooling overhead higher
-        // We allow adaptive tolerance because the benchmark is micro-scale and noise dominates
-        val ratio = if (timeWithoutPooling == Duration.ZERO) {
-            Double.POSITIVE_INFINITY
-        } else {
-            timeWithPooling / timeWithoutPooling
-        }
-
-        val baselineMs = timeWithoutPooling.inWholeMilliseconds
-        if (baselineMs <= 5) {
-            // If the baseline completes in under ~5ms the measurement is dominated by noise.
-            // Ensure we at least avoid catastrophic regressions (>10x slower) while logging context.
-            println(
-                "Baseline under 5ms; treating pooling ratio as informational (ratio=${
-                    formatDouble(
-                        ratio
-                    )
-                })"
-            )
-            assertTrue(
-                ratio <= 10.0,
-                "Object pooling should not be an order of magnitude slower: ratio=${
-                    formatDouble(
-                        ratio
-                    )
-                }, " +
-                        "pooling=${timeWithPooling.inWholeMicroseconds}µs, no-pooling=${timeWithoutPooling.inWholeMicroseconds}µs"
-            )
-        } else {
-            val acceptableRatio = 4.0 // generous tolerance allowing for pool bookkeeping overhead
-            assertTrue(
-                ratio <= acceptableRatio,
-                "Object pooling should not excessively degrade performance: ratio=${
-                    formatDouble(
-                        ratio
-                    )
-                }, " +
-                        "pooling=${timeWithPooling.inWholeMicroseconds}µs, no-pooling=${timeWithoutPooling.inWholeMicroseconds}µs"
-            )
-        }
-
-        // Check pool stats
-        val stats = MathObjectPools.getStats()
-        println("Pool stats: $stats")
+        // Should complete in reasonable time
+        assertTrue(
+            timeOperations.inWholeMilliseconds < 500,
+            "10k vector operations should complete in < 500ms"
+        )
     }
 
     @Test

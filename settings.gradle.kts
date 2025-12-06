@@ -38,8 +38,9 @@ include(":materia-validation")
 include(":materia-examples-common")
 
 // Core MVP modules
+// NOTE: materia-gpu provides GPU abstraction backed by wgpu4k-toolkit
 include(":materia-gpu")
-include(":materia-gpu-android-native")
+// materia-gpu-android-native removed: wgpu4k-toolkit handles Android GPU backend
 include(":materia-engine")
 
 // Example projects

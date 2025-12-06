@@ -103,12 +103,32 @@ tasks.register<JavaExec>("runJvm") {
     // dependsOn(jvmMain.processResourcesTaskName) // Not available in this version of KGP?
 
     mainClass.set("io.materia.examples.embeddinggalaxy.MainKt")
-    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
+    jvmArgs(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx2G",
+        "-XX:+UseG1GC"
+    )
 
     classpath = files(
         jvmMain.output.allOutputs,
         configurations.named("jvmRuntimeClasspath")
     )
+    
+    // wgpu4k requires Java 22+ (FFM API, class file version 66.0)
+    val java22Home = file("/usr/lib/jvm/java-22-openjdk")
+    if (java22Home.exists()) {
+        executable = file("$java22Home/bin/java").absolutePath
+    }
+    
+    // Use jemalloc on Linux to work around wgpu4k memory management issues
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("linux")) {
+        val jemallocPath = "/usr/lib/libjemalloc.so"
+        if (file(jemallocPath).exists()) {
+            environment("LD_PRELOAD", jemallocPath)
+        }
+    }
     
     doFirst {
         println("🚀 Launching Embedding Galaxy on JVM")

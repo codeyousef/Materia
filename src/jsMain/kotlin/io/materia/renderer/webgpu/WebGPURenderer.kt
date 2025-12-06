@@ -117,7 +117,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var viewport = Viewport(0, 0, canvas.width, canvas.height)
 
     // T033: Debug flag for verbose frame logging (default off to avoid spam)
-    var enableFrameLogging: Boolean = true
+    var enableFrameLogging: Boolean = false
 
     // Renderer interface properties
     override val backend: BackendType = BackendType.WEBGPU

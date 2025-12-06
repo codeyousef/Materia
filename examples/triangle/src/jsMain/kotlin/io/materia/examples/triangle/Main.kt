@@ -1,18 +1,30 @@
 package io.materia.examples.triangle
 
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLCanvasElement
-import org.w3c.dom.HTMLPreElement
+
+private val console = js("console")
 
 fun main() {
     val scope = MainScope()
     scope.launch {
         val canvas = ensureCanvas()
+        
+        // Ensure canvas has proper render dimensions (not just CSS size)
+        val renderWidth = canvas.clientWidth.takeIf { it > 0 } ?: canvas.width.takeIf { it > 0 } ?: 1280
+        val renderHeight = canvas.clientHeight.takeIf { it > 0 } ?: canvas.height.takeIf { it > 0 } ?: 720
+        canvas.width = renderWidth
+        canvas.height = renderHeight
+        
+        console.log("Canvas: render=${canvas.width}x${canvas.height}, client=${canvas.clientWidth}x${canvas.clientHeight}")
+        
         val surface = WebGPUSurface(canvas)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
 
         val example = TriangleExample()
         val result = example.boot(
@@ -24,20 +36,22 @@ fun main() {
 
         println(message)
 
-        val pre = (document.createElement("pre") as HTMLPreElement).apply {
-            textContent = message
-            style.fontFamily = "monospace"
-            style.backgroundColor = "#111"
-            style.color = "#50fa7b"
-            style.padding = "16px"
-            style.margin = "24px"
-            style.borderRadius = "8px"
+        // Update the info overlay stats instead of appending a pre element
+        document.getElementById("objects")?.textContent = "2"
+        document.getElementById("renderer")?.textContent = "WebGPU"
+        
+        // Hide loading overlay
+        document.getElementById("loading-overlay")?.let { 
+            it.asDynamic().style.display = "none"
         }
 
-        document.body?.appendChild(pre)
-
+        var frameCount = 0
         fun renderLoop(timestamp: Double) {
             result.renderFrame()
+            frameCount++
+            if (frameCount % 60 == 0) {
+                console.log("Rendered $frameCount frames")
+            }
             window.requestAnimationFrame(::renderLoop)
         }
 
@@ -57,8 +71,15 @@ fun main() {
 }
 
 private fun ensureCanvas(): HTMLCanvasElement {
-    val existing = document.getElementById("triangle-canvas")
-    if (existing is HTMLCanvasElement) return existing
+    // Try to find the canvas from the HTML template first
+    val existing = document.getElementById("materia-canvas") 
+        ?: document.getElementById("triangle-canvas")
+    if (existing is HTMLCanvasElement) {
+        // Set proper dimensions if not already set
+        if (existing.width == 0) existing.width = 640
+        if (existing.height == 0) existing.height = 480
+        return existing
+    }
 
     val canvas = (document.createElement("canvas") as HTMLCanvasElement).apply {
         id = "triangle-canvas"

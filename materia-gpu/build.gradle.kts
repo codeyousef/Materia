@@ -38,6 +38,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(project(":"))
+                // wgpu4k-toolkit for unified GPU abstraction (replaces LWJGL Vulkan and custom native backends)
+                api(libs.wgpu4k)
             }
         }
 
@@ -50,8 +52,9 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                // LWJGL GLFW kept for windowing (wgpu4k-toolkit uses it internally for JVM)
                 implementation(libs.lwjgl.core)
-                implementation(libs.lwjgl.vulkan)
+                implementation(libs.lwjgl.glfw)
                 implementation(project(":"))
             }
         }
@@ -67,7 +70,7 @@ kotlin {
 
         val androidMain by getting {
             dependencies {
-                implementation(project(":materia-gpu-android-native"))
+                // wgpu4k-toolkit handles Android via its native helper - no custom native bridge needed
             }
         }
     }

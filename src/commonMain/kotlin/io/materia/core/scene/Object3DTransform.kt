@@ -17,30 +17,26 @@ internal fun Object3D.extractWorldPosition(target: Vector3 = Vector3()): Vector3
 
 /**
  * Gets the world quaternion of this object
- * OPTIMIZED: Uses object pooling to avoid allocations
+ * Uses temporary vectors to decompose the matrix
  */
 internal fun Object3D.extractWorldQuaternion(target: Quaternion = Quaternion()): Quaternion {
     updateMatrixWorld()
-    return MathObjectPools.withVector3 { tempPos ->
-        MathObjectPools.withVector3 { tempScale ->
-            matrixWorld.decompose(tempPos, target, tempScale)
-            target
-        }
-    }
+    val tempPos = Vector3()
+    val tempScale = Vector3()
+    matrixWorld.decompose(tempPos, target, tempScale)
+    return target
 }
 
 /**
  * Gets the world scale of this object
- * OPTIMIZED: Uses object pooling to avoid allocations
+ * Uses temporary vectors to decompose the matrix
  */
 internal fun Object3D.extractWorldScale(target: Vector3 = Vector3()): Vector3 {
     updateMatrixWorld()
-    return MathObjectPools.withVector3 { tempPos ->
-        MathObjectPools.withQuaternion { tempQuat ->
-            matrixWorld.decompose(tempPos, tempQuat, target)
-            target
-        }
-    }
+    val tempPos = Vector3()
+    val tempQuat = Quaternion()
+    matrixWorld.decompose(tempPos, tempQuat, target)
+    return target
 }
 
 /**
@@ -61,50 +57,41 @@ internal fun Object3D.setLookAt(target: Vector3) {
 
 /**
  * Rotates this object to face a target position
- * OPTIMIZED: Uses object pooling to avoid allocations
+ * Uses temporary vectors and matrices
  */
 internal fun Object3D.setLookAt(x: Float, y: Float, z: Float) {
-    MathObjectPools.withVector3 { target ->
-        target.set(x, y, z)
-        MathObjectPools.withVector3 { position ->
-            getWorldPosition(position)
-            MathObjectPools.withMatrix4 { m1 ->
-                m1.lookAt(position, target, Vector3.UP)
-                quaternion.setFromRotationMatrix(m1)
+    val target = Vector3(x, y, z)
+    val position = Vector3()
+    getWorldPosition(position)
+    val m1 = Matrix4()
+    m1.lookAt(position, target, Vector3.UP)
+    quaternion.setFromRotationMatrix(m1)
 
-                parent?.let { p ->
-                    m1.extractRotation(p.matrixWorld)
-                    MathObjectPools.withQuaternion { q1 ->
-                        q1.setFromRotationMatrix(m1)
-                        quaternion.premultiply(q1.invert())
-                    }
-                }
-            }
-        }
+    parent?.let { p ->
+        m1.extractRotation(p.matrixWorld)
+        val q1 = Quaternion()
+        q1.setFromRotationMatrix(m1)
+        quaternion.premultiply(q1.invert())
     }
 }
 
 /**
  * Rotates around an axis by an angle
- * OPTIMIZED: Uses object pooling to avoid allocations
  */
 internal fun Object3D.applyRotationOnAxis(axis: Vector3, angle: Float): Object3D {
-    MathObjectPools.withQuaternion { q1 ->
-        q1.setFromAxisAngle(axis, angle)
-        quaternion.multiply(q1)
-    }
+    val q1 = Quaternion()
+    q1.setFromAxisAngle(axis, angle)
+    quaternion.multiply(q1)
     return this
 }
 
 /**
  * Rotates around world axis
- * OPTIMIZED: Uses object pooling to avoid allocations
  */
 internal fun Object3D.applyRotationOnWorldAxis(axis: Vector3, angle: Float): Object3D {
-    MathObjectPools.withQuaternion { q1 ->
-        q1.setFromAxisAngle(axis, angle)
-        quaternion.premultiply(q1)
-    }
+    val q1 = Quaternion()
+    q1.setFromAxisAngle(axis, angle)
+    quaternion.premultiply(q1)
     return this
 }
 
@@ -131,13 +118,11 @@ internal fun Object3D.applyRotationZ(angle: Float): Object3D {
 
 /**
  * Translates along an axis
- * OPTIMIZED: Uses object pooling to avoid allocations
  */
 internal fun Object3D.applyTranslationOnAxis(axis: Vector3, distance: Float): Object3D {
-    MathObjectPools.withVector3 { v1 ->
-        v1.copy(axis).applyQuaternion(quaternion)
-        position.add(v1.multiplyScalar(distance))
-    }
+    val v1 = Vector3()
+    v1.copy(axis).applyQuaternion(quaternion)
+    position.add(v1.multiplyScalar(distance))
     return this
 }
 
@@ -171,13 +156,11 @@ internal fun Object3D.convertLocalToWorld(vector: Vector3): Vector3 {
 
 /**
  * Converts world coordinates to local coordinates
- * OPTIMIZED: Uses object pooling to avoid allocations
  */
 internal fun Object3D.convertWorldToLocal(vector: Vector3): Vector3 {
-    return MathObjectPools.withMatrix4 { inverseMatrix ->
-        inverseMatrix.copy(matrixWorld).invert()
-        vector.applyMatrix4(inverseMatrix)
-    }
+    val inverseMatrix = Matrix4()
+    inverseMatrix.copy(matrixWorld).invert()
+    return vector.applyMatrix4(inverseMatrix)
 }
 
 /**

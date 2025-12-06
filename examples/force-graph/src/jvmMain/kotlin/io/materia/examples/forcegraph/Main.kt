@@ -1,6 +1,7 @@
 package io.materia.examples.forcegraph
 
 import io.materia.gpu.GpuBackend
+import io.materia.gpu.initializeGpuContext
 import io.materia.io.saveJson
 import io.materia.renderer.SurfaceFactory
 import kotlinx.coroutines.runBlocking
@@ -59,6 +60,7 @@ fun main() = runBlocking {
     val example = ForceGraphExample(preferredBackends = listOf(GpuBackend.VULKAN))
     val boot = runCatching {
         val surface = SurfaceFactory.create(window)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
         example.boot(renderSurface = surface, widthOverride = width, heightOverride = height)
     }.getOrElse { throwable ->
         println("⚠️ Force Graph failed to acquire a GPU surface: ${throwable.message ?: throwable::class.simpleName}")

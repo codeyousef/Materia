@@ -18,7 +18,12 @@ kotlin {
         browser {
             commonWebpackConfig {
                 outputFileName = "triangle.js"
+                devServer = devServer?.copy(
+                    open = false,
+                    port = 8081
+                )
             }
+            binaries.executable()
             testTask {
                 enabled = false
             }
@@ -106,7 +111,27 @@ tasks.register<JavaExec>("runJvm") {
         jvmMainCompilation.output.allOutputs,
         jvmMainCompilation.runtimeDependencyFiles
     )
-    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
+    jvmArgs(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx2G",
+        "-XX:+UseG1GC"
+    )
+    
+    // wgpu4k requires Java 22+ (FFM API, class file version 66.0)
+    val java22Home = file("/usr/lib/jvm/java-22-openjdk")
+    if (java22Home.exists()) {
+        executable = file("$java22Home/bin/java").absolutePath
+    }
+    
+    // Use jemalloc on Linux to work around wgpu4k memory management issues
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("linux")) {
+        val jemallocPath = "/usr/lib/libjemalloc.so"
+        if (file(jemallocPath).exists()) {
+            environment("LD_PRELOAD", jemallocPath)
+        }
+    }
 
     doFirst {
         println("🎮 Starting Materia Triangle Example (JVM)")
@@ -130,29 +155,6 @@ tasks.register("runJs") {
         println("🌐 Launching Materia Triangle Example (Browser)")
         println("Opening dev server - ensure a WebGPU capable browser is available")
     }
-}
-
-tasks.register("dev") {
-    group = "run"
-    description = "Development mode - continuous build and run"
-
-    dependsOn("runJs")
-
-    doFirst {
-        println("🔄 Starting development mode with hot reload")
-    }
-}
-
-tasks.register("jsBrowserRun") {
-    group = "run"
-    description = "Alias for browser triangle run task"
-    dependsOn("runJs")
-}
-
-tasks.register("wasmJsBrowserRun") {
-    group = "run"
-    description = "Alias for Web/WASM browser run (dev server) for Triangle example"
-    dependsOn("runJs")
 }
 
 tasks.register("installDebug") {
