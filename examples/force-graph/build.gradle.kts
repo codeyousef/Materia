@@ -107,7 +107,27 @@ tasks.register<JavaExec>("runJvm") {
         jvmMainCompilation.output.allOutputs,
         jvmMainCompilation.runtimeDependencyFiles
     )
-    jvmArgs("-Dorg.lwjgl.system.stackSize=8192")
+    jvmArgs(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx2G",
+        "-XX:+UseG1GC"
+    )
+    
+    // wgpu4k requires Java 22+ (FFM API, class file version 66.0)
+    val java22Home = file("/usr/lib/jvm/java-22-openjdk")
+    if (java22Home.exists()) {
+        executable = file("$java22Home/bin/java").absolutePath
+    }
+    
+    // Use jemalloc on Linux to work around wgpu4k memory management issues
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("linux")) {
+        val jemallocPath = "/usr/lib/libjemalloc.so"
+        if (file(jemallocPath).exists()) {
+            environment("LD_PRELOAD", jemallocPath)
+        }
+    }
 
     doFirst {
         println("🚀 Launching Force Graph on JVM")
@@ -131,29 +151,6 @@ tasks.register("runJs") {
         println("🌐 Launching Force Graph (Browser / WebGPU)")
         println("Ensure a WebGPU-capable browser is available.")
     }
-}
-
-tasks.register("dev") {
-    group = "run"
-    description = "Development mode for Force Graph (browser)"
-
-    dependsOn("runJs")
-
-    doFirst {
-        println("🔄 Starting Force Graph dev server (WebGPU)")
-    }
-}
-
-tasks.register("jsBrowserRun") {
-    group = "run"
-    description = "Alias task for Force Graph browser run"
-    dependsOn("runJs")
-}
-
-tasks.register("wasmJsBrowserRun") {
-    group = "run"
-    description = "Alias task for Force Graph browser run (intended wasmJs entry point)"
-    dependsOn("runJs")
 }
 
 tasks.register("runAndroid") {

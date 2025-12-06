@@ -1,5 +1,6 @@
 package io.materia.examples.triangle
 
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -23,6 +24,7 @@ fun main() {
         console.log("Canvas: render=${canvas.width}x${canvas.height}, client=${canvas.clientWidth}x${canvas.clientHeight}")
         
         val surface = WebGPUSurface(canvas)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
 
         val example = TriangleExample()
         val result = example.boot(

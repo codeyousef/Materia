@@ -1,6 +1,7 @@
 package io.materia.examples.triangle
 
 import io.materia.gpu.GpuBackend
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.SurfaceFactory
 import kotlinx.coroutines.runBlocking
 import org.lwjgl.glfw.GLFW.*
@@ -37,6 +38,7 @@ fun main() = runBlocking {
 
     val runtime = runCatching {
         val surface = SurfaceFactory.create(window)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
         example.boot(renderSurface = surface)
     }.getOrElse { throwable ->
         println("⚠️ Triangle renderer failed to acquire GPU surface: ${throwable.message ?: throwable::class.simpleName}")

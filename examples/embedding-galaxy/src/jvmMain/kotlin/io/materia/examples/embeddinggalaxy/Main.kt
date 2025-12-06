@@ -1,6 +1,7 @@
 package io.materia.examples.embeddinggalaxy
 
 import io.materia.gpu.GpuBackend
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.SurfaceFactory
 import kotlinx.coroutines.runBlocking
 import org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_BRACKET
@@ -51,6 +52,7 @@ fun main() = runBlocking {
 
     val boot = runCatching {
         val surface = SurfaceFactory.create(window)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context with existing window
         example.boot(renderSurface = surface, widthOverride = width, heightOverride = height)
     }.getOrElse { throwable ->
         println("⚠️ Embedding Galaxy failed to acquire a GPU surface: ${throwable.message ?: throwable::class.simpleName}")

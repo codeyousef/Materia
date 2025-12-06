@@ -7,67 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0.0] - 2025-12-05
+
+### Changed
+
+#### Major: Migration to wgpu4k and korlibs-math
+
+This release represents a major architectural change, replacing custom GPU backends and math implementations with battle-tested libraries while maintaining the same API surface.
+
+**GPU Abstraction Layer**
+- **Migrated to wgpu4k-toolkit v0.1.1** - Unified cross-platform GPU abstraction using wgpu-native
+  - Single `wgpu4k` dependency in commonMain replaces all platform-specific GPU code
+  - WebGPU backend for JavaScript/Browser (via browser's native WebGPU API)
+  - Vulkan/Metal backend for JVM and Android (via wgpu-native)
+  - Removed ~1500 lines of custom LWJGL Vulkan code from JVM
+  - Removed ~1000 lines of custom WebGPU bindings from JS
+  - Removed custom C++/JNI native Vulkan bridge for Android (`materia-gpu-android-native` module deleted)
+
+**Math Library**
+- **Migrated to korlibs-math v6.0.0** - Production-ready math library from korge ecosystem
+  - Replaced custom `Vector3`, `Matrix4`, `Quaternion` with korma equivalents
+  - Added `KormaInterop.kt` bridge for seamless integration
+  - Removed custom `MathObjectPools.kt` (korma handles pooling internally)
+
 ### Added
 
-#### Feature 016: Production-Ready WebGPU Renderer
-- **WebGPU Renderer Implementation** - Modern graphics API support for high-performance 3D rendering
-  - Full WebGPU API integration using @webgpu/types
-  - WGSL shader compilation and validation
-  - GPU buffer management with efficient pooling (5-10 FPS improvement, 90% allocation reduction)
-  - Render pipeline state caching (8-15 FPS improvement)
-  - Automatic GPU context loss recovery
+- **JS Browser Examples**
+  - Fixed webpack `publicPath` configuration for all examples
+  - Added `index.html` for force-graph example
+  - Fixed canvas positioning and sizing issues
+  - Improved WebGPU adapter detection and SwiftShader fallback warnings
 
-- **Performance Optimizations**
-  - Frustum culling: +15 FPS improvement by skipping off-screen objects
-  - Draw call batching: +10 FPS improvement (reduces draw calls from 1000+ to 50-100)
-  - Buffer pooling with size classes (256KB, 512KB, 1MB, 2MB, 4MB)
-  - Pipeline caching to avoid redundant compilation
+- **Build Improvements**
+  - Added `binaries.executable()` to JS examples for webpack dev server
+  - Webpack config files (`publicPath.js`) for proper asset loading
 
-- **Automatic Fallback Mechanism**
-  - WebGPU detection on page load
-  - Automatic fallback to WebGL when WebGPU unavailable
-  - Browser compatibility: Chrome 113+, Firefox 121+, Safari 18+
+### Fixed
 
-- **Developer Experience**
-  - Comprehensive error reporting with actionable suggestions
-  - Render statistics tracking (FPS, draw calls, triangles, memory usage)
-  - Extended statistics with frame timing and memory breakdown
+- **Android Examples**
+  - Copied missing SPIR-V shader assets to embedding-galaxy-android and force-graph-android
+  - Android minSdk set to 28 (required by wgpu4k-toolkit)
 
-- **Core Components**
-  - `WebGPURenderer` - Main renderer class implementing Renderer interface
-  - `WebGPUShaderModule` - WGSL shader compilation and validation
-  - `WebGPUBuffer` - GPU buffer management (vertex, index, uniform buffers)
-  - `WebGPUTexture` - 2D/3D texture handling and sampling
-  - `WebGPUPipeline` - Render pipeline state management
-  - `PipelineCache` - Hash-based pipeline caching system
-  - `BufferPool` - Efficient buffer memory pooling
-  - `ContextLossRecovery` - Automatic GPU context recovery
-  - `FrustumCuller` - View frustum culling optimization
-  - `DrawCallBatcher` - Draw call batching system
-  - `ErrorReporter` - Structured error reporting and logging
-  - `RenderStatsTracker` - Performance and memory statistics tracking
-  - `WebGPURendererFactory` - Factory with automatic WebGL fallback
+- **JS/Browser Examples**  
+  - Fixed "Automatic publicPath is not supported" webpack error
+  - Fixed canvas not finding correct element ID (materia-canvas vs triangle-canvas)
+  - Fixed force-graph rendering outside visible viewport
+  - Disabled verbose frame logging that was impacting performance
+
+### Removed
+
+- **Deleted `materia-gpu-android-native` module** - Custom C++/JNI Vulkan bridge replaced by wgpu4k
+- **Removed LWJGL Vulkan dependencies from JVM** - wgpu4k-toolkit handles GPU abstraction
+- **Removed custom WebGPU JS bindings** - wgpu4k provides unified API
 
 ### Technical Details
 
-- **Dependencies**: @webgpu/types 0.1.40, kotlinx-coroutines-core 1.8.0
-- **Target Platforms**: Browser (JavaScript/WebAssembly via Kotlin/JS)
-- **Performance**: Achieves 60 FPS at 1,000,000 triangles @ 1920x1080
-- **Library Size**: Optimized to stay within <5MB constitutional limit
+- **Runtime Requirements**:
+  - **JVM: Java 22+** (wgpu4k-toolkit is compiled with class file version 66.0)
+  - Android: minSdk 28
+  
+- **Dependencies**:
+  - `wgpu4k-toolkit`: 0.1.1 (commonMain - all platforms)
+  - `korlibs-math`: 6.0.0
+  - Android minSdk: 28 (up from 24)
+  
+- **Platform Support** (all via wgpu4k-toolkit):
+  - ✅ JVM (Vulkan/Metal via wgpu-native) - requires Java 22+
+  - ✅ JS/Browser (native WebGPU API)
+  - ✅ Android (Vulkan via wgpu-native)
+
+- **Architecture**: All GPU code now uses a single unified API:
+  - `expect`/`actual` pattern wraps wgpu4k types
+  - Platform context initialization: `glfwContextRenderer()` (JVM), `canvasContextRenderer()` (JS), `androidContextRenderer()` (Android)
+  - Type conversion functions bridge Materia types to wgpu4k types
 
 ### Migration Guide
 
-For projects currently using WebGLRenderer:
+The public API remains largely unchanged. Internal math types now use korma:
 
 ```kotlin
-// Before (WebGL)
-val renderer = WebGLRenderer(canvas)
+// Types are compatible - Vec3/Vector3 interop via KormaInterop
+import korlibs.math.geom.Vector3
+import korlibs.math.geom.Matrix4
+import korlibs.math.geom.Quaternion
 
-// After (WebGPU with automatic fallback)
-val renderer = WebGPURendererFactory.create(canvas)
+// Use extension functions for conversion if needed
+import io.materia.core.math.toVec3
+import io.materia.core.math.toKormaVector3
 ```
-
-The WebGPU renderer is API-compatible with the existing Renderer interface, requiring no changes to scene graph, camera, or material code.
 
 ## [0.1.0] - 2025-10-04
 

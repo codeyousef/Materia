@@ -1,5 +1,6 @@
 package io.materia.examples.embeddinggalaxy
 
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -26,6 +27,7 @@ fun main() {
         console.log("Starting with canvas: ${width}x${height}")
         
         val surface = WebGPUSurface(canvas)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
         val example = EmbeddingGalaxyExample(performanceProfile = PerformanceProfile.Web)
         val boot = example.boot(
             renderSurface = surface,

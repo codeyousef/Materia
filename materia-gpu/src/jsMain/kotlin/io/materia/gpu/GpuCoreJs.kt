@@ -1,61 +1,20 @@
 package io.materia.gpu
 
 import io.materia.renderer.RenderSurface
-import kotlin.js.Promise
-import kotlin.js.jsTypeOf
-import kotlinx.coroutines.await
-import org.khronos.webgl.Float32Array
-import org.khronos.webgl.Uint8Array
-import org.w3c.dom.HTMLCanvasElement
+import io.ygdrasil.webgpu.*
 
-private fun navigatorGpu(): dynamic =
-    js("typeof navigator !== 'undefined' && navigator.gpu ? navigator.gpu : null")
+// ============================================================================
+// wgpu4k-based JS GPU Backend Implementation
+// ============================================================================
 
-private fun currentDocument(): dynamic = js("typeof document !== 'undefined' ? document : null")
-private fun emptyObject(): dynamic = js("({})")
-private fun emptyArray(): dynamic = js("[]")
-private fun createCanvas(document: dynamic): dynamic = document.createElement("canvas")
-
-private fun JsArray(): dynamic = emptyArray()
-
-private fun FloatArray.componentOrDefault(index: Int, default: Double): Double =
-    if (index in indices) this[index].toDouble() else default
-
-private suspend fun <T> Promise<T>.awaitJs(): T = await()
-
-private fun requireWebGpu(): dynamic =
-    navigatorGpu() ?: error("WebGPU is not available in this environment")
-
-private fun String?.orDefault(default: String): String = this ?: default
-
-private fun ensureCanvas(label: String?): dynamic {
-    val document = currentDocument() ?: error("Document is not available")
-    val canvasId = label.orDefault("materia-canvas")
-    val existing = document.getElementById(canvasId)
-    return existing ?: createCanvas(document).also { created ->
-        created.id = canvasId
-        val parent = document.body ?: document
-        parent.appendChild(created)
-    }
-}
-
-private fun configureCanvas(canvas: dynamic, width: Int, height: Int) {
-    canvas.width = width
-    canvas.height = height
-}
-
-private fun createUint8Array(length: Int): Uint8Array = Uint8Array(length)
-private fun createFloat32Array(length: Int): Float32Array = Float32Array(length)
-
-private fun callIfFunction(target: dynamic, functionName: String) {
-    val fn = target[functionName]
-    if (fn != null && jsTypeOf(fn) == "function") {
-        fn.call(target)
-    }
+internal object JsWgpuContextHolder {
+    var canvasContext: CanvasContext? = null
+    
+    val wgpuContext: WGPUContext?
+        get() = canvasContext?.wgpuContext
 }
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance {
-    requireWebGpu()
     return GpuInstance(descriptor)
 }
 
@@ -64,74 +23,27 @@ actual class GpuInstance actual constructor(
 ) {
     private var disposed = false
 
-    actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter =
-        ensureActive {
-            val gpu = requireWebGpu()
-            
-            // First, try to get a high-performance hardware adapter
-            val jsOptions = emptyObject()
-            jsOptions.powerPreference = "high-performance"
-            // Explicitly set forceFallbackAdapter to false to prefer hardware
-            jsOptions.forceFallbackAdapter = false
-            
-            console.log("[GpuInstance] Requesting adapter with powerPreference=high-performance, forceFallback=false")
-            
-            var adapterHandle = (gpu.requestAdapter(jsOptions) as Promise<dynamic>).awaitJs()
-            
-            // Check if we got a fallback adapter
-            val isFallback = adapterHandle?.isFallbackAdapter as? Boolean ?: false
-            val info = adapterHandle?.info
-            val isSwiftShader = (info?.architecture as? String)?.contains("swiftshader", ignoreCase = true) == true ||
-                               (info?.vendor as? String)?.contains("google", ignoreCase = true) == true
-            
-            // If we got SwiftShader, try requesting without any options (let browser choose)
-            if (isFallback || isSwiftShader) {
-                console.warn("[GpuInstance] Got software adapter, trying default adapter request...")
-                val defaultAdapter = (gpu.requestAdapter() as Promise<dynamic>).awaitJs()
-                val defaultInfo = defaultAdapter?.info
-                val defaultIsSwiftShader = (defaultInfo?.architecture as? String)?.contains("swiftshader", ignoreCase = true) == true
-                
-                if (defaultAdapter != null && !defaultIsSwiftShader) {
-                    console.log("[GpuInstance] Default adapter is hardware, using it")
-                    adapterHandle = defaultAdapter
-                } else {
-                    console.warn("[GpuInstance] ⚠️ No hardware GPU available - browser is forcing software rendering")
-                    console.warn("[GpuInstance] Check chrome://gpu for WebGPU status")
-                }
-            }
-            
-            if (adapterHandle == null) {
-                error("Failed to acquire WebGPU adapter")
-            }
-
-            val finalInfo = adapterHandle.info
-            console.log("[GpuInstance] Adapter info: device=${finalInfo?.device}, vendor=${finalInfo?.vendor}, architecture=${finalInfo?.architecture}, driver=${finalInfo?.driver}")
-            
-            val adapterInfo = GpuAdapterInfo(
-                name = finalInfo?.device as? String
-                    ?: finalInfo?.name as? String
-                    ?: "WebGPU Adapter",
-                vendor = finalInfo?.vendor as? String,
-                architecture = finalInfo?.architecture as? String,
-                driverVersion = finalInfo?.driver as? String ?: finalInfo?.driverVersion as? String
+    actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter {
+        check(!disposed) { "GpuInstance has been disposed." }
+        val ctx = JsWgpuContextHolder.wgpuContext
+            ?: error("Canvas context not initialized. Call GpuSurface.attachRenderSurface first.")
+        
+        return GpuAdapter(
+            backend = GpuBackend.WEBGPU,
+            options = options,
+            info = GpuAdapterInfo(
+                name = ctx.adapter.info.device,
+                vendor = ctx.adapter.info.vendor,
+                architecture = ctx.adapter.info.architecture,
+                driverVersion = ctx.adapter.info.description
             )
-            
-            console.log("[GpuInstance] Using adapter: ${adapterInfo.name} (${adapterInfo.vendor})")
-
-            GpuAdapter(
-                backend = descriptor.preferredBackends.firstOrNull() ?: GpuBackend.WEBGPU,
-                options = options,
-                info = adapterInfo
-            ).apply { attachHandle(adapterHandle) }
-        }
+        )
+    }
 
     actual fun dispose() {
         disposed = true
-    }
-
-    private inline fun <T> ensureActive(block: () -> T): T {
-        check(!disposed) { "GpuInstance has been disposed." }
-        return block()
+        JsWgpuContextHolder.canvasContext?.close()
+        JsWgpuContextHolder.canvasContext = null
     }
 }
 
@@ -140,40 +52,10 @@ actual class GpuAdapter actual constructor(
     actual val options: GpuRequestAdapterOptions,
     actual val info: GpuAdapterInfo
 ) {
-    private var handle: dynamic = null
-
-    internal fun attachHandle(adapterHandle: dynamic) {
-        handle = adapterHandle
-    }
-
-    private fun adapterHandle(): dynamic {
-        val stored = handle
-        require(stored != null) { "Adapter handle not initialised" }
-        return stored
-    }
-
     actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        if (descriptor.requiredFeatures.isNotEmpty()) {
-            jsDescriptor.requiredFeatures = descriptor.requiredFeatures.toTypedArray()
-        }
-        if (descriptor.requiredLimits.isNotEmpty()) {
-            val limits = emptyObject()
-            val limitsDyn = limits
-            descriptor.requiredLimits.forEach { (key, value) ->
-                limitsDyn[key] = value
-            }
-            jsDescriptor.requiredLimits = limits
-        }
-
-        val deviceHandle =
-            (adapterHandle().requestDevice(jsDescriptor) as Promise<dynamic>).awaitJs()
-        val queueHandle = deviceHandle.queue ?: error("WebGPU device queue unavailable")
-
-        return GpuDevice(this, descriptor).apply {
-            attachHandles(deviceHandle, queueHandle)
-        }
+        val ctx = JsWgpuContextHolder.wgpuContext
+            ?: error("wgpu4k context not available")
+        return GpuDevice(this, descriptor)
     }
 }
 
@@ -181,885 +63,454 @@ actual class GpuDevice actual constructor(
     actual val adapter: GpuAdapter,
     actual val descriptor: GpuDeviceDescriptor
 ) {
-    private var deviceHandle: dynamic = null
-    private var queueHandle: dynamic = null
+    internal val wgpuDevice: GPUDevice
+        get() = JsWgpuContextHolder.wgpuContext?.device
+            ?: error("wgpu4k context not available")
 
     actual val queue: GpuQueue = GpuQueue(descriptor.label)
 
-    internal fun attachHandles(device: dynamic, queue: dynamic) {
-        deviceHandle = device
-        queueHandle = queue
-        this.queue.attachQueue(queue)
-    }
-
-    internal fun handle(): dynamic {
-        val handle = deviceHandle
-        require(handle != null) { "Device handle not initialised" }
-        return handle
-    }
-
-    private fun queue(): dynamic {
-        val handle = queueHandle
-        require(handle != null) { "Queue handle not initialised" }
-        return handle
-    }
-
     actual fun createBuffer(descriptor: GpuBufferDescriptor): GpuBuffer {
-        require(descriptor.size <= Int.MAX_VALUE) {
-            "WebGPU buffer size must be <= Int.MAX_VALUE, got ${descriptor.size}"
-        }
-
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        jsDescriptor.size = descriptor.size.toInt()
-        jsDescriptor.usage = descriptor.usage
-        jsDescriptor.mappedAtCreation = descriptor.mappedAtCreation
-        val buffer = handle().createBuffer(jsDescriptor)
-        return GpuBuffer(this, descriptor).apply { attach(buffer, queue()) }
+        val wgpuBuffer = wgpuDevice.createBuffer(
+            BufferDescriptor(
+                label = descriptor.label ?: "",
+                size = descriptor.size.toULong(),
+                usage = descriptor.usage.toWgpuBufferUsage(),
+                mappedAtCreation = descriptor.mappedAtCreation
+            )
+        )
+        return GpuBuffer(this, descriptor, wgpuBuffer)
     }
 
     actual fun createTexture(descriptor: GpuTextureDescriptor): GpuTexture {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        val size = emptyObject()
-        size.width = descriptor.size.first
-        size.height = descriptor.size.second
-        size.depthOrArrayLayers = descriptor.size.third
-        jsDescriptor.size = size
-        jsDescriptor.mipLevelCount = descriptor.mipLevelCount
-        jsDescriptor.sampleCount = descriptor.sampleCount
-        jsDescriptor.dimension = when (descriptor.dimension) {
-            GpuTextureDimension.D1 -> "1d"
-            GpuTextureDimension.D2 -> "2d"
-            GpuTextureDimension.D3 -> "3d"
-        }
-        jsDescriptor.format = descriptor.format.toWebGpuFormat()
-        jsDescriptor.usage = descriptor.usage
-        val texture = handle().createTexture(jsDescriptor)
-        return GpuTexture(this, descriptor).apply { attach(texture) }
+        val (width, height, depth) = descriptor.size
+        val wgpuTexture = wgpuDevice.createTexture(
+            TextureDescriptor(
+                label = descriptor.label ?: "",
+                size = Extent3D(width.toUInt(), height.toUInt(), depth.toUInt()),
+                mipLevelCount = descriptor.mipLevelCount.toUInt(),
+                sampleCount = descriptor.sampleCount.toUInt(),
+                dimension = descriptor.dimension.toWgpu(),
+                format = descriptor.format.toWgpu(),
+                usage = descriptor.usage.toWgpuTextureUsage()
+            )
+        )
+        return GpuTexture(this, descriptor, wgpuTexture)
     }
 
     actual fun createSampler(descriptor: GpuSamplerDescriptor): GpuSampler {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        jsDescriptor.addressModeU =
-            descriptor.addressModeU.name.lowercase().replace('_', '-')
-        jsDescriptor.addressModeV =
-            descriptor.addressModeV.name.lowercase().replace('_', '-')
-        jsDescriptor.addressModeW =
-            descriptor.addressModeW.name.lowercase().replace('_', '-')
-        jsDescriptor.magFilter = descriptor.magFilter.name.lowercase()
-        jsDescriptor.minFilter = descriptor.minFilter.name.lowercase()
-        jsDescriptor.mipmapFilter = descriptor.mipmapFilter.name.lowercase()
-        jsDescriptor.lodMinClamp = descriptor.lodMinClamp
-        jsDescriptor.lodMaxClamp = descriptor.lodMaxClamp
-        val sampler = handle().createSampler(jsDescriptor)
-        return GpuSampler(this, descriptor).apply { attach(sampler) }
+        val wgpuSampler = wgpuDevice.createSampler(
+            SamplerDescriptor(
+                label = descriptor.label ?: "",
+                addressModeU = descriptor.addressModeU.toWgpu(),
+                addressModeV = descriptor.addressModeV.toWgpu(),
+                addressModeW = descriptor.addressModeW.toWgpu(),
+                magFilter = descriptor.magFilter.toWgpu(),
+                minFilter = descriptor.minFilter.toWgpu(),
+                mipmapFilter = descriptor.mipmapFilter.toWgpu(),
+                lodMinClamp = descriptor.lodMinClamp,
+                lodMaxClamp = descriptor.lodMaxClamp
+            )
+        )
+        return GpuSampler(this, descriptor, wgpuSampler)
     }
 
     actual fun createBindGroupLayout(descriptor: GpuBindGroupLayoutDescriptor): GpuBindGroupLayout {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        val entries = JsArray()
-        descriptor.entries.forEach { entry ->
-            val jsEntry = emptyObject()
-            jsEntry.binding = entry.binding
-            jsEntry.visibility = entry.visibility.toWebGpuVisibilityMask()
-            when (entry.resourceType) {
-                GpuBindingResourceType.UNIFORM_BUFFER -> {
-                    val buffer = emptyObject()
-                    buffer.type = "uniform"
-                    jsEntry.buffer = buffer
+        val entries = descriptor.entries.map { entry ->
+            BindGroupLayoutEntry(
+                binding = entry.binding.toUInt(),
+                visibility = entry.visibility.toWgpu(),
+                buffer = when (entry.resourceType) {
+                    GpuBindingResourceType.UNIFORM_BUFFER -> BufferBindingLayout(type = GPUBufferBindingType.Uniform)
+                    GpuBindingResourceType.STORAGE_BUFFER -> BufferBindingLayout(type = GPUBufferBindingType.Storage)
+                    else -> null
+                },
+                sampler = when (entry.resourceType) {
+                    GpuBindingResourceType.SAMPLER -> SamplerBindingLayout()
+                    else -> null
+                },
+                texture = when (entry.resourceType) {
+                    GpuBindingResourceType.TEXTURE -> TextureBindingLayout()
+                    else -> null
                 }
-
-                GpuBindingResourceType.STORAGE_BUFFER -> {
-                    val buffer = emptyObject()
-                    buffer.type = "storage"
-                    jsEntry.buffer = buffer
-                }
-
-                GpuBindingResourceType.SAMPLER -> {
-                    val sampler = emptyObject()
-                    sampler.type = "filtering"
-                    jsEntry.sampler = sampler
-                }
-
-                GpuBindingResourceType.TEXTURE -> {
-                    val texture = emptyObject()
-                    texture.sampleType = "float"
-                    texture.viewDimension = "2d"
-                    texture.multisampled = false
-                    jsEntry.texture = texture
-                }
-            }
-            entries.push(jsEntry)
+            )
         }
-        jsDescriptor.entries = entries
-        val layout = handle().createBindGroupLayout(jsDescriptor)
-        return GpuBindGroupLayout(this, descriptor).apply { attach(layout) }
+        val wgpuLayout = wgpuDevice.createBindGroupLayout(
+            BindGroupLayoutDescriptor(label = descriptor.label ?: "", entries = entries)
+        )
+        return GpuBindGroupLayout(this, descriptor, wgpuLayout)
     }
 
     actual fun createBindGroup(descriptor: GpuBindGroupDescriptor): GpuBindGroup {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        jsDescriptor.layout = descriptor.layout.handle()
-        val entries = JsArray()
-        descriptor.entries.forEach { entry ->
-            val jsEntry = emptyObject()
-            jsEntry.binding = entry.binding
-            val resource = when (val binding = entry.resource) {
-                is GpuBindingResource.Buffer -> {
-                    val bufferBinding = emptyObject()
-                    bufferBinding.buffer = binding.buffer.handle()
-                    if (binding.offset != 0L) {
-                        bufferBinding.offset = binding.offset
-                    }
-                    binding.size?.let { bufferBinding.size = it }
-                    bufferBinding
+        val entries = descriptor.entries.map { entry ->
+            BindGroupEntry(
+                binding = entry.binding.toUInt(),
+                resource = when (val res = entry.resource) {
+                    is GpuBindingResource.Buffer -> BufferBinding(
+                        buffer = res.buffer.wgpuBuffer,
+                        offset = res.offset.toULong(),
+                        size = res.size?.toULong() ?: res.buffer.descriptor.size.toULong()
+                    )
+                    is GpuBindingResource.Sampler -> res.sampler.wgpuSampler
+                    is GpuBindingResource.Texture -> res.textureView.wgpuTextureView
                 }
-
-                is GpuBindingResource.Sampler -> binding.sampler.handle()
-                is GpuBindingResource.Texture -> binding.textureView.handle()
-            }
-            jsEntry.resource = resource
-            entries.push(jsEntry)
+            )
         }
-        jsDescriptor.entries = entries
-        val bindGroup = handle().createBindGroup(jsDescriptor)
-        return GpuBindGroup(descriptor.layout, descriptor).apply { attach(bindGroup) }
+        val wgpuBindGroup = wgpuDevice.createBindGroup(
+            BindGroupDescriptor(
+                label = descriptor.label ?: "",
+                layout = descriptor.layout.wgpuLayout,
+                entries = entries
+            )
+        )
+        return GpuBindGroup(descriptor.layout, descriptor, wgpuBindGroup)
     }
 
     actual fun createCommandEncoder(descriptor: GpuCommandEncoderDescriptor?): GpuCommandEncoder {
-        val encoder = descriptor?.label?.let {
-            val encDesc = emptyObject()
-            encDesc.label = it
-            handle().createCommandEncoder(encDesc)
-        } ?: handle().createCommandEncoder()
-        return GpuCommandEncoder(this, descriptor).apply { attach(encoder) }
+        val wgpuEncoder = wgpuDevice.createCommandEncoder(
+            descriptor?.let { CommandEncoderDescriptor(label = it.label ?: "") }
+        )
+        return GpuCommandEncoder(this, descriptor, wgpuEncoder)
     }
 
     actual fun createShaderModule(descriptor: GpuShaderModuleDescriptor): GpuShaderModule {
-        val moduleDescriptor = emptyObject()
-        descriptor.label?.let { moduleDescriptor.label = it }
-        moduleDescriptor.code = descriptor.code
-        val module = handle().createShaderModule(moduleDescriptor)
-        return GpuShaderModule(this, descriptor).apply { attach(module) }
+        val wgpuModule = wgpuDevice.createShaderModule(
+            ShaderModuleDescriptor(label = descriptor.label ?: "", code = descriptor.code)
+        )
+        return GpuShaderModule(this, descriptor, wgpuModule)
     }
 
     actual fun createRenderPipeline(descriptor: GpuRenderPipelineDescriptor): GpuRenderPipeline {
-        val pipelineDescriptor = emptyObject()
-        descriptor.label?.let { pipelineDescriptor.label = it }
-
-        if (descriptor.bindGroupLayouts.isNotEmpty()) {
-            val layoutDescriptor = emptyObject()
-            val layouts = JsArray()
-            descriptor.bindGroupLayouts.forEach { layout ->
-                layouts.push(layout.handle())
-            }
-            layoutDescriptor.bindGroupLayouts = layouts
-            val pipelineLayout = handle().createPipelineLayout(layoutDescriptor)
-            pipelineDescriptor.layout = pipelineLayout
-        } else {
-            pipelineDescriptor.layout = "auto"
-        }
-        descriptor.depthState?.let { depthState ->
-            val depthStencil = emptyObject()
-            depthStencil.format = depthState.format.toWebGpuFormat()
-            depthStencil.depthWriteEnabled = depthState.depthWriteEnabled
-            depthStencil.depthCompare = depthState.depthCompare.toWebGpu()
-            pipelineDescriptor.depthStencil = depthStencil
-        }
-
-        val vertexState = emptyObject()
-        vertexState.module = descriptor.vertexShader.handle()
-        vertexState.entryPoint = "main"
-        val vertexBuffers = JsArray()
-        descriptor.vertexBuffers.forEach { layout ->
-            val bufferLayout = emptyObject()
-            bufferLayout.arrayStride = layout.arrayStride
-            bufferLayout.stepMode = layout.stepMode.toWebGpu()
-            val attributes = JsArray()
-            layout.attributes.forEach { attribute ->
-                val attributeDesc = emptyObject()
-                attributeDesc.shaderLocation = attribute.shaderLocation
-                attributeDesc.offset = attribute.offset
-                attributeDesc.format = attribute.format.toWebGpuFormat()
-                attributes.push(attributeDesc)
-            }
-            bufferLayout.attributes = attributes
-            vertexBuffers.push(bufferLayout)
-        }
-        vertexState.buffers = vertexBuffers
-        pipelineDescriptor.vertex = vertexState
-
-        descriptor.fragmentShader?.let { fragment ->
-            val fragmentState = emptyObject()
-            fragmentState.module = fragment.handle()
-            fragmentState.entryPoint = "main"
-            val targets = JsArray()
-            descriptor.colorFormats.forEach { format ->
-                val target = emptyObject()
-                target.format = format.toWebGpuFormat()
-                val blend = descriptor.blendMode.toWebGpu()
-                if (blend != null) {
-                    target.blend = blend
+        val vertexBuffers = descriptor.vertexBuffers.map { buf ->
+            VertexBufferLayout(
+                arrayStride = buf.arrayStride.toULong(),
+                stepMode = buf.stepMode.toWgpu(),
+                attributes = buf.attributes.map { attr ->
+                    VertexAttribute(
+                        format = attr.format.toWgpu(),
+                        offset = attr.offset.toULong(),
+                        shaderLocation = attr.shaderLocation.toUInt()
+                    )
                 }
-                targets.push(target)
-            }
-            fragmentState.targets = targets
-            pipelineDescriptor.fragment = fragmentState
+            )
         }
 
-        val primitive = emptyObject()
-        primitive.topology = descriptor.primitiveTopology.toWebGpu()
-        primitive.cullMode = descriptor.cullMode.toWebGpu()
-        primitive.frontFace = descriptor.frontFace.toWebGpu()
-        pipelineDescriptor.primitive = primitive
-
-        descriptor.depthStencilFormat?.let { depthFormat ->
-            val depthStencil = emptyObject()
-            depthStencil.format = depthFormat.toWebGpuFormat()
-            depthStencil.depthWriteEnabled = true
-            depthStencil.depthCompare = "less"
-            pipelineDescriptor.depthStencil = depthStencil
+        val fragmentState = descriptor.fragmentShader?.let { fragModule ->
+            FragmentState(
+                module = fragModule.wgpuModule,
+                entryPoint = "main",
+                targets = descriptor.colorFormats.map { format ->
+                    ColorTargetState(
+                        format = format.toWgpu(),
+                        blend = descriptor.blendMode.toWgpu()
+                    )
+                }
+            )
         }
 
-        val pipeline = handle().createRenderPipeline(pipelineDescriptor)
-        return GpuRenderPipeline(this, descriptor).apply { attach(pipeline) }
+        val depthStencil = descriptor.depthState?.let { ds ->
+            DepthStencilState(
+                format = ds.format.toWgpu(),
+                depthWriteEnabled = ds.depthWriteEnabled,
+                depthCompare = ds.depthCompare.toWgpu()
+            )
+        }
+
+        val layout = if (descriptor.bindGroupLayouts.isNotEmpty()) {
+            wgpuDevice.createPipelineLayout(
+                PipelineLayoutDescriptor(
+                    bindGroupLayouts = descriptor.bindGroupLayouts.map { it.wgpuLayout }
+                )
+            )
+        } else null
+
+        val wgpuPipeline = wgpuDevice.createRenderPipeline(
+            RenderPipelineDescriptor(
+                label = descriptor.label ?: "",
+                layout = layout,
+                vertex = VertexState(
+                    module = descriptor.vertexShader.wgpuModule,
+                    entryPoint = "main",
+                    buffers = vertexBuffers
+                ),
+                fragment = fragmentState,
+                primitive = PrimitiveState(
+                    topology = descriptor.primitiveTopology.toWgpu(),
+                    frontFace = descriptor.frontFace.toWgpu(),
+                    cullMode = descriptor.cullMode.toWgpu()
+                ),
+                depthStencil = depthStencil
+            )
+        )
+        return GpuRenderPipeline(this, descriptor, wgpuPipeline)
     }
 
     actual fun createComputePipeline(descriptor: GpuComputePipelineDescriptor): GpuComputePipeline {
-        val pipelineDescriptor = emptyObject()
-        descriptor.label?.let { pipelineDescriptor.label = it }
-        val computeState = emptyObject()
-        computeState.module = descriptor.shader.handle()
-        computeState.entryPoint = "main"
-        pipelineDescriptor.compute = computeState
-        pipelineDescriptor.layout = "auto"
-        val pipeline = handle().createComputePipeline(pipelineDescriptor)
-        return GpuComputePipeline(this, descriptor).apply { attach(pipeline) }
+        val wgpuPipeline = wgpuDevice.createComputePipeline(
+            ComputePipelineDescriptor(
+                label = descriptor.label ?: "",
+                compute = ProgrammableStage(
+                    module = descriptor.shader.wgpuModule,
+                    entryPoint = "main"
+                )
+            )
+        )
+        return GpuComputePipeline(this, descriptor, wgpuPipeline)
     }
 
     actual fun destroy() {
-        val handle = deviceHandle
-        if (handle != null) {
-            callIfFunction(handle, "destroy")
-        }
+        wgpuDevice.close()
     }
 }
 
 actual class GpuQueue actual constructor(
     actual val label: String?
 ) {
-    private var queueHandle: dynamic = null
-
-    internal fun attachQueue(handle: dynamic) {
-        queueHandle = handle
-    }
+    private val wgpuQueue: GPUQueue
+        get() = JsWgpuContextHolder.wgpuContext?.device?.queue
+            ?: error("wgpu4k context not available")
 
     actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
         if (commandBuffers.isEmpty()) return
-        val queue = queueHandle ?: return
-        val jsBuffers = JsArray()
-        commandBuffers.forEach { buffer ->
-            jsBuffers.push(buffer.handle())
-        }
-        queue.submit(jsBuffers)
+        wgpuQueue.submit(commandBuffers.map { it.wgpuCommandBuffer })
+    }
+    
+    fun writeBuffer(buffer: GpuBuffer, offset: Long, data: ByteArray) {
+        wgpuQueue.writeBuffer(buffer.wgpuBuffer, offset.toULong(), data)
     }
 }
 
 actual class GpuSurface actual constructor(
     actual val label: String?
 ) {
-    internal var configuration: GpuSurfaceConfiguration? = null
     private var configuredDevice: GpuDevice? = null
-    internal var canvas: dynamic = null
-    private var context: dynamic = null
-    internal var attachedSurface: RenderSurface? = null
+    private var _width: Int = 0
+    private var _height: Int = 0
+
+    private val wgpuSurface: Surface
+        get() = JsWgpuContextHolder.wgpuContext?.surface
+            ?: error("wgpu4k context not available")
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
         configuredDevice = device
-        this.configuration = configuration
-        // Use the attached canvas if available, otherwise create/find one by label
-        val existingCanvas = canvas
-        val canvasElement = if (existingCanvas != null && jsTypeOf(existingCanvas) != "undefined") {
-            existingCanvas
-        } else {
-            ensureCanvas(label)
-        }
-        configureCanvas(canvasElement, configuration.width, configuration.height)
-        this.canvas = canvasElement
-        
-        console.log("GpuSurface.configure: canvas.width=${canvasElement.width}, canvas.height=${canvasElement.height}, config=${configuration.width}x${configuration.height}")
-
-        context = context ?: canvasElement.getContext("webgpu")
-                ?: error("Unable to acquire WebGPU canvas context")
-
-        val jsConfig = emptyObject()
-        jsConfig.device = device.handle()
-        jsConfig.format = configuration.format.toWebGpuFormat()
-        jsConfig.usage = configuration.usage
-        jsConfig.alphaMode = "opaque"
-        context.configure(jsConfig)
-        
-        // Check what the context thinks the size is
-        val tex = context.getCurrentTexture()
-        console.log("GpuSurface.configure: texture size=${tex.width}x${tex.height}")
+        _width = configuration.width
+        _height = configuration.height
+        wgpuSurface.configure(
+            SurfaceConfiguration(
+                device = device.wgpuDevice,
+                format = configuration.format.toWgpu(),
+                usage = configuration.usage.toWgpuTextureUsage(),
+                alphaMode = configuration.alphaMode.toWgpu()
+            )
+        )
     }
 
     actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
-        val gpu = requireWebGpu()
-        val preferred = gpu.getPreferredCanvasFormat?.call(gpu) as? String
-        return when (preferred) {
-            "bgra8unorm" -> GpuTextureFormat.BGRA8_UNORM
-            "rgba8unorm" -> GpuTextureFormat.RGBA8_UNORM
-            "rgba16float" -> GpuTextureFormat.RGBA16_FLOAT
-            else -> configuration?.format ?: GpuTextureFormat.BGRA8_UNORM
-        }
+        return GpuTextureFormat.BGRA8_UNORM
     }
 
     actual fun acquireFrame(): GpuSurfaceFrame {
-        val device = configuredDevice ?: error("GpuSurface not configured with a device")
-        val context = context ?: error("Surface not configured with context")
-        val canvas = this.canvas ?: error("GpuSurface canvas not initialised")
-        val textureHandle = context.getCurrentTexture()
-            ?: error("Failed to acquire swapchain texture")
-        val surfaceConfig = configuration ?: error("Surface configuration missing")
+        val device = configuredDevice ?: error("Surface not configured")
+        val ctx = JsWgpuContextHolder.wgpuContext ?: error("wgpu4k context not available")
         
-        // Get actual texture dimensions from the WebGPU texture, not from canvas
-        val actualWidth = textureHandle.width as Int
-        val actualHeight = textureHandle.height as Int
-        
+        val surfaceTexture = ctx.renderingContext.getCurrentTexture()
         val texture = GpuTexture(
-            device = device,
-            descriptor = GpuTextureDescriptor(
-                label = "${label.orDefault("surface")}-frame",
-                size = Triple(actualWidth, actualHeight, 1),
-                mipLevelCount = 1,
-                sampleCount = 1,
-                dimension = GpuTextureDimension.D2,
-                format = surfaceConfig.format,
-                usage = surfaceConfig.usage
-            )
-        ).apply { attach(textureHandle) }
+            device,
+            GpuTextureDescriptor(
+                size = Triple(_width, _height, 1),
+                format = GpuTextureFormat.BGRA8_UNORM,
+                usage = GpuTextureUsage.RENDER_ATTACHMENT.mask
+            ),
+            surfaceTexture
+        )
         val view = texture.createView(GpuTextureViewDescriptor())
         return GpuSurfaceFrame(texture, view)
     }
 
     actual fun present(frame: GpuSurfaceFrame) {
-        // WebGPU presents automatically after queue submission.
+        wgpuSurface.present()
     }
 
     actual fun resize(width: Int, height: Int) {
-        val dev = configuredDevice ?: return
-        val ctx = context ?: return
-        val config = configuration ?: return
-        val canvasEl = canvas ?: return
-        
-        // First update the canvas dimensions
-        configureCanvas(canvasEl, width, height)
-        
-        // Update configuration
-        val newConfig = config.copy(width = width, height = height)
-        configuration = newConfig
-        
-        // Reconfigure the WebGPU context - it will use the canvas dimensions
-        val jsConfig = emptyObject()
-        jsConfig.device = dev.handle()
-        jsConfig.format = newConfig.format.toWebGpuFormat()
-        jsConfig.usage = newConfig.usage
-        jsConfig.alphaMode = "opaque"
-        ctx.configure(jsConfig)
-        
-        // Verify the texture size after reconfiguration
-        val tex = ctx.getCurrentTexture()
-        console.log("GpuSurface.resize: canvas=${canvasEl.width}x${canvasEl.height}, texture=${tex.width}x${tex.height}")
+        _width = width
+        _height = height
+        configuredDevice?.let { device ->
+            wgpuSurface.configure(
+                SurfaceConfiguration(
+                    device = device.wgpuDevice,
+                    format = GPUTextureFormat.BGRA8Unorm,
+                    usage = setOf(GPUTextureUsage.RenderAttachment),
+                    alphaMode = CompositeAlphaMode.Opaque
+                )
+            )
+        }
     }
+}
+
+// ============================================================================
+// Platform expect fun implementations
+// ============================================================================
+
+/**
+ * Pre-initializes the wgpu4k context from a canvas element.
+ * On JS, this sets up the CanvasContext using wgpu4k's canvasContextRenderer.
+ */
+actual suspend fun initializeGpuContext(surface: RenderSurface) {
+    val handle = surface.getHandle()
+    // wgpu4k uses its own HTMLCanvasElement type wrapper
+    @Suppress("USELESS_IS_CHECK")
+    val canvas = handle.unsafeCast<io.ygdrasil.webgpu.HTMLCanvasElement>()
+    val canvasContext = canvasContextRenderer(canvas)
+    JsWgpuContextHolder.canvasContext = canvasContext
 }
 
 actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
-    attachedSurface = surface
-    val handle = surface.getHandle()
-    val canvasElement = when (handle) {
-        is HTMLCanvasElement -> handle
-        else -> handle as? HTMLCanvasElement
-    } ?: error("RenderSurface handle is not an HTMLCanvasElement")
-    canvas = canvasElement
-    configuration?.let {
-        configureCanvas(canvasElement, it.width, it.height)
-    }
+    // Context should already be initialized via initializeGpuContext()
+    // For backwards compatibility, if not initialized, try now (but this is a no-op
+    // since we can't call suspend functions here)
 }
 
-actual class GpuBuffer actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuBufferDescriptor
-) {
-    private var bufferHandle: dynamic = null
-    private var queueHandle: dynamic = null
+actual fun GpuBindGroupLayout.unwrapHandle(): Any? = wgpuLayout
 
-    internal fun attach(handle: dynamic, queue: dynamic) {
-        bufferHandle = handle
-        queueHandle = queue
-    }
+actual fun GpuBindGroup.unwrapHandle(): Any? = wgpuBindGroup
 
-    internal fun handle(): dynamic {
-        require(bufferHandle != null) { "Buffer handle not initialised" }
-        return bufferHandle
-    }
+// ============================================================================
+// Type conversions
+// ============================================================================
 
-    private fun queue(): dynamic {
-        require(queueHandle != null) { "Queue handle not initialised" }
-        return queueHandle
-    }
-
-    actual fun write(data: ByteArray, offset: Int) {
-        require(offset >= 0) { "Offset must be >= 0" }
-        require(offset + data.size <= descriptor.size) {
-            "Write range exceeds buffer size (offset=$offset, data=${data.size}, capacity=${descriptor.size})"
-        }
-
-        val uint8 = createUint8Array(data.size)
-        val dynArray: dynamic = uint8
-        data.forEachIndexed { index, byte ->
-            dynArray[index] = byte.toInt() and 0xFF
-        }
-        queue().writeBuffer(handle(), offset, uint8)
-    }
-
-    actual fun writeFloats(data: FloatArray, offset: Int) {
-        val byteOffset = offset * Float.SIZE_BYTES
-        val byteSize = data.size * Float.SIZE_BYTES
-        require(offset >= 0) { "Offset must be >= 0" }
-        require(byteOffset + byteSize <= descriptor.size) {
-            "Write range exceeds buffer size"
-        }
-        val floatArray = createFloat32Array(data.size)
-        val dynFloats: dynamic = floatArray
-        data.forEachIndexed { index, value ->
-            dynFloats[index] = value
-        }
-        queue().writeBuffer(handle(), byteOffset, floatArray)
-    }
-
-    actual fun destroy() {
-        val handle = bufferHandle
-        if (handle != null) {
-            callIfFunction(handle, "destroy")
-        }
-    }
+internal fun GpuBufferUsageFlags.toWgpuBufferUsage(): Set<GPUBufferUsage> = buildSet {
+    if (this@toWgpuBufferUsage and GpuBufferUsage.MAP_READ.mask != 0) add(GPUBufferUsage.MapRead)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.MAP_WRITE.mask != 0) add(GPUBufferUsage.MapWrite)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.COPY_SRC.mask != 0) add(GPUBufferUsage.CopySrc)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.COPY_DST.mask != 0) add(GPUBufferUsage.CopyDst)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.INDEX.mask != 0) add(GPUBufferUsage.Index)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.VERTEX.mask != 0) add(GPUBufferUsage.Vertex)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.UNIFORM.mask != 0) add(GPUBufferUsage.Uniform)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.STORAGE.mask != 0) add(GPUBufferUsage.Storage)
+    if (this@toWgpuBufferUsage and GpuBufferUsage.INDIRECT.mask != 0) add(GPUBufferUsage.Indirect)
 }
 
-actual class GpuTexture actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuTextureDescriptor
-) {
-    private var textureHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        textureHandle = handle
-    }
-
-    private fun handle(): dynamic {
-        val handle = textureHandle
-        require(handle != null) { "Texture handle not initialised" }
-        return handle
-    }
-
-    actual fun createView(descriptor: GpuTextureViewDescriptor): GpuTextureView {
-        val jsDescriptor = emptyObject()
-        descriptor.label?.let { jsDescriptor.label = it }
-        descriptor.format?.let { jsDescriptor.format = it.toWebGpuFormat() }
-        jsDescriptor.baseMipLevel = descriptor.baseMipLevel
-        descriptor.mipLevelCount?.let { jsDescriptor.mipLevelCount = it }
-        jsDescriptor.baseArrayLayer = descriptor.baseArrayLayer
-        descriptor.arrayLayerCount?.let { jsDescriptor.arrayLayerCount = it }
-        val viewHandle = handle().createView(jsDescriptor)
-        return GpuTextureView(this, descriptor).apply { attach(viewHandle) }
-    }
-
-    actual fun destroy() {
-        val texHandle = textureHandle
-        if (texHandle != null) {
-            callIfFunction(texHandle, "destroy")
-        }
-    }
+internal fun GpuTextureUsageFlags.toWgpuTextureUsage(): Set<GPUTextureUsage> = buildSet {
+    if (this@toWgpuTextureUsage and GpuTextureUsage.COPY_SRC.mask != 0) add(GPUTextureUsage.CopySrc)
+    if (this@toWgpuTextureUsage and GpuTextureUsage.COPY_DST.mask != 0) add(GPUTextureUsage.CopyDst)
+    if (this@toWgpuTextureUsage and GpuTextureUsage.TEXTURE_BINDING.mask != 0) add(GPUTextureUsage.TextureBinding)
+    if (this@toWgpuTextureUsage and GpuTextureUsage.STORAGE_BINDING.mask != 0) add(GPUTextureUsage.StorageBinding)
+    if (this@toWgpuTextureUsage and GpuTextureUsage.RENDER_ATTACHMENT.mask != 0) add(GPUTextureUsage.RenderAttachment)
 }
 
-actual class GpuTextureView actual constructor(
-    actual val texture: GpuTexture,
-    actual val descriptor: GpuTextureViewDescriptor
-) {
-    private var viewHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        viewHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val handle = viewHandle
-        require(handle != null) { "Texture view handle not initialised" }
-        return handle
-    }
+internal fun GpuTextureDimension.toWgpu(): GPUTextureDimension = when (this) {
+    GpuTextureDimension.D1 -> GPUTextureDimension.OneD
+    GpuTextureDimension.D2 -> GPUTextureDimension.TwoD
+    GpuTextureDimension.D3 -> GPUTextureDimension.ThreeD
 }
 
-actual class GpuSampler actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuSamplerDescriptor
-) {
-    private var samplerHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        samplerHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val handle = samplerHandle
-        require(handle != null) { "Sampler handle not initialised" }
-        return handle
-    }
+internal fun GpuTextureFormat.toWgpu(): GPUTextureFormat = when (this) {
+    GpuTextureFormat.RGBA8_UNORM -> GPUTextureFormat.RGBA8Unorm
+    GpuTextureFormat.BGRA8_UNORM -> GPUTextureFormat.BGRA8Unorm
+    GpuTextureFormat.RGBA16_FLOAT -> GPUTextureFormat.RGBA16Float
+    GpuTextureFormat.DEPTH24_PLUS -> GPUTextureFormat.Depth24Plus
 }
 
-actual class GpuCommandEncoder actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuCommandEncoderDescriptor?
-) {
-    private var encoderHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        encoderHandle = handle
-    }
-
-    private fun handle(): dynamic {
-        val handle = encoderHandle
-        require(handle != null) { "Command encoder handle not initialised" }
-        return handle
-    }
-
-    actual fun finish(label: String?): GpuCommandBuffer {
-        val commandBuffer = label?.let {
-            val finishDescriptor = emptyObject()
-            finishDescriptor.label = it
-            handle().finish(finishDescriptor)
-        } ?: handle().finish()
-        return GpuCommandBuffer(device, label ?: descriptor?.label).apply { attach(commandBuffer) }
-    }
-
-    actual fun beginRenderPass(descriptor: GpuRenderPassDescriptor): GpuRenderPassEncoder {
-        val passDescriptor = emptyObject()
-        descriptor.label?.let { passDescriptor.label = it }
-        val attachments = JsArray()
-        descriptor.colorAttachments.forEach { attachment ->
-            val jsAttachment = emptyObject()
-            jsAttachment.view = attachment.view.handle()
-            attachment.resolveTarget?.let { jsAttachment.resolveTarget = it.handle() }
-            jsAttachment.loadOp = attachment.loadOp.toWebGpu()
-            jsAttachment.storeOp = attachment.storeOp.toWebGpu()
-            val color = attachment.clearColor
-            val clearValue = emptyObject()
-            clearValue.r = color.componentOrDefault(0, 0.0)
-            clearValue.g = color.componentOrDefault(1, 0.0)
-            clearValue.b = color.componentOrDefault(2, 0.0)
-            clearValue.a = color.componentOrDefault(3, 1.0)
-            jsAttachment.clearValue = clearValue
-            attachments.push(jsAttachment)
-        }
-        passDescriptor.colorAttachments = attachments
-
-        descriptor.depthStencilAttachment?.let { depth ->
-            val depthAttachment = emptyObject()
-            depthAttachment.view = depth.view.handle()
-            depthAttachment.depthLoadOp = depth.depthLoadOp.toWebGpu()
-            depthAttachment.depthStoreOp = depth.depthStoreOp.toWebGpu()
-            depthAttachment.depthClearValue = depth.depthClearValue
-            depthAttachment.depthReadOnly = depth.depthReadOnly
-
-            depth.stencilLoadOp?.let { depthAttachment.stencilLoadOp = it.toWebGpu() }
-            depth.stencilStoreOp?.let { depthAttachment.stencilStoreOp = it.toWebGpu() }
-            depthAttachment.stencilClearValue = depth.stencilClearValue
-            depthAttachment.stencilReadOnly = depth.stencilReadOnly
-
-            passDescriptor.depthStencilAttachment = depthAttachment
-        }
-
-        val passHandle = handle().beginRenderPass(passDescriptor)
-        
-        // Explicitly set viewport to match the render target size
-        // This is needed for some WebGPU implementations (like SwiftShader)
-        val firstAttachment = descriptor.colorAttachments.firstOrNull()
-        if (firstAttachment != null) {
-            val textureDesc = firstAttachment.view.texture.descriptor
-            val width = textureDesc.size.first.toDouble()
-            val height = textureDesc.size.second.toDouble()
-            // WebGPU setViewport expects: x, y, width, height, minDepth, maxDepth
-            passHandle.setViewport(0.0, 0.0, width, height, 0.0, 1.0)
-            passHandle.setScissorRect(0, 0, width.toInt(), height.toInt())
-        }
-        
-        return GpuRenderPassEncoder(this, descriptor).apply { attach(passHandle) }
-    }
+internal fun GpuAddressMode.toWgpu(): GPUAddressMode = when (this) {
+    GpuAddressMode.CLAMP_TO_EDGE -> GPUAddressMode.ClampToEdge
+    GpuAddressMode.REPEAT -> GPUAddressMode.Repeat
+    GpuAddressMode.MIRROR_REPEAT -> GPUAddressMode.MirrorRepeat
 }
 
-actual class GpuCommandBuffer actual constructor(
-    actual val device: GpuDevice,
-    actual val label: String?
-) {
-    private var bufferHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        bufferHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val handle = bufferHandle
-        require(handle != null) { "Command buffer handle not initialised" }
-        return handle
-    }
+internal fun GpuFilterMode.toWgpu(): GPUFilterMode = when (this) {
+    GpuFilterMode.NEAREST -> GPUFilterMode.Nearest
+    GpuFilterMode.LINEAR -> GPUFilterMode.Linear
 }
 
-actual class GpuShaderModule actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuShaderModuleDescriptor
-) {
-    private var shaderHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        shaderHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val handle = shaderHandle
-        require(handle != null) { "Shader handle not initialised" }
-        return handle
-    }
+internal fun GpuMipmapFilterMode.toWgpu(): GPUMipmapFilterMode = when (this) {
+    GpuMipmapFilterMode.NEAREST -> GPUMipmapFilterMode.Nearest
+    GpuMipmapFilterMode.LINEAR -> GPUMipmapFilterMode.Linear
 }
 
-actual class GpuBindGroupLayout actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuBindGroupLayoutDescriptor
-) {
-    private var layoutHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        layoutHandle = handle
+internal fun Set<GpuShaderStage>.toWgpu(): Set<GPUShaderStage> = mapNotNull { stage ->
+    when (stage) {
+        GpuShaderStage.VERTEX -> GPUShaderStage.Vertex
+        GpuShaderStage.FRAGMENT -> GPUShaderStage.Fragment
+        GpuShaderStage.COMPUTE -> GPUShaderStage.Compute
     }
+}.toSet()
 
-    internal fun handle(): dynamic {
-        val handle = layoutHandle
-        require(handle != null) { "Bind group layout handle not initialised" }
-        return handle
-    }
+internal fun GpuVertexStepMode.toWgpu(): GPUVertexStepMode = when (this) {
+    GpuVertexStepMode.VERTEX -> GPUVertexStepMode.Vertex
+    GpuVertexStepMode.INSTANCE -> GPUVertexStepMode.Instance
 }
 
-actual class GpuBindGroup actual constructor(
-    actual val layout: GpuBindGroupLayout,
-    actual val descriptor: GpuBindGroupDescriptor
-) {
-    private var bindGroupHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        bindGroupHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val handle = bindGroupHandle
-        require(handle != null) { "Bind group handle not initialised" }
-        return handle
-    }
+internal fun GpuVertexFormat.toWgpu(): GPUVertexFormat = when (this) {
+    GpuVertexFormat.FLOAT32 -> GPUVertexFormat.Float32
+    GpuVertexFormat.FLOAT32x2 -> GPUVertexFormat.Float32x2
+    GpuVertexFormat.FLOAT32x3 -> GPUVertexFormat.Float32x3
+    GpuVertexFormat.FLOAT32x4 -> GPUVertexFormat.Float32x4
+    GpuVertexFormat.UINT32 -> GPUVertexFormat.Uint32
+    GpuVertexFormat.UINT32x2 -> GPUVertexFormat.Uint32x2
+    GpuVertexFormat.UINT32x3 -> GPUVertexFormat.Uint32x3
+    GpuVertexFormat.UINT32x4 -> GPUVertexFormat.Uint32x4
+    GpuVertexFormat.SINT32 -> GPUVertexFormat.Sint32
+    GpuVertexFormat.SINT32x2 -> GPUVertexFormat.Sint32x2
+    GpuVertexFormat.SINT32x3 -> GPUVertexFormat.Sint32x3
+    GpuVertexFormat.SINT32x4 -> GPUVertexFormat.Sint32x4
 }
 
-private fun Set<GpuShaderStage>.toWebGpuVisibilityMask(): Int {
-    var mask = 0
-    if (contains(GpuShaderStage.VERTEX)) mask = mask or 0x1
-    if (contains(GpuShaderStage.FRAGMENT)) mask = mask or 0x2
-    if (contains(GpuShaderStage.COMPUTE)) mask = mask or 0x4
-    return mask
+internal fun GpuPrimitiveTopology.toWgpu(): GPUPrimitiveTopology = when (this) {
+    GpuPrimitiveTopology.POINT_LIST -> GPUPrimitiveTopology.PointList
+    GpuPrimitiveTopology.LINE_LIST -> GPUPrimitiveTopology.LineList
+    GpuPrimitiveTopology.LINE_STRIP -> GPUPrimitiveTopology.LineStrip
+    GpuPrimitiveTopology.TRIANGLE_LIST -> GPUPrimitiveTopology.TriangleList
+    GpuPrimitiveTopology.TRIANGLE_STRIP -> GPUPrimitiveTopology.TriangleStrip
 }
 
-actual fun GpuBindGroupLayout.unwrapHandle(): Any? = handle()
-
-actual fun GpuBindGroup.unwrapHandle(): Any? = handle()
-
-actual class GpuRenderPipeline actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuRenderPipelineDescriptor
-) {
-    private var pipelineHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        pipelineHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val stored = pipelineHandle
-        require(stored != null) { "Pipeline handle not initialised" }
-        return stored
-    }
+internal fun GpuFrontFace.toWgpu(): GPUFrontFace = when (this) {
+    GpuFrontFace.CCW -> GPUFrontFace.CCW
+    GpuFrontFace.CW -> GPUFrontFace.CW
 }
 
-actual class GpuComputePipeline actual constructor(
-    actual val device: GpuDevice,
-    actual val descriptor: GpuComputePipelineDescriptor
-) {
-    private var pipelineHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        pipelineHandle = handle
-    }
-
-    internal fun handle(): dynamic {
-        val stored = pipelineHandle
-        require(stored != null) { "Pipeline handle not initialised" }
-        return stored
-    }
+internal fun GpuCullMode.toWgpu(): GPUCullMode = when (this) {
+    GpuCullMode.NONE -> GPUCullMode.None
+    GpuCullMode.FRONT -> GPUCullMode.Front
+    GpuCullMode.BACK -> GPUCullMode.Back
 }
 
-actual class GpuRenderPassEncoder actual constructor(
-    actual val encoder: GpuCommandEncoder,
-    actual val descriptor: GpuRenderPassDescriptor
-) {
-    private var passHandle: dynamic = null
-
-    internal fun attach(handle: dynamic) {
-        passHandle = handle
-    }
-
-    private fun handle(): dynamic {
-        val stored = passHandle
-        require(stored != null) { "Render pass handle not initialised" }
-        return stored
-    }
-
-    actual fun setPipeline(pipeline: GpuRenderPipeline) {
-        handle().setPipeline(pipeline.handle())
-    }
-
-    actual fun setVertexBuffer(slot: Int, buffer: GpuBuffer) {
-        handle().setVertexBuffer(slot, buffer.handle())
-    }
-
-    actual fun setIndexBuffer(buffer: GpuBuffer, format: GpuIndexFormat, offset: Long) {
-        handle().setIndexBuffer(buffer.handle(), format.toWebGpu(), offset.toDouble())
-    }
-
-    actual fun setBindGroup(index: Int, bindGroup: GpuBindGroup) {
-        handle().setBindGroup(index, bindGroup.handle())
-    }
-
-    actual fun draw(vertexCount: Int, instanceCount: Int, firstVertex: Int, firstInstance: Int) {
-        handle().draw(vertexCount, instanceCount, firstVertex, firstInstance)
-    }
-
-    actual fun drawIndexed(
-        indexCount: Int,
-        instanceCount: Int,
-        firstIndex: Int,
-        baseVertex: Int,
-        firstInstance: Int
-    ) {
-        handle().drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
-    }
-
-    actual fun end() {
-        handle().end()
-    }
+internal fun GpuCompareFunction.toWgpu(): GPUCompareFunction = when (this) {
+    GpuCompareFunction.ALWAYS -> GPUCompareFunction.Always
+    GpuCompareFunction.LESS -> GPUCompareFunction.Less
+    GpuCompareFunction.LESS_EQUAL -> GPUCompareFunction.LessEqual
 }
 
-private fun GpuIndexFormat.toWebGpu(): String = when (this) {
-    GpuIndexFormat.UINT16 -> "uint16"
-    GpuIndexFormat.UINT32 -> "uint32"
-}
-
-private fun GpuTextureFormat.toWebGpuFormat(): String = when (this) {
-    GpuTextureFormat.RGBA8_UNORM -> "rgba8unorm"
-    GpuTextureFormat.BGRA8_UNORM -> "bgra8unorm"
-    GpuTextureFormat.RGBA16_FLOAT -> "rgba16float"
-    GpuTextureFormat.DEPTH24_PLUS -> "depth24plus"
-}
-
-private fun GpuCompareFunction.toWebGpu(): String = when (this) {
-    GpuCompareFunction.ALWAYS -> "always"
-    GpuCompareFunction.LESS -> "less"
-    GpuCompareFunction.LESS_EQUAL -> "less-equal"
-}
-
-private fun GpuBlendMode.toWebGpu(): dynamic? = when (this) {
+internal fun GpuBlendMode.toWgpu(): BlendState? = when (this) {
     GpuBlendMode.DISABLED -> null
-    GpuBlendMode.ALPHA -> {
-        val blend = emptyObject()
-        val color = emptyObject()
-        color.srcFactor = "src-alpha"
-        color.dstFactor = "one-minus-src-alpha"
-        color.operation = "add"
-        val alpha = emptyObject()
-        alpha.srcFactor = "one"
-        alpha.dstFactor = "one-minus-src-alpha"
-        alpha.operation = "add"
-        blend.color = color
-        blend.alpha = alpha
-        blend
-    }
-
-    GpuBlendMode.ADDITIVE -> {
-        val blend = emptyObject()
-        val color = emptyObject()
-        color.srcFactor = "one"
-        color.dstFactor = "one"
-        color.operation = "add"
-        val alpha = emptyObject()
-        alpha.srcFactor = "one"
-        alpha.dstFactor = "one"
-        alpha.operation = "add"
-        blend.color = color
-        blend.alpha = alpha
-        blend
-    }
+    GpuBlendMode.ALPHA -> BlendState(
+        color = BlendComponent(
+            srcFactor = GPUBlendFactor.SrcAlpha,
+            dstFactor = GPUBlendFactor.OneMinusSrcAlpha,
+            operation = GPUBlendOperation.Add
+        ),
+        alpha = BlendComponent(
+            srcFactor = GPUBlendFactor.One,
+            dstFactor = GPUBlendFactor.OneMinusSrcAlpha,
+            operation = GPUBlendOperation.Add
+        )
+    )
+    GpuBlendMode.ADDITIVE -> BlendState(
+        color = BlendComponent(
+            srcFactor = GPUBlendFactor.One,
+            dstFactor = GPUBlendFactor.One,
+            operation = GPUBlendOperation.Add
+        ),
+        alpha = BlendComponent(
+            srcFactor = GPUBlendFactor.One,
+            dstFactor = GPUBlendFactor.One,
+            operation = GPUBlendOperation.Add
+        )
+    )
 }
 
-private fun GpuLoadOp.toWebGpu(): String = when (this) {
-    GpuLoadOp.LOAD -> "load"
-    GpuLoadOp.CLEAR -> "clear"
-}
-
-private fun GpuStoreOp.toWebGpu(): String = when (this) {
-    GpuStoreOp.STORE -> "store"
-    GpuStoreOp.DISCARD -> "discard"
-}
-
-private fun GpuVertexStepMode.toWebGpu(): String = when (this) {
-    GpuVertexStepMode.VERTEX -> "vertex"
-    GpuVertexStepMode.INSTANCE -> "instance"
-}
-
-private fun GpuVertexFormat.toWebGpuFormat(): String = when (this) {
-    GpuVertexFormat.FLOAT32 -> "float32"
-    GpuVertexFormat.FLOAT32x2 -> "float32x2"
-    GpuVertexFormat.FLOAT32x3 -> "float32x3"
-    GpuVertexFormat.FLOAT32x4 -> "float32x4"
-    GpuVertexFormat.UINT32 -> "uint32"
-    GpuVertexFormat.UINT32x2 -> "uint32x2"
-    GpuVertexFormat.UINT32x3 -> "uint32x3"
-    GpuVertexFormat.UINT32x4 -> "uint32x4"
-    GpuVertexFormat.SINT32 -> "sint32"
-    GpuVertexFormat.SINT32x2 -> "sint32x2"
-    GpuVertexFormat.SINT32x3 -> "sint32x3"
-    GpuVertexFormat.SINT32x4 -> "sint32x4"
-}
-
-private fun GpuPrimitiveTopology.toWebGpu(): String = when (this) {
-    GpuPrimitiveTopology.POINT_LIST -> "point-list"
-    GpuPrimitiveTopology.LINE_LIST -> "line-list"
-    GpuPrimitiveTopology.LINE_STRIP -> "line-strip"
-    GpuPrimitiveTopology.TRIANGLE_LIST -> "triangle-list"
-    GpuPrimitiveTopology.TRIANGLE_STRIP -> "triangle-strip"
-}
-
-private fun GpuCullMode.toWebGpu(): String = when (this) {
-    GpuCullMode.NONE -> "none"
-    GpuCullMode.FRONT -> "front"
-    GpuCullMode.BACK -> "back"
-}
-
-private fun GpuFrontFace.toWebGpu(): String = when (this) {
-    GpuFrontFace.CCW -> "ccw"
-    GpuFrontFace.CW -> "cw"
+internal fun GpuCompositeAlphaMode.toWgpu(): CompositeAlphaMode = when (this) {
+    GpuCompositeAlphaMode.AUTO -> CompositeAlphaMode.Auto
+    GpuCompositeAlphaMode.OPAQUE -> CompositeAlphaMode.Opaque
+    GpuCompositeAlphaMode.PREMULTIPLIED -> CompositeAlphaMode.Premultiplied
+    GpuCompositeAlphaMode.UNPREMULTIPLIED -> CompositeAlphaMode.Unpremultiplied
+    GpuCompositeAlphaMode.INHERIT -> CompositeAlphaMode.Inherit
 }

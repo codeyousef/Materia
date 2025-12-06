@@ -197,6 +197,20 @@ data class GpuSamplerDescriptor(
     val lodMaxClamp: Float = 32f
 )
 
+/** Alpha compositing mode for surface presentation. */
+enum class GpuCompositeAlphaMode {
+    /** Automatic mode selection. */
+    AUTO,
+    /** Opaque compositing (ignore alpha). */
+    OPAQUE,
+    /** Premultiplied alpha. */
+    PREMULTIPLIED,
+    /** Unpremultiplied alpha. */
+    UNPREMULTIPLIED,
+    /** Inherit from parent. */
+    INHERIT
+}
+
 /**
  * Configuration for a presentation surface.
  *
@@ -205,13 +219,15 @@ data class GpuSamplerDescriptor(
  * @property width Surface width in pixels.
  * @property height Surface height in pixels.
  * @property presentMode Presentation mode (e.g., "fifo" for vsync).
+ * @property alphaMode Alpha compositing mode.
  */
 data class GpuSurfaceConfiguration(
     val format: GpuTextureFormat,
     val usage: GpuTextureUsageFlags,
     val width: Int,
     val height: Int,
-    val presentMode: String = "fifo"
+    val presentMode: String = "fifo",
+    val alphaMode: GpuCompositeAlphaMode = GpuCompositeAlphaMode.OPAQUE
 )
 
 /**

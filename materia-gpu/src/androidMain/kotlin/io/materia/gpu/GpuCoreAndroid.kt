@@ -1,30 +1,20 @@
 package io.materia.gpu
 
-import ffi.LibraryLoader
+import android.view.SurfaceHolder
 import io.materia.renderer.RenderSurface
 import io.ygdrasil.webgpu.*
 import kotlinx.coroutines.runBlocking
 
 // ============================================================================
-// wgpu4k-based JVM GPU Backend Implementation
+// wgpu4k-based Android GPU Backend Implementation
 // ============================================================================
 
-// Ensure native library is loaded on class initialization
-private val ensureNativeLoaded = LibraryLoader.load()
-
-internal object WgpuContextHolder {
+internal object AndroidWgpuContextHolder {
     @Volatile
-    var glfwContext: GLFWContext? = null
-    
-    // For existing window support
-    @Volatile
-    var customWgpuContext: WGPUContext? = null
-    
-    @Volatile
-    var existingWindowHandle: Long? = null
+    var androidContext: AndroidContext? = null
     
     val wgpuContext: WGPUContext?
-        get() = customWgpuContext ?: glfwContext?.wgpuContext
+        get() = androidContext?.wgpuContext
 }
 
 actual suspend fun createGpuInstance(descriptor: GpuInstanceDescriptor): GpuInstance {
@@ -38,8 +28,8 @@ actual class GpuInstance actual constructor(
 
     actual suspend fun requestAdapter(options: GpuRequestAdapterOptions): GpuAdapter {
         check(!disposed) { "GpuInstance has been disposed." }
-        val ctx = WgpuContextHolder.wgpuContext
-            ?: error("GLFW context not initialized. Call GpuSurface.attachRenderSurface first.")
+        val ctx = AndroidWgpuContextHolder.wgpuContext
+            ?: error("Android context not initialized. Call GpuSurface.attachRenderSurface first.")
         
         return GpuAdapter(
             backend = GpuBackend.WEBGPU,
@@ -55,8 +45,8 @@ actual class GpuInstance actual constructor(
 
     actual fun dispose() {
         disposed = true
-        WgpuContextHolder.glfwContext?.close()
-        WgpuContextHolder.glfwContext = null
+        AndroidWgpuContextHolder.androidContext?.close()
+        AndroidWgpuContextHolder.androidContext = null
     }
 }
 
@@ -66,7 +56,7 @@ actual class GpuAdapter actual constructor(
     actual val info: GpuAdapterInfo
 ) {
     actual suspend fun requestDevice(descriptor: GpuDeviceDescriptor): GpuDevice {
-        val ctx = WgpuContextHolder.wgpuContext
+        val ctx = AndroidWgpuContextHolder.wgpuContext
             ?: error("wgpu4k context not available")
         return GpuDevice(this, descriptor)
     }
@@ -77,7 +67,7 @@ actual class GpuDevice actual constructor(
     actual val descriptor: GpuDeviceDescriptor
 ) {
     internal val wgpuDevice: GPUDevice
-        get() = WgpuContextHolder.wgpuContext?.device
+        get() = AndroidWgpuContextHolder.wgpuContext?.device
             ?: error("wgpu4k context not available")
 
     actual val queue: GpuQueue = GpuQueue(descriptor.label)
@@ -279,7 +269,7 @@ actual class GpuQueue actual constructor(
     actual val label: String?
 ) {
     private val wgpuQueue: GPUQueue
-        get() = WgpuContextHolder.wgpuContext?.device?.queue
+        get() = AndroidWgpuContextHolder.wgpuContext?.device?.queue
             ?: error("wgpu4k context not available")
 
     actual fun submit(commandBuffers: List<GpuCommandBuffer>) {
@@ -300,7 +290,7 @@ actual class GpuSurface actual constructor(
     private var _height: Int = 0
 
     private val wgpuSurface: Surface
-        get() = WgpuContextHolder.wgpuContext?.surface
+        get() = AndroidWgpuContextHolder.wgpuContext?.surface
             ?: error("wgpu4k context not available")
 
     actual fun configure(device: GpuDevice, configuration: GpuSurfaceConfiguration) {
@@ -318,18 +308,12 @@ actual class GpuSurface actual constructor(
     }
 
     actual fun getPreferredFormat(adapter: GpuAdapter): GpuTextureFormat {
-        // Use the first format supported by the surface, which should match what wgpu4k configured
-        val ctx = WgpuContextHolder.wgpuContext
-        if (ctx != null) {
-            val wgpuFormat = ctx.renderingContext.textureFormat
-            return wgpuFormat.toMateriaFormat()
-        }
         return GpuTextureFormat.BGRA8_UNORM
     }
 
     actual fun acquireFrame(): GpuSurfaceFrame {
         val device = configuredDevice ?: error("Surface not configured")
-        val ctx = WgpuContextHolder.wgpuContext ?: error("wgpu4k context not available")
+        val ctx = AndroidWgpuContextHolder.wgpuContext ?: error("wgpu4k context not available")
         
         val surfaceTexture = ctx.renderingContext.getCurrentTexture()
         val texture = GpuTexture(
@@ -370,141 +354,36 @@ actual class GpuSurface actual constructor(
 // ============================================================================
 
 /**
- * Pre-initializes the wgpu4k context from an existing GLFW window.
- * This must be called before requestAdapter() is used.
+ * Pre-initializes the wgpu4k context from an Android SurfaceHolder.
  */
 actual suspend fun initializeGpuContext(surface: RenderSurface) {
-    val handle = surface.getHandle()
+    val surfaceHolder = surface.getHandle() as? SurfaceHolder
+        ?: error("RenderSurface handle must be a SurfaceHolder on Android platform")
     
-    when (handle) {
-        is Long -> {
-            // Use existing GLFW window handle - create wgpu4k context from it
-            WgpuContextHolder.existingWindowHandle = handle
-            val wgpuContext = createWgpuContextFromWindow(handle, surface.width, surface.height)
-            WgpuContextHolder.customWgpuContext = wgpuContext
-        }
-        else -> {
-            // Fallback: create new GLFW window via glfwContextRenderer
-            val glfwContext = glfwContextRenderer(
-                width = surface.width,
-                height = surface.height,
-                title = "Materia Engine"
-            )
-            WgpuContextHolder.glfwContext = glfwContext
-        }
-    }
+    val androidContext = androidContextRenderer(
+        surfaceHolder = surfaceHolder,
+        width = surface.width,
+        height = surface.height
+    )
+    AndroidWgpuContextHolder.androidContext = androidContext
 }
 
 actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
     // Context should already be initialized via initializeGpuContext()
-    // If not, try to initialize it now (for backwards compatibility)
-    if (WgpuContextHolder.wgpuContext == null) {
-        val handle = surface.getHandle()
-        when (handle) {
-            is Long -> {
-                WgpuContextHolder.existingWindowHandle = handle
-                val wgpuContext = runBlocking {
-                    createWgpuContextFromWindow(handle, surface.width, surface.height)
-                }
-                WgpuContextHolder.customWgpuContext = wgpuContext
-            }
-            else -> {
-                val glfwContext = runBlocking {
-                    glfwContextRenderer(
-                        width = surface.width,
-                        height = surface.height,
-                        title = "Materia Engine"
-                    )
-                }
-                WgpuContextHolder.glfwContext = glfwContext
-            }
-        }
-    }
-}
-
-/**
- * Creates a WGPUContext from an existing GLFW window handle.
- * This mirrors glfwContextRenderer but uses an existing window instead of creating a new one.
- */
-private suspend fun createWgpuContextFromWindow(
-    windowHandle: Long,
-    width: Int,
-    height: Int
-): WGPUContext {
-    // Force Vulkan backend to avoid EGL/OpenGL issues on Linux
-    val wgpu = WGPU.createInstance(WGPUInstanceBackend.Vulkan) ?: error("Failed to create WGPU instance")
-    
-    val nativeSurface = wgpu.getSurfaceFromWindow(windowHandle)
-    val surface = Surface(nativeSurface, windowHandle)
-    
-    val adapter = wgpu.requestAdapter(nativeSurface)
-        ?: error("Failed to get GPU adapter")
-    
-    val device = adapter.requestDevice(DeviceDescriptor())
-        .getOrThrow()
-    
-    nativeSurface.computeSurfaceCapabilities(adapter)
-    // Prefer BGRA8Unorm which is well-supported on most platforms
-    val preferredFormat = surface.supportedFormats.find { it == GPUTextureFormat.BGRA8Unorm }
-        ?: surface.supportedFormats.find { it == GPUTextureFormat.RGBA8Unorm }
-        ?: surface.supportedFormats.first()
-    val renderingContext = SurfaceRenderingContext(surface, preferredFormat)
-    
-    return WGPUContext(surface, adapter, device, renderingContext)
-}
-
-/**
- * Platform-specific surface creation from GLFW window handle.
- * Detects OS and uses appropriate wgpu4k surface creation method.
- */
-private fun WGPU.getSurfaceFromWindow(windowHandle: Long): NativeSurface {
-    val osName = System.getProperty("os.name").lowercase()
-    
-    return when {
-        osName.contains("linux") -> {
-            // Try X11 first, fall back to Wayland
-            val waylandWindow = org.lwjgl.glfw.GLFWNativeWayland.glfwGetWaylandWindow(windowHandle)
-            if (waylandWindow == 0L) {
-                // X11
-                val display = org.lwjgl.glfw.GLFWNativeX11.glfwGetX11Display()
-                    .let { java.lang.foreign.MemorySegment.ofAddress(it) }
-                    .let { ffi.NativeAddress(it) }
-                val x11Window = org.lwjgl.glfw.GLFWNativeX11.glfwGetX11Window(windowHandle).toULong()
-                getSurfaceFromX11Window(display, x11Window) ?: error("Failed to get X11 surface")
-            } else {
-                // Wayland
-                val display = org.lwjgl.glfw.GLFWNativeWayland.glfwGetWaylandDisplay()
-                    .let { java.lang.foreign.MemorySegment.ofAddress(it) }
-                    .let { ffi.NativeAddress(it) }
-                val waylandWindowAddr = waylandWindow
-                    .let { java.lang.foreign.MemorySegment.ofAddress(it) }
-                    .let { ffi.NativeAddress(it) }
-                getSurfaceFromWaylandWindow(display, waylandWindowAddr)
-            }
-        }
-        osName.contains("windows") -> {
-            val hwnd = org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(windowHandle)
-                .let { java.lang.foreign.MemorySegment.ofAddress(it) }
-                .let { ffi.NativeAddress(it) }
-            val hinstance = com.sun.jna.platform.win32.Kernel32.INSTANCE.GetModuleHandle(null).pointer
-                .let { java.lang.foreign.MemorySegment.ofAddress(com.sun.jna.Pointer.nativeValue(it)) }
-                .let { ffi.NativeAddress(it) }
-            getSurfaceFromWindows(hinstance, hwnd) ?: error("Failed to get Windows surface")
-        }
-        osName.contains("mac") || osName.contains("darwin") -> {
-            val nsWindowPtr = org.lwjgl.glfw.GLFWNativeCocoa.glfwGetCocoaWindow(windowHandle)
-            val nswindow = org.rococoa.Rococoa.wrap(org.rococoa.ID.fromLong(nsWindowPtr), darwin.NSWindow::class.java)
-            nswindow.contentView()?.setWantsLayer(true)
-            val layer = darwin.CAMetalLayer.layer()
-            nswindow.contentView()?.setLayer(layer.id().toLong().let { com.sun.jna.Pointer(it) })
-            getSurfaceFromMetalLayer(
-                layer.id().toLong()
-                    .let { java.lang.foreign.MemorySegment.ofAddress(it) }
-                    .let { ffi.NativeAddress(it) }
+    // For backwards compatibility, if not initialized, try now
+    if (AndroidWgpuContextHolder.wgpuContext == null) {
+        val surfaceHolder = surface.getHandle() as? SurfaceHolder
+            ?: error("RenderSurface handle must be a SurfaceHolder on Android platform")
+        
+        val androidContext = runBlocking {
+            androidContextRenderer(
+                surfaceHolder = surfaceHolder,
+                width = surface.width,
+                height = surface.height
             )
         }
-        else -> error("Unsupported OS: $osName")
-    } ?: error("Failed to get native surface")
+        AndroidWgpuContextHolder.androidContext = androidContext
+    }
 }
 
 actual fun GpuBindGroupLayout.unwrapHandle(): Any? = wgpuLayout
@@ -546,16 +425,6 @@ internal fun GpuTextureFormat.toWgpu(): GPUTextureFormat = when (this) {
     GpuTextureFormat.BGRA8_UNORM -> GPUTextureFormat.BGRA8Unorm
     GpuTextureFormat.RGBA16_FLOAT -> GPUTextureFormat.RGBA16Float
     GpuTextureFormat.DEPTH24_PLUS -> GPUTextureFormat.Depth24Plus
-}
-
-internal fun GPUTextureFormat.toMateriaFormat(): GpuTextureFormat = when (this) {
-    GPUTextureFormat.RGBA8Unorm -> GpuTextureFormat.RGBA8_UNORM
-    GPUTextureFormat.RGBA8UnormSrgb -> GpuTextureFormat.RGBA8_UNORM
-    GPUTextureFormat.BGRA8Unorm -> GpuTextureFormat.BGRA8_UNORM
-    GPUTextureFormat.BGRA8UnormSrgb -> GpuTextureFormat.BGRA8_UNORM
-    GPUTextureFormat.RGBA16Float -> GpuTextureFormat.RGBA16_FLOAT
-    GPUTextureFormat.Depth24Plus -> GpuTextureFormat.DEPTH24_PLUS
-    else -> GpuTextureFormat.BGRA8_UNORM // Default fallback
 }
 
 internal fun GpuAddressMode.toWgpu(): GPUAddressMode = when (this) {

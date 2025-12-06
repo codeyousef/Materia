@@ -190,6 +190,25 @@ data class GpuSurfaceFrame(
     val view: GpuTextureView
 )
 
+/**
+ * Pre-initializes the GPU context from a render surface.
+ * 
+ * This must be called BEFORE creating a GpuInstance or requesting an adapter
+ * on platforms that use wgpu4k-toolkit (JVM, Android). On JS/Browser, this
+ * is a no-op as the browser's WebGPU handles context creation differently.
+ *
+ * Usage:
+ * ```kotlin
+ * val surface = SurfaceFactory.create(window)
+ * initializeGpuContext(surface)  // Pre-initialize wgpu4k context
+ * val instance = createGpuInstance()
+ * val adapter = instance.requestAdapter()
+ * ```
+ *
+ * @param surface The render surface to initialize the GPU context from.
+ */
+expect suspend fun initializeGpuContext(surface: RenderSurface)
+
 expect fun GpuSurface.attachRenderSurface(surface: RenderSurface)
 
 expect fun GpuBindGroupLayout.unwrapHandle(): Any?

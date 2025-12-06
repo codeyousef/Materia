@@ -1,5 +1,6 @@
 package io.materia.examples.forcegraph
 
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -19,6 +20,7 @@ fun main() {
     scope.launch {
         val canvas = ensureCanvas()
         val surface = WebGPUSurface(canvas)
+        initializeGpuContext(surface)  // Pre-initialize wgpu4k context
         val example = ForceGraphExample()
         val boot = example.boot(
             renderSurface = surface,
