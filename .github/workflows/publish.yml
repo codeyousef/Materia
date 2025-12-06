@@ -28,10 +28,10 @@ jobs:
             chmod +x sign-artifact.sh
           fi
 
-      - name: Set up Temurin JDK 17
+      - name: Set up Temurin JDK 22
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '22'
           distribution: 'temurin'
 
       - name: Set up Android SDK
