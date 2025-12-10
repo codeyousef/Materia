@@ -5,6 +5,67 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1.0] - 2025-12-10
+
+### Added
+
+#### New: Effect Composer & Rendering Pipeline (`io.materia.engine.render`)
+
+A complete post-processing orchestration layer that bridges `FullScreenEffect` with the WebGPU rendering pipeline, inspired by Three.js's `EffectComposer`.
+
+**FullScreenEffectPass**
+- Wraps `FullScreenEffect` for use in rendering pipelines
+- Dirty tracking for uniform buffer updates
+- Automatic resolution uniform updates on resize
+- Shader code caching for performance
+- DSL builder: `FullScreenEffectPass.create { fragmentShader = "..."; uniforms { ... } }`
+
+**EffectComposer**
+- Three.js-style pass chain management
+- Add, remove, insert, and reorder passes
+- Size propagation to all passes
+- Enable/disable individual passes
+- Automatic cleanup with `dispose()`
+
+**EffectPipelineFactory**
+- Generates GPU pipeline descriptors from passes
+- Blend mode translation (`OPAQUE`, `ALPHA_BLEND`, `ADDITIVE`, `MULTIPLY`)
+- Bind group layout generation for uniforms and input textures
+- Ready for WebGPU `createRenderPipeline()` integration
+
+### Technical Details
+
+- **44 new unit tests** covering all new functionality
+- TDD approach: tests written before implementation
+- Integrates with existing `EngineRenderer` FXAA pattern
+- Pure Kotlin implementation in `commonMain`
+
+### Example Usage
+
+```kotlin
+// Create effect passes
+val vignettePass = FullScreenEffectPass.create {
+    fragmentShader = vignetteShader
+    blendMode = BlendMode.ALPHA_BLEND
+}
+
+val colorGradingPass = FullScreenEffectPass.create {
+    fragmentShader = colorGradingShader
+    uniforms { float("gamma") }
+}
+
+// Compose into a chain
+val composer = EffectComposer(width = 1920, height = 1080)
+composer.addPass(vignettePass)
+composer.addPass(colorGradingPass)
+
+// Update uniforms in render loop
+colorGradingPass.updateUniforms { set("gamma", 2.2f) }
+
+// Get pipeline descriptor for GPU
+val descriptor = EffectPipelineFactory.createDescriptor(colorGradingPass)
+```
+
 ## [0.3.0.0] - 2025-12-10
 
 ### Added
