@@ -5,6 +5,101 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0.0] - 2025-12-10
+
+### Added
+
+#### New: Effects Module (`io.materia.effects`)
+
+A comprehensive set of high-level APIs for fullscreen shader effects and WebGPU rendering, designed to dramatically reduce boilerplate code for common use cases.
+
+**UniformBlock Builder**
+- Type-safe uniform buffer layout management with automatic WebGPU alignment
+- Supports `float`, `int`, `vec2`, `vec3`, `vec4`, `mat3`, `mat4`, and arrays
+- Automatic padding calculations for 8-byte (vec2) and 16-byte (vec3/vec4/mat) alignment
+- WGSL struct generation with `toWGSL(structName)`
+- DSL builder: `uniformBlock { float("time"); vec4("color") }`
+- `UniformUpdater` for type-safe value updates
+
+**FullScreenEffect Class**
+- Simplified API for fullscreen shader effects
+- Automatic fullscreen triangle vertex shader (optimized 3-vertex approach, no vertex buffer needed)
+- Fragment-shader-only API - just provide your WGSL fragment code
+- Built-in UV coordinates passed to fragment shader
+- Integration with `UniformBlock` for type-safe uniforms
+- Configurable blend modes (`OPAQUE`, `ALPHA_BLEND`, `ADDITIVE`, `MULTIPLY`, `PREMULTIPLIED_ALPHA`)
+- DSL builder: `fullScreenEffect { fragmentShader = "..."; uniforms { ... } }`
+
+**WGSLLib Snippet Library**
+- Reusable WGSL shader code snippets for common operations
+- `Hash`: `HASH_21`, `HASH_22`, `HASH_31`, `HASH_33` - pseudo-random functions
+- `Noise`: `VALUE_2D`, `PERLIN_2D`, `SIMPLEX_2D`, `WORLEY_2D` - procedural noise
+- `Fractal`: `FBM`, `TURBULENCE`, `RIDGED` - multi-octave noise
+- `Color`: `COSINE_PALETTE`, `HSV_TO_RGB`, `RGB_TO_HSV`, `SRGB_TO_LINEAR`, `LINEAR_TO_SRGB`
+- `Math`: `REMAP`, `SMOOTHSTEP_CUBIC`, `SMOOTHSTEP_QUINTIC`, `ROTATION_2D`
+- `SDF`: `CIRCLE`, `BOX`, `ROUNDED_BOX`, `LINE` - signed distance field primitives
+
+**RenderLoop Utility**
+- Animation loop management with timing utilities
+- `FrameInfo` with `deltaTime`, `totalTime`, `realTime`, `frameCount`, `fps`
+- `timeScale` for slow motion / fast forward effects
+- `pause()` / `resume()` functionality
+- `maxDeltaTime` clamping to handle lag spikes gracefully
+- `reset()` to clear all timing state
+
+**WebGPUCanvasConfig**
+- Configuration and state management for WebGPU canvas
+- `WebGPUCanvasOptions` with `alphaMode`, `powerPreference`, DPR handling
+- `CanvasState` tracking logical/physical size and aspect ratio
+- `InitResult` sealed class for comprehensive error handling
+- Resize callback support
+- DSL builder: `webGPUCanvasOptions { alphaMode = AlphaMode.PREMULTIPLIED }`
+
+### Technical Details
+
+- **113 unit tests** covering all new functionality
+- All tests passing on JVM target
+- Pure Kotlin implementation in `commonMain` (cross-platform)
+- Zero external dependencies beyond existing Materia core
+
+### Example Usage
+
+```kotlin
+// Aurora-style fullscreen effect
+val aurora = fullScreenEffect {
+    fragmentShader = """
+        ${WGSLLib.Hash.HASH_22}
+        ${WGSLLib.Fractal.FBM}
+        ${WGSLLib.Color.COSINE_PALETTE}
+        
+        @fragment
+        fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+            let n = fbm(uv * 3.0 + u.time * 0.1, 6) * 0.5 + 0.5;
+            let color = cosinePalette(n, u.paletteA.rgb, u.paletteB.rgb, u.paletteC.rgb, u.paletteD.rgb);
+            return vec4<f32>(color, 0.85);
+        }
+    """
+    uniforms {
+        float("time")
+        vec2("resolution")
+        vec4("paletteA")
+        vec4("paletteB")
+        vec4("paletteC")
+        vec4("paletteD")
+    }
+    blendMode = BlendMode.ALPHA_BLEND
+}
+
+val loop = RenderLoop { frame ->
+    aurora.updateUniforms {
+        set("time", frame.totalTime)
+        set("resolution", canvas.width.toFloat(), canvas.height.toFloat())
+    }
+    // render...
+}
+loop.start()
+```
+
 ## [0.2.0.0] - 2025-12-06
 
 ### Changed
