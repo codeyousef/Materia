@@ -25,6 +25,15 @@ enum class BlendMode {
     ADDITIVE,
     /** Multiply blending: src * dst */
     MULTIPLY,
+    /** Screen blending: 1 - (1-src) * (1-dst), lightens the image */
+    SCREEN,
+    /**
+     * Overlay blending: combines multiply and screen based on base color luminance.
+     * Note: True overlay blending cannot be achieved with fixed-function blend states alone.
+     * This maps to MULTIPLY as an approximation. For accurate overlay, use shader-based
+     * implementation with WGSLLib.Color functions.
+     */
+    OVERLAY,
     /** Premultiplied alpha: src + dst * (1 - srcAlpha) */
     PREMULTIPLIED_ALPHA
 }

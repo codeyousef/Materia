@@ -5,6 +5,29 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2.0] - 2025-01-11
+
+### Added
+
+#### New Blend Modes
+
+- **`BlendMode.SCREEN`**: Screen blending (1 - (1-src) * (1-dst)) that lightens the image. Useful for glow effects, light overlays, and brightening operations.
+- **`BlendMode.OVERLAY`**: Combines multiply and screen based on base color luminance. Note: True overlay blending cannot be achieved with fixed-function blend states alone; this maps to MULTIPLY as an approximation. For accurate overlay effects, use shader-based implementation.
+
+#### Matrix Uniform Setters
+
+- **`UniformUpdater.setMat3(name, FloatArray)`**: Set a mat3 uniform from a 9-element float array (column-major order). Handles WGSL std140 layout with proper vec4 padding.
+- **`UniformUpdater.setMat3(name, m00..m22)`**: Convenience overload with individual components.
+
+#### Pipeline Factory Enhancements
+
+- **`BlendStateType.SCREEN`**: New blend state type for screen blending (srcFactor=ONE, dstFactor=ONE_MINUS_SRC_COLOR).
+
+### Technical Details
+
+- 12 new unit tests for blend modes and matrix setters
+- All existing tests continue to pass
+
 ## [0.3.1.1] - 2025-01-10
 
 ### Fixed

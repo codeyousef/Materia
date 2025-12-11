@@ -476,6 +476,91 @@ class UniformBlockTest {
         assertEquals(600f, buffer[3], 0.0001f)  // resolution.y at offset 12 (index 3)
     }
 
+    // ============ Matrix Updater Tests ============
+
+    @Test
+    fun uniformUpdater_setMat3_fromArray() {
+        val block = uniformBlock {
+            mat3("rotation")
+        }
+        
+        val buffer = block.createBuffer()
+        val updater = block.createUpdater(buffer)
+        
+        // Identity matrix in column-major order
+        val identity = floatArrayOf(
+            1f, 0f, 0f,  // column 0
+            0f, 1f, 0f,  // column 1
+            0f, 0f, 1f   // column 2
+        )
+        updater.setMat3("rotation", identity)
+        
+        // mat3 is stored as 3 vec4s (12 floats) with padding
+        // Column 0
+        assertEquals(1f, buffer[0], 0.0001f)
+        assertEquals(0f, buffer[1], 0.0001f)
+        assertEquals(0f, buffer[2], 0.0001f)
+        assertEquals(0f, buffer[3], 0.0001f)  // padding
+        // Column 1
+        assertEquals(0f, buffer[4], 0.0001f)
+        assertEquals(1f, buffer[5], 0.0001f)
+        assertEquals(0f, buffer[6], 0.0001f)
+        assertEquals(0f, buffer[7], 0.0001f)  // padding
+        // Column 2
+        assertEquals(0f, buffer[8], 0.0001f)
+        assertEquals(0f, buffer[9], 0.0001f)
+        assertEquals(1f, buffer[10], 0.0001f)
+        assertEquals(0f, buffer[11], 0.0001f)  // padding
+    }
+
+    @Test
+    fun uniformUpdater_setMat3_fromComponents() {
+        val block = uniformBlock {
+            mat3("transform")
+        }
+        
+        val buffer = block.createBuffer()
+        val updater = block.createUpdater(buffer)
+        
+        // Set with individual components (column-major)
+        updater.setMat3(
+            "transform",
+            2f, 0f, 0f,   // column 0
+            0f, 3f, 0f,   // column 1
+            0f, 0f, 4f    // column 2
+        )
+        
+        // Verify diagonal values
+        assertEquals(2f, buffer[0], 0.0001f)  // m00
+        assertEquals(3f, buffer[5], 0.0001f)  // m11
+        assertEquals(4f, buffer[10], 0.0001f) // m22
+    }
+
+    @Test
+    fun uniformUpdater_setMat4_fromArray() {
+        val block = uniformBlock {
+            mat4("modelView")
+        }
+        
+        val buffer = block.createBuffer()
+        val updater = block.createUpdater(buffer)
+        
+        // Identity matrix in column-major order
+        val identity = floatArrayOf(
+            1f, 0f, 0f, 0f,  // column 0
+            0f, 1f, 0f, 0f,  // column 1
+            0f, 0f, 1f, 0f,  // column 2
+            0f, 0f, 0f, 1f   // column 3
+        )
+        updater.setMat4("modelView", identity)
+        
+        // Verify diagonal
+        assertEquals(1f, buffer[0], 0.0001f)   // m00
+        assertEquals(1f, buffer[5], 0.0001f)   // m11
+        assertEquals(1f, buffer[10], 0.0001f)  // m22
+        assertEquals(1f, buffer[15], 0.0001f)  // m33
+    }
+
     // ============ DSL Builder Tests ============
 
     @Test

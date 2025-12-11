@@ -233,6 +233,56 @@ class FullScreenEffectTest {
     }
 
     @Test
+    fun configure_blendMode_screen() {
+        val effect = FullScreenEffect(
+            fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",
+            blendMode = BlendMode.SCREEN
+        )
+        
+        assertEquals(BlendMode.SCREEN, effect.blendMode)
+    }
+
+    @Test
+    fun configure_blendMode_overlay() {
+        val effect = FullScreenEffect(
+            fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",
+            blendMode = BlendMode.OVERLAY
+        )
+        
+        assertEquals(BlendMode.OVERLAY, effect.blendMode)
+    }
+
+    @Test
+    fun configure_blendMode_multiply() {
+        val effect = FullScreenEffect(
+            fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",
+            blendMode = BlendMode.MULTIPLY
+        )
+        
+        assertEquals(BlendMode.MULTIPLY, effect.blendMode)
+    }
+
+    @Test
+    fun configure_blendMode_additive() {
+        val effect = FullScreenEffect(
+            fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",
+            blendMode = BlendMode.ADDITIVE
+        )
+        
+        assertEquals(BlendMode.ADDITIVE, effect.blendMode)
+    }
+
+    @Test
+    fun configure_blendMode_premultipliedAlpha() {
+        val effect = FullScreenEffect(
+            fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",
+            blendMode = BlendMode.PREMULTIPLIED_ALPHA
+        )
+        
+        assertEquals(BlendMode.PREMULTIPLIED_ALPHA, effect.blendMode)
+    }
+
+    @Test
     fun configure_clearColor() {
         val effect = FullScreenEffect(
             fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }",

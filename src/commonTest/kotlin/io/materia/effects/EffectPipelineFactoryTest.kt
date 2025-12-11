@@ -127,6 +127,63 @@ class EffectPipelineFactoryTest {
         assertEquals(BlendStateType.ADDITIVE, descriptor.blendState)
     }
 
+    @Test
+    fun blendState_screen() {
+        val pass = FullScreenEffectPass(
+            fullScreenEffect {
+                fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }"
+                blendMode = BlendMode.SCREEN
+            }
+        )
+
+        val descriptor = EffectPipelineFactory.createDescriptor(pass)
+
+        assertEquals(BlendStateType.SCREEN, descriptor.blendState)
+    }
+
+    @Test
+    fun blendState_overlay_mapsToMultiply() {
+        // Overlay is approximated as multiply since true overlay requires shader-based implementation
+        val pass = FullScreenEffectPass(
+            fullScreenEffect {
+                fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }"
+                blendMode = BlendMode.OVERLAY
+            }
+        )
+
+        val descriptor = EffectPipelineFactory.createDescriptor(pass)
+
+        assertEquals(BlendStateType.MULTIPLY, descriptor.blendState)
+    }
+
+    @Test
+    fun blendState_multiply() {
+        val pass = FullScreenEffectPass(
+            fullScreenEffect {
+                fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }"
+                blendMode = BlendMode.MULTIPLY
+            }
+        )
+
+        val descriptor = EffectPipelineFactory.createDescriptor(pass)
+
+        assertEquals(BlendStateType.MULTIPLY, descriptor.blendState)
+    }
+
+    @Test
+    fun blendState_premultipliedAlpha() {
+        val pass = FullScreenEffectPass(
+            fullScreenEffect {
+                fragmentShader = "@fragment fn main() -> @location(0) vec4<f32> { return vec4(1.0); }"
+                blendMode = BlendMode.PREMULTIPLIED_ALPHA
+            }
+        )
+
+        val descriptor = EffectPipelineFactory.createDescriptor(pass)
+
+        assertEquals(BlendStateType.PREMULTIPLIED, descriptor.blendState)
+    }
+
     // ============ Uniform Buffer Size Tests ============
 
     @Test

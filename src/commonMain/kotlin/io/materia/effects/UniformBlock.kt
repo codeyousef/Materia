@@ -345,6 +345,44 @@ class UniformUpdater(
     }
     
     /**
+     * Set a mat3 uniform value from a float array.
+     * The 9 values are laid out in column-major order and expanded to
+     * 3 vec4s (12 floats) in the buffer due to WGSL std140 alignment.
+     */
+    fun setMat3(name: String, matrix: FloatArray) {
+        require(matrix.size >= 9) { "Mat3 requires 9 float values" }
+        val field = block.field(name) ?: throw IllegalArgumentException("Unknown uniform: $name")
+        val index = field.offset / 4
+        // Column 0
+        buffer[index + 0] = matrix[0]
+        buffer[index + 1] = matrix[1]
+        buffer[index + 2] = matrix[2]
+        buffer[index + 3] = 0f  // padding
+        // Column 1
+        buffer[index + 4] = matrix[3]
+        buffer[index + 5] = matrix[4]
+        buffer[index + 6] = matrix[5]
+        buffer[index + 7] = 0f  // padding
+        // Column 2
+        buffer[index + 8] = matrix[6]
+        buffer[index + 9] = matrix[7]
+        buffer[index + 10] = matrix[8]
+        buffer[index + 11] = 0f  // padding
+    }
+
+    /**
+     * Set a mat3 uniform value from individual components (column-major order).
+     */
+    fun setMat3(
+        name: String,
+        m00: Float, m01: Float, m02: Float,
+        m10: Float, m11: Float, m12: Float,
+        m20: Float, m21: Float, m22: Float
+    ) {
+        setMat3(name, floatArrayOf(m00, m01, m02, m10, m11, m12, m20, m21, m22))
+    }
+
+    /**
      * Set a mat4 uniform value from a float array
      */
     fun setMat4(name: String, matrix: FloatArray) {
