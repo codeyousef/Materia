@@ -5,7 +5,18 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1.0] - 2025-12-10
+## [0.3.1.1] - 2025-01-10
+
+### Fixed
+
+- **Moved Effect Composer classes to published artifact**: `FullScreenEffectPass`, `EffectComposer`, and `EffectPipelineFactory` are now in the `io.materia.effects` package (root module) instead of `io.materia.engine.render` (materia-engine). This ensures they are included in the published Maven artifacts.
+
+### Added
+
+- **`Disposable` interface** (`io.materia.core`): Standard interface for resource cleanup
+- **`renderToScreen` property** on `FullScreenEffectPass`: Marks the final pass in a chain that renders directly to the screen
+
+## [0.3.1.0] - 2025-01-10
 
 ### Added
 
