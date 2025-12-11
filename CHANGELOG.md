@@ -5,6 +5,94 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3.0] - 2025-12-11
+
+### Added
+
+#### WebGL Effect System (`io.materia.renderer.webgl`)
+
+A complete post-processing effect system for WebGL, providing the same high-level API as the WebGPU `FullScreenEffect` system but using GLSL shaders.
+
+**WebGLFullScreenEffect**
+- WebGL equivalent of `FullScreenEffect` for GLSL fragment shaders
+- Automatic fullscreen triangle vertex shader (optimized 3-vertex approach)
+- Integration with `UniformBlock` for type-safe uniforms
+- Blend mode support (`OPAQUE`, `ALPHA_BLEND`, `ADDITIVE`, `MULTIPLY`, `SCREEN`, `OVERLAY`, `PREMULTIPLIED_ALPHA`)
+- DSL builder: `webGLFullScreenEffect { fragmentShader = "..."; uniforms { ... } }`
+
+**WebGLEffectPass**
+- Wrapper for `WebGLFullScreenEffect` with pass chain semantics
+- Dirty tracking for uniform buffer updates
+- Resolution uniform auto-updates on resize
+- Input texture support for post-processing chains
+- DSL builder: `WebGLEffectPass.create { fragmentShader = "..." }`
+
+**WebGLEffectComposer**
+- Pass chain manager for multi-pass WebGL rendering
+- Ping-pong framebuffer system for efficient multi-pass effects
+- Add, remove, insert, and reorder passes
+- Enable/disable individual passes
+- Automatic size propagation and framebuffer management
+
+**WebGLEffectUniforms**
+- Helper class for managing common uniforms (time, resolution, mouse)
+- `WebGLUniformSetter` for type-safe uniform updates by name
+- `GLSLUniforms` constants for standard uniform declarations
+
+**GLSLLib - GLSL Shader Snippet Library**
+- WebGL equivalent of `WGSLLib` for GLSL shaders
+- `Hash`: `HASH_21`, `HASH_22`, `HASH_31`, `HASH_33` - pseudo-random functions
+- `Noise`: `VALUE_2D`, `PERLIN_2D`, `SIMPLEX_2D`, `WORLEY_2D` - procedural noise
+- `Fractal`: `FBM`, `TURBULENCE`, `RIDGED` - multi-octave noise
+- `Color`: `COSINE_PALETTE`, `HSV_TO_RGB`, `RGB_TO_HSV`, `SRGB_TO_LINEAR`, `LINEAR_TO_SRGB`
+- `Math`: `REMAP`, `SMOOTHSTEP_CUBIC`, `SMOOTHSTEP_QUINTIC`, `ROTATION_2D`, `PI`, `TAU`
+- `SDF`: `CIRCLE`, `BOX`, `ROUNDED_BOX`, `LINE`, `TRIANGLE`, `RING`
+- `Effects`: `VIGNETTE`, `FILM_GRAIN`, `CHROMATIC_ABERRATION`, `SCANLINES`
+- `Presets`: Combined shader snippets for common use cases
+
+### Technical Details
+
+- **5 new source files** for WebGL effect system
+- **3 new test files** with comprehensive unit tests
+- All existing tests continue to pass
+- JS-only implementation in `src/jsMain/kotlin`
+
+### Example Usage
+
+```kotlin
+// Create a WebGL fullscreen effect
+val effect = webGLFullScreenEffect {
+    fragmentShader = """
+        ${GLSLLib.Presets.FRAGMENT_HEADER_WITH_UNIFORMS}
+        ${GLSLLib.Hash.HASH_21}
+        ${GLSLLib.Noise.VALUE_2D}
+        ${GLSLLib.Fractal.FBM}
+        ${GLSLLib.Color.COSINE_PALETTE}
+        
+        void main() {
+            float n = fbm(vUv * 10.0, 6);
+            vec3 color = cosinePalette(n, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0));
+            gl_FragColor = vec4(color, 1.0);
+        }
+    """
+    uniforms {
+        float("time")
+        vec2("resolution")
+    }
+    blendMode = BlendMode.ALPHA_BLEND
+}
+
+// Or use the composer for multi-pass effects
+val composer = WebGLEffectComposer(gl, width, height)
+composer.addPass(WebGLEffectPass.create {
+    fragmentShader = vignetteShader
+})
+composer.addPass(WebGLEffectPass.create(requiresInputTexture = true) {
+    fragmentShader = blurShader
+})
+composer.render()
+```
+
 ## [0.3.2.0] - 2025-01-11
 
 ### Added
