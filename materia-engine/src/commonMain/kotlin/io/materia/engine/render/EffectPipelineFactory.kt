@@ -14,6 +14,8 @@ enum class BlendStateType {
     ADDITIVE,
     /** Multiply blending: src * dst */
     MULTIPLY,
+    /** Screen blending: srcFactor=ONE, dstFactor=ONE_MINUS_SRC, operation=ADD */
+    SCREEN,
     /** Premultiplied alpha: src + dst * (1 - srcAlpha) */
     PREMULTIPLIED
 }
@@ -128,6 +130,8 @@ object EffectPipelineFactory {
             BlendMode.ALPHA_BLEND -> BlendStateType.ALPHA
             BlendMode.ADDITIVE -> BlendStateType.ADDITIVE
             BlendMode.MULTIPLY -> BlendStateType.MULTIPLY
+            BlendMode.SCREEN -> BlendStateType.SCREEN
+            BlendMode.OVERLAY -> BlendStateType.MULTIPLY  // Overlay approximated as multiply
             BlendMode.PREMULTIPLIED_ALPHA -> BlendStateType.PREMULTIPLIED
         }
     }
