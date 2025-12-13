@@ -28,12 +28,17 @@
  * composer.render(outputView)
  * ```
  */
+@file:OptIn(ExperimentalJsExport::class)
+
 package io.materia.renderer.webgpu
 
 import io.materia.effects.BlendMode
 import io.materia.effects.FullScreenEffectPass
 import org.khronos.webgl.Float32Array
 import org.khronos.webgl.set
+import kotlin.js.ExperimentalJsExport
+import kotlin.js.JsExport
+import kotlin.js.JsName
 
 /**
  * Manages a chain of WebGPU post-processing effects.
@@ -43,6 +48,7 @@ import org.khronos.webgl.set
  * @property height Current height in pixels
  * @property format The texture format for render targets (default: bgra8unorm)
  */
+@JsExport
 class WebGPUEffectComposer(
     private val device: GPUDevice,
     width: Int = 0,
