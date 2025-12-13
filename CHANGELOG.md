@@ -5,11 +5,67 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.3.1] - 2025-12-13
+## [0.3.4.0] - 2025-12-13
 
-### Fixed
+### Added
 
-- **Documentation**: Corrected `docs/private/materia-renderloop-fix.md` to accurately reflect the architecture of `RenderLoop` and `EffectComposer` classes. The document now properly explains the two different `RenderLoop` implementations (`io.materia.effects.RenderLoop` timing utility vs `io.materia.engine.core.RenderLoop` platform animation loop) and clarifies that `EffectComposer` is a pass manager without a built-in `render()` method.
+#### WebGPU Effect Composer (`io.materia.renderer.webgpu.WebGPUEffectComposer`)
+
+A complete post-processing effect composer for WebGPU, providing symmetric rendering capabilities to `WebGLEffectComposer`. This bridges the API asymmetry where only WebGL had a composable render pipeline.
+
+**WebGPUEffectComposer**
+- WebGPU equivalent of `WebGLEffectComposer` for WGSL shaders
+- Manages chains of `FullScreenEffectPass` objects with automatic pipeline creation
+- Ping-pong texture system for multi-pass rendering
+- Automatic uniform buffer management and dirty tracking
+- Full blend mode support (`OPAQUE`, `ALPHA_BLEND`, `ADDITIVE`, `MULTIPLY`, `SCREEN`, `OVERLAY`, `PREMULTIPLIED_ALPHA`)
+- Lazy pipeline and resource creation for optimal performance
+- Pass chain management (add, remove, insert, reorder, swap)
+- Enable/disable individual passes
+- Automatic size propagation and texture recreation on resize
+
+**Example Usage**
+```kotlin
+// Create effect composer with WebGPU device
+val composer = WebGPUEffectComposer(device, width = 1920, height = 1080)
+
+// Add passes using existing FullScreenEffectPass API
+composer.addPass(FullScreenEffectPass.create {
+    fragmentShader = vignetteShader
+    blendMode = BlendMode.ALPHA_BLEND
+})
+
+composer.addPass(FullScreenEffectPass.create(requiresInputTexture = true) {
+    fragmentShader = colorGradingShader
+    uniforms { float("gamma") }
+})
+
+// Update uniforms in render loop
+passes[1].updateUniforms { set("gamma", 2.2f) }
+
+// Render to swapchain texture
+composer.render(swapchainView)
+
+// Or render single effect directly
+composer.renderSingle(singlePass, outputView)
+```
+
+### Technical Details
+
+- **1 new source file** for WebGPU effect composer
+- **1 new test file** with unit tests
+- JS-only implementation in `src/jsMain/kotlin/io/materia/renderer/webgpu`
+- Reuses existing `FullScreenEffectPass` and `FullScreenEffect` from `io.materia.effects`
+
+### API Symmetry
+
+| Component | WebGL | WebGPU |
+|-----------|-------|--------|
+| Composer | `WebGLEffectComposer` | `WebGPUEffectComposer` |
+| Pass | `WebGLEffectPass` | `FullScreenEffectPass` |
+| Effect | `WebGLFullScreenEffect` | `FullScreenEffect` |
+| Has render()? | ✅ Yes | ✅ Yes |
+
 
 ## [0.3.3.0] - 2025-12-11
 
