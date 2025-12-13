@@ -159,7 +159,7 @@ class WebGPUEffectComposer(
         descriptor.label = label
         
         // Build size object programmatically (js() requires constant strings)
-        val size = js("({})").asDynamic()
+        val size = js("({})")
         size.width = width
         size.height = height
         descriptor.asDynamic().size = size
@@ -378,7 +378,7 @@ class WebGPUEffectComposer(
             
             // Build clearValue object programmatically
             val cc = pass.clearColor
-            val clearValue = js("({})").asDynamic()
+            val clearValue = js("({})")
             clearValue.r = cc.r
             clearValue.g = cc.g
             clearValue.b = cc.b
@@ -438,7 +438,7 @@ class WebGPUEffectComposer(
         
         // Build clearValue object programmatically
         val cc = pass.clearColor
-        val clearValue = js("({})").asDynamic()
+        val clearValue = js("({})")
         clearValue.r = cc.r
         clearValue.g = cc.g
         clearValue.b = cc.b

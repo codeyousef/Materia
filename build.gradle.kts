@@ -773,7 +773,7 @@ tasks.register("publishToCentralPortal") {
         val uploadResult = providers.exec {
             commandLine(
                 "curl", "-v", "-X", "POST",
-                "https://central.sonatype.com/api/v1/publisher/upload",
+                "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC",
                 "-H", "Authorization: Basic $authString",
                 "-F", "bundle=@${zipFile.absolutePath}",
                 "--fail-with-body"
