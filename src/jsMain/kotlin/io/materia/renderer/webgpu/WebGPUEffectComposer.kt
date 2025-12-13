@@ -303,15 +303,15 @@ class WebGPUEffectComposer(
      * Render all enabled passes in the chain.
      *
      * This uses ping-pong textures for multi-pass rendering:
-     * - First pass renders to buffer A
-     * - Second pass reads from buffer A, writes to buffer B
+     * - First pass renders to texture A (or output if single pass)
+     * - Second pass reads from texture A, writes to texture B
+     * - Third pass reads from texture B, writes to texture A
      * - And so on...
      * - Final pass writes directly to the output view
      *
      * @param outputView The final render target (e.g., swapchain texture view)
-     * @param inputTexture Optional input texture (e.g., from scene render)
      */
-    fun render(outputView: GPUTextureView, inputTexture: GPUTextureView? = null) {
+    fun render(outputView: GPUTextureView) {
         if (isDisposed) return
 
         val enabledPasses = getEnabledPasses()
@@ -323,18 +323,22 @@ class WebGPUEffectComposer(
         }
 
         // Track ping-pong state
-        var writeToA = true
-        var currentInputView: GPUTextureView? = inputTexture
-        var currentInputBindGroup: GPUBindGroup? = null
-
+        // We alternate writing between A and B textures
+        // readFromA tracks which texture contains the previous pass's output
+        var readFromA = false  // After first pass writes to A, next pass reads from A
+        
         for ((index, pass) in enabledPasses.withIndex()) {
+            val isFirstPass = index == 0
             val isLastPass = index == enabledPasses.lastIndex
 
             // Determine the render target
+            // - Last pass (or renderToScreen) writes to the output view
+            // - Otherwise alternate between A and B
             val targetView = if (isLastPass || pass.renderToScreen) {
                 outputView
             } else {
-                if (writeToA) viewA!! else viewB!!
+                // First pass writes to A, second to B, third to A, etc.
+                if (index % 2 == 0) viewA!! else viewB!!
             }
 
             // Get or create pipeline for this pass
@@ -349,9 +353,13 @@ class WebGPUEffectComposer(
                 pass.clearDirtyFlag()
             }
 
-            // If this pass requires input, set up the input bind group
-            if (pass.requiresInputTexture && currentInputView != null) {
-                currentInputBindGroup = if (writeToA) inputBindGroupB else inputBindGroupA
+            // Determine input bind group for passes that need previous output
+            // inputBindGroupA contains viewA, inputBindGroupB contains viewB
+            val inputBindGroup: GPUBindGroup? = if (pass.requiresInputTexture && !isFirstPass) {
+                // Read from whichever texture the previous pass wrote to
+                if (readFromA) inputBindGroupA else inputBindGroupB
+            } else {
+                null
             }
 
             // Create command encoder and render pass
@@ -383,8 +391,8 @@ class WebGPUEffectComposer(
             }
             
             // Bind input texture group at index 1 (if needed)
-            if (pass.requiresInputTexture && currentInputBindGroup != null) {
-                renderPass.setBindGroup(1, currentInputBindGroup)
+            if (inputBindGroup != null) {
+                renderPass.setBindGroup(1, inputBindGroup)
             }
             
             // Draw fullscreen triangle (3 vertices)
@@ -394,10 +402,9 @@ class WebGPUEffectComposer(
             // Submit commands
             device.queue.submit(arrayOf(commandEncoder.finish()))
 
-            // Update ping-pong state for next pass
+            // Update state for next pass - track which texture we just wrote to
             if (!isLastPass) {
-                currentInputView = if (writeToA) viewA else viewB
-                writeToA = !writeToA
+                readFromA = (index % 2 == 0)  // We just wrote to A if index was even
             }
         }
     }
