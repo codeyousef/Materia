@@ -128,8 +128,9 @@ class WebGLEffectPass(
         if (!effect.compile(gl)) return false
 
         // Cache input texture location if this pass requires input
+        // Use plain name without "u_" prefix to match GLSL shader conventions
         if (requiresInputTexture) {
-            inputTextureLocation = gl.getUniformLocation(effect.program!!, "u_inputTexture")
+            inputTextureLocation = gl.getUniformLocation(effect.program!!, "inputTexture")
         }
 
         return true

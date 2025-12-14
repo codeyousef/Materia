@@ -172,14 +172,16 @@ class WebGLFullScreenEffect(
     }
 
     /**
-     * Cache uniform locations for all defined uniforms
+     * Cache uniform locations for all defined uniforms.
+     * Looks up uniforms by their plain name (e.g., "time", "resolution").
      */
     private fun cacheUniformLocations(gl: WebGLRenderingContext) {
         val prog = program ?: return
 
         // Cache locations for all uniforms defined in the block
+        // Use plain names without prefix - shader authors define names in GLSL
         uniforms.layout.forEach { field ->
-            uniformLocations[field.name] = gl.getUniformLocation(prog, "u_${field.name}")
+            uniformLocations[field.name] = gl.getUniformLocation(prog, field.name)
         }
     }
 
