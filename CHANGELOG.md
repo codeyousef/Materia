@@ -5,6 +5,12 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4.6] - 2025-12-15
+
+### Fixed
+
+- **WebGL uniform name mismatch**: Fixed uniform lookups in WebGL using plain names without `u_` prefix, matching how GLSL shaders declare uniforms. Previously, uniforms were being looked up with an incorrect prefix causing them to not be found.
+
 ## [0.3.4.3] - 2025-12-13
 
 ### Fixed

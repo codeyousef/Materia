@@ -67,6 +67,12 @@ class WebGLFullScreenEffect(
     /** Clear color for the render pass */
     val clearColor: ClearColor = ClearColor.BLACK
 ) {
+    init {
+        console.log("[WebGL] WebGLFullScreenEffect created with ${uniforms.layout.size} uniforms")
+        uniforms.layout.forEach { field ->
+            console.log("[WebGL]   - ${field.name}: ${field.type}")
+        }
+    }
 
     /** Buffer for uniform data */
     val uniformBuffer: FloatArray = uniforms.createBuffer()
@@ -178,10 +184,13 @@ class WebGLFullScreenEffect(
     private fun cacheUniformLocations(gl: WebGLRenderingContext) {
         val prog = program ?: return
 
+        console.log("[WebGL] Caching uniform locations for ${uniforms.layout.size} uniforms")
         // Cache locations for all uniforms defined in the block
         // Use plain names without prefix - shader authors define names in GLSL
         uniforms.layout.forEach { field ->
-            uniformLocations[field.name] = gl.getUniformLocation(prog, field.name)
+            val location = gl.getUniformLocation(prog, field.name)
+            uniformLocations[field.name] = location
+            console.log("[WebGL] Uniform '${field.name}' -> location: $location")
         }
     }
 
@@ -218,13 +227,24 @@ class WebGLFullScreenEffect(
         gl.useProgram(prog)
 
         uniforms.layout.forEach { field ->
-            val location = uniformLocations[field.name] ?: return@forEach
+            val location = uniformLocations[field.name]
+            if (location == null) {
+                console.log("[WebGL] Skipping uniform '${field.name}' - no location cached")
+                return@forEach
+            }
             val index = field.offset / 4
 
             when (field.type) {
-                UniformType.FLOAT -> gl.uniform1f(location, uniformBuffer[index])
+                UniformType.FLOAT -> {
+                    val value = uniformBuffer[index]
+                    console.log("[WebGL] Upload uniform '${field.name}' = $value")
+                    gl.uniform1f(location, value)
+                }
                 UniformType.INT, UniformType.UINT -> gl.uniform1i(location, Float.fromBits(uniformBuffer[index].toRawBits()).toInt())
-                UniformType.VEC2 -> gl.uniform2f(location, uniformBuffer[index], uniformBuffer[index + 1])
+                UniformType.VEC2 -> {
+                    console.log("[WebGL] Upload uniform '${field.name}' = (${uniformBuffer[index]}, ${uniformBuffer[index + 1]})")
+                    gl.uniform2f(location, uniformBuffer[index], uniformBuffer[index + 1])
+                }
                 UniformType.VEC3 -> gl.uniform3f(location, uniformBuffer[index], uniformBuffer[index + 1], uniformBuffer[index + 2])
                 UniformType.VEC4 -> gl.uniform4f(location, uniformBuffer[index], uniformBuffer[index + 1], uniformBuffer[index + 2], uniformBuffer[index + 3])
                 UniformType.MAT3 -> {
@@ -378,6 +398,7 @@ class WebGLFullScreenEffectBuilder {
      */
     fun uniforms(block: UniformBlockBuilder.() -> Unit) {
         uniformBlock = uniformBlock(block)
+        console.log("[WebGL] Builder.uniforms() called, uniformBlock has ${uniformBlock.layout.size} fields")
     }
 
     /**
@@ -385,6 +406,7 @@ class WebGLFullScreenEffectBuilder {
      */
     internal fun build(): WebGLFullScreenEffect {
         require(fragmentShader.isNotBlank()) { "Fragment shader is required" }
+        console.log("[WebGL] Builder.build() called, uniformBlock has ${uniformBlock.layout.size} fields")
 
         return WebGLFullScreenEffect(
             fragmentShader = fragmentShader,
