@@ -158,7 +158,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
-## 📄 License
+## � Built With
+
+Materia is built on top of these excellent open source projects:
+
+- **[wgpu4k](https://github.com/AmphoraHealth/wgpu4k)** – Kotlin Multiplatform bindings for wgpu, providing the unified WebGPU/Vulkan graphics backend
+- **[korlibs-math](https://github.com/korlibs/korge)** – Kotlin Multiplatform math library from Korge, providing vectors, matrices, and quaternions
+
+---
+
+## �📄 License
 
 [Apache License 2.0](LICENSE) – Use freely in commercial and open source projects.
 
