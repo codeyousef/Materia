@@ -13,32 +13,14 @@ import io.materia.lighting.ibl.PrefilterMipSelector
 import io.materia.material.MeshBasicMaterial
 import io.materia.material.MeshStandardMaterial
 import io.materia.optimization.Frustum
-import io.materia.renderer.BackendType
-import io.materia.renderer.RenderStats
-import io.materia.renderer.Renderer
-import io.materia.renderer.RendererCapabilities
-import io.materia.renderer.RendererConfig
-import io.materia.renderer.Texture2D
+import io.materia.renderer.*
 import io.materia.renderer.geometry.GeometryAttribute
 import io.materia.renderer.geometry.GeometryMetadata
 import io.materia.renderer.geometry.buildGeometryOptions
-import io.materia.renderer.gpu.GpuBackend
-import io.materia.renderer.gpu.GpuBindGroupLayout
-import io.materia.renderer.gpu.GpuDeviceFactory
-import io.materia.renderer.gpu.GpuDiagnostics
-import io.materia.renderer.gpu.GpuPowerPreference
-import io.materia.renderer.gpu.GpuRequestConfig
-import io.materia.renderer.gpu.unwrapHandle
-import io.materia.renderer.gpu.unwrapHandleAdapter
+import io.materia.renderer.gpu.*
 import io.materia.renderer.lighting.SceneLightingUniforms
 import io.materia.renderer.lighting.collectSceneLightingUniforms
-import io.materia.renderer.material.MaterialBindingSource
-import io.materia.renderer.material.MaterialBindingType
-import io.materia.renderer.material.MaterialDescriptor
-import io.materia.renderer.material.MaterialDescriptorRegistry
-import io.materia.renderer.material.ResolvedMaterialDescriptor
-import io.materia.renderer.material.bindingGroups
-import io.materia.renderer.material.requiresBinding
+import io.materia.renderer.material.*
 import io.materia.renderer.shader.MaterialShaderDescriptor
 import io.materia.renderer.shader.MaterialShaderGenerator
 import io.materia.renderer.shader.withOverrides
@@ -57,9 +39,17 @@ import io.materia.material.Material as EngineMaterial
  * FR-013: Pipeline caching
  */
 class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
+    // Actual WebGPU render target — equals canvas unless Firefox+Linux blit workaround is active
+    private var renderCanvas: HTMLCanvasElement = canvas
+
+    // Firefox+Linux WebGPU presentation workaround (Bug 1966566)
+    private var presentationCanvas: HTMLCanvasElement? =
+        null  // the user's visible canvas (null = no workaround needed)
+    private var blitCtx: dynamic = null                        // 2D context on visible canvas for blitting
 
     private companion object {
         private const val MAX_MORPH_TARGETS = 8
+        private const val DIAG_FRAMES = 3  // Unconditional diagnostic logging for first N frames
     }
 
     private val statsTracker = RenderStatsTracker()
@@ -69,6 +59,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var gpuContext: io.materia.renderer.gpu.GpuContext? = null
     private var gpuQueue: io.materia.renderer.gpu.GpuQueue? = null
     private var context: GPUCanvasContext? = null
+    private var contextDynamic: dynamic = null  // For render-path dynamic dispatch
     private var adapter: GPUAdapter? = null
 
     // Component managers
@@ -103,6 +94,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     // Create once, reuse 68 times per frame with different dynamic offsets
 
 
+    // Canvas format (queried from navigator.gpu.getPreferredCanvasFormat())
+    private var canvasFormat: String = "bgra8unorm"
+    private var canvasTextureFormat: TextureFormat = TextureFormat.BGRA8_UNORM
+
     // Depth resources
     private var depthTexture: WebGPUTexture? = null
     private var depthTextureView: GPUTextureView? = null
@@ -114,7 +109,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private var rendererCapabilities: RendererCapabilities? = null
 
     // Viewport
-    private var viewport = Viewport(0, 0, canvas.width, canvas.height)
+    private var viewport = Viewport(0, 0, canvas.width, canvas.height)  // updated in setSize()
 
     // T033: Debug flag for verbose frame logging (default off to avoid spam)
     var enableFrameLogging: Boolean = false
@@ -250,22 +245,74 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 }
             }
 
+            // Surface any WebGPU validation errors to the console
+            underlyingDevice.asDynamic().addEventListener("uncapturederror", { event: dynamic ->
+                console.error("WebGPU error: ${event.error?.message}")
+            })
+
+            // Detect Firefox+Linux WebGPU presentation bug (Bug 1966566)
+            val needsBlit = run {
+                val ua = js("navigator.userAgent") as? String ?: ""
+                ua.contains("Firefox") && ua.contains("Linux")
+            }
+            if (needsBlit) {
+                presentationCanvas = canvas
+                val offscreen = js("document.createElement('canvas')") as HTMLCanvasElement
+                offscreen.width = canvas.width
+                offscreen.height = canvas.height
+                renderCanvas = offscreen
+                blitCtx = canvas.asDynamic().getContext("2d")
+                console.log("T033: Firefox+Linux detected — using offscreen canvas blit for presentation")
+            }
+
             // Configure canvas context
             console.log("T033: Configuring canvas context...")
-            context = canvas.getContext("webgpu").unsafeCast<GPUCanvasContext?>()
-                ?: return io.materia.core.Result.Error(
+            val rawCtx = renderCanvas.getContext("webgpu")
+            if (rawCtx == null) {
+                return io.materia.core.Result.Error(
                     "Failed to get WebGPU context from canvas",
                     RuntimeException("Failed to get WebGPU context")
                 )
+            }
+            contextDynamic = rawCtx
+            context = rawCtx.unsafeCast<GPUCanvasContext?>()
 
-            val contextConfig = js("({})").unsafeCast<GPUCanvasConfiguration>()
-            contextConfig.device = underlyingDevice
-            contextConfig.format = "bgra8unorm"
-            contextConfig.alphaMode = "opaque"
-            context!!.configure(contextConfig)
-            console.log("T033: Canvas context configured (format=bgra8unorm, alphaMode=opaque)")
+            // Query preferred canvas format from the browser
+            try {
+                val gpu: dynamic = js("navigator.gpu")
+                val preferred = gpu.getPreferredCanvasFormat() as? String
+                if (preferred != null) {
+                    canvasFormat = preferred
+                    canvasTextureFormat = when (preferred) {
+                        "rgba8unorm" -> TextureFormat.RGBA8_UNORM
+                        "bgra8unorm" -> TextureFormat.BGRA8_UNORM
+                        else -> TextureFormat.BGRA8_UNORM
+                    }
+                }
+            } catch (e: dynamic) {
+                console.warn("T033: getPreferredCanvasFormat() failed, defaulting to bgra8unorm: ${e?.message ?: e}")
+            }
+            console.log("T033: Canvas dims at configure: ${renderCanvas.width}x${renderCanvas.height}, preferredFormat=$canvasFormat")
+            val configObj = js("({})")
+            configObj.device = underlyingDevice
+            configObj.format = canvasFormat
+            configObj.usage = js("GPUTextureUsage.RENDER_ATTACHMENT")
+            configObj.alphaMode = "opaque"
+            contextDynamic.configure(configObj)
+            console.log("T033: Canvas context configured (format=$canvasFormat, alphaMode=opaque)")
 
-            ensureDepthTexture(canvas.width, canvas.height)
+            // Verify context works immediately after configure
+            try {
+                val probe = contextDynamic.getCurrentTexture()
+                console.log(
+                    "T033: Context probe - getCurrentTexture()=${jsTypeOf(probe)}, " +
+                            "size=${probe.width}x${probe.height}"
+                )
+            } catch (e: dynamic) {
+                console.error("T033: Context probe FAILED: ${e?.message ?: e}")
+            }
+
+            ensureDepthTexture(renderCanvas.width, renderCanvas.height)
 
             // Create buffer pool
             console.log("T033: Creating buffer pool...")
@@ -290,6 +337,17 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             console.log("T033: Capabilities detected: maxTextureSize=${rendererCapabilities!!.maxTextureSize}, maxVertexAttributes=${rendererCapabilities!!.maxVertexAttributes}")
             GpuDiagnostics.logContext(gpuCtx, rendererCapabilities)
 
+            // WGSL shader validation probe — detect browsers that accept the device
+            // but fail shader compilation (e.g. Firefox experimental WebGPU)
+            console.log("T033: Validating WGSL shader compilation...")
+            val probeResult = validateWgslSupport(underlyingDevice)
+            if (probeResult is io.materia.core.Result.Error) {
+                console.warn("T033: WGSL validation failed, signaling fallback: ${probeResult.message}")
+                cleanupPartialInit()
+                return probeResult
+            }
+            console.log("T033: WGSL shader validation passed")
+
             isInitialized = true
 
             val initTime = js("performance.now()").unsafeCast<Double>() - startTime
@@ -306,8 +364,169 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
     }
 
+    /**
+     * Diagnostic: Perform a raw red clear bypassing the entire Materia pipeline.
+     * If the canvas turns red, presentation works and the problem is in the rendering pipeline.
+     * If it stays black, the problem is in canvas presentation/CSS/DOM.
+     */
+    fun diagnosticRawClear() {
+        try {
+            val dev = device ?: run { console.error("RAW-CLEAR-TEST: no device"); return }
+            val ctx = contextDynamic ?: run { console.error("RAW-CLEAR-TEST: no context"); return }
+
+            val rawTexture = ctx.getCurrentTexture()
+            val rawView = rawTexture.createView()
+
+            val rawEncoder = dev.createCommandEncoder()
+            val rawColorAtt = js("({})")
+            rawColorAtt.view = rawView
+            rawColorAtt.loadOp = "clear"
+            rawColorAtt.storeOp = "store"
+            val rawClear = js("({})")
+            rawClear.r = 1.0; rawClear.g = 0.0; rawClear.b = 0.0; rawClear.a = 1.0
+            rawColorAtt.clearValue = rawClear
+
+            val rawDesc = js("({})")
+            val colorAttachments = js("[]")
+            colorAttachments.push(rawColorAtt)
+            rawDesc.colorAttachments = colorAttachments
+
+            val rawPass = rawEncoder.beginRenderPass(rawDesc)
+            rawPass.end()
+
+            val cmdBuf = rawEncoder.finish()
+            val cmdArray = js("[]")
+            cmdArray.push(cmdBuf)
+            dev.queue.submit(cmdArray)
+            console.log("RAW-CLEAR-TEST: Submitted red clear. If canvas is red, presentation works.")
+        } catch (e: dynamic) {
+            console.error("RAW-CLEAR-TEST: FAILED: ${e?.message ?: e}")
+        }
+    }
+
     override fun resize(width: Int, height: Int) {
         setSize(width, height, false)
+    }
+
+    /**
+     * Compile a representative WGSL test shader and check for validation errors.
+     * Uses dual strategy: getCompilationInfo() + pushErrorScope/popErrorScope.
+     * Returns Result.Error if the browser cannot compile WGSL shaders correctly.
+     */
+    private suspend fun validateWgslSupport(device: GPUDevice): io.materia.core.Result<Unit> {
+        val testShaderCode = """
+            struct Uniforms {
+                modelViewProjection: mat4x4<f32>,
+            }
+            @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+            struct VertexInput {
+                @location(0) position: vec3<f32>,
+                @location(1) normal: vec3<f32>,
+            }
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) vNormal: vec3<f32>,
+            }
+
+            @vertex
+            fn vs_main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                output.position = uniforms.modelViewProjection * vec4<f32>(input.position, 1.0);
+                output.vNormal = input.normal;
+                return output;
+            }
+
+            @fragment
+            fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+                let light = normalize(vec3<f32>(1.0, 1.0, 1.0));
+                let intensity = max(dot(normalize(input.vNormal), light), 0.0);
+                return vec4<f32>(vec3<f32>(intensity), 1.0);
+            }
+        """.trimIndent()
+
+        return try {
+            // Push a validation error scope so we can catch GPU-level errors
+            device.pushErrorScope("validation")
+
+            val descriptor = js("({})").unsafeCast<GPUShaderModuleDescriptor>()
+            descriptor.code = testShaderCode
+            descriptor.label = "wgsl-validation-probe"
+            val testModule = device.createShaderModule(descriptor)
+
+            // Strategy 1: Check getCompilationInfo()
+            val compilationInfo =
+                (testModule.getCompilationInfo() as kotlin.js.Promise<GPUCompilationInfo>).awaitPromise()
+            val errors = compilationInfo.messages.filter { it.type == "error" }
+            if (errors.isNotEmpty()) {
+                // Pop the error scope (discard — we already know it failed)
+                (device.popErrorScope() as kotlin.js.Promise<dynamic>).awaitPromise()
+                val errorMsg = errors.joinToString("; ") { "L${it.lineNum}:${it.linePos} ${it.message}" }
+                return io.materia.core.Result.Error(
+                    "WGSL shader compilation failed: $errorMsg",
+                    RuntimeException("WGSL validation error")
+                )
+            }
+
+            // Strategy 2: Check error scope for GPU-level validation errors
+            val gpuError = (device.popErrorScope() as kotlin.js.Promise<dynamic>).awaitPromise()
+            if (gpuError != null && jsTypeOf(gpuError) != "undefined") {
+                val errorMessage = gpuError.message as? String ?: gpuError.toString()
+                return io.materia.core.Result.Error(
+                    "WGSL shader validation error (GPU scope): $errorMessage",
+                    RuntimeException("WGSL validation error")
+                )
+            }
+
+            io.materia.core.Result.Success(Unit)
+        } catch (e: Exception) {
+            console.error("T033: Exception during WGSL validation: ${e.message}")
+            io.materia.core.Result.Error(
+                "WGSL shader validation threw exception: ${e.message}",
+                e
+            )
+        }
+    }
+
+    /**
+     * Clean up resources allocated during initializeInternal() before the
+     * isInitialized flag was set. Called when shader validation fails.
+     */
+    private fun cleanupPartialInit() {
+        try {
+            bufferManager = null
+            renderPassManager = null
+
+            uniformManager.dispose()
+            materialTextureManager.dispose()
+
+            if (this::bufferPool.isInitialized) {
+                bufferPool.dispose()
+            }
+
+            if (depthTexture != null && depthTextureBytes > 0) {
+                statsTracker.recordTextureDisposed(depthTextureBytes)
+                depthTextureBytes = 0
+            }
+            depthTexture?.dispose()
+            depthTexture = null
+            depthTextureView = null
+
+            context?.unconfigure()
+            context = null
+            contextDynamic = null
+
+            device?.destroy()
+            device = null
+            adapter = null
+            gpuContext = null
+            gpuQueue = null
+
+            rendererCapabilities = null
+            statsTracker.reset()
+        } catch (e: Exception) {
+            console.error("T033: Error during partial cleanup: ${e.message}")
+        }
     }
 
     override fun dispose() {
@@ -343,12 +562,16 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
         context?.unconfigure()
         context = null
+        contextDynamic = null
 
         device?.destroy()
         device = null
         adapter = null
         gpuContext = null
         gpuQueue = null
+
+        presentationCanvas = null
+        blitCtx = null
 
         rendererCapabilities = null
         currentPipeline = null
@@ -362,7 +585,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     }
 
     override fun render(scene: Scene, camera: Camera) {
-        if (!isInitialized || device == null || context == null) {
+        if (!isInitialized || device == null || context == null || contextDynamic == null) {
             console.error("T033: Renderer not initialized, cannot render")
             return
         }
@@ -370,6 +593,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         statsTracker.frameStart()
         statsTracker.recordIBLConvolution(IBLConvolutionProfiler.snapshot())
         statsTracker.recordIBLMaterial(0f, 0)
+
+        val diag = frameCount < DIAG_FRAMES  // Unconditional diagnostic for first N frames
 
         // T021 FIX: Frame rendering (removed unreliable performance.now() logging)
 
@@ -399,12 +624,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             var culledCount = 0
             var visibleCount = 0
 
-            // Get current texture from swap chain
+            // Get current texture from swap chain (dynamic dispatch — matches working SigilEffectCanvas pattern)
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Getting current texture from swap chain...")
-            val currentTexture = context!!.getCurrentTexture()
+            val currentTexture = contextDynamic.getCurrentTexture()
             val textureView = currentTexture.createView()
 
-            ensureDepthTexture(canvas.width, canvas.height)
+            ensureDepthTexture(renderCanvas.width, renderCanvas.height)
             val depthView = depthTextureView
             if (depthView == null) {
                 console.warn("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Depth texture unavailable; rendering without depth buffer")
@@ -422,13 +647,15 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
             // T020: Initialize RenderPassManager for this frame
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Initializing RenderPassManager...")
-            renderPassManager = WebGPURenderPassManager(commandEncoder)
+            renderPassManager = WebGPURenderPassManager(commandEncoder).also {
+                it.enableDiagnostics = diag
+            }
 
             // T020: Begin render pass using manager
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Beginning render pass (clearColor=[${clearColor.r}, ${clearColor.g}, ${clearColor.b}])...")
             val framebufferHandle = if (depthView != null) {
                 io.materia.renderer.feature020.FramebufferHandle(
-                    WebGPUFramebufferAttachments(textureView, depthView)
+                    WebGPUFramebufferAttachments(textureView.unsafeCast<GPUTextureView>(), depthView)
                 )
             } else {
                 io.materia.renderer.feature020.FramebufferHandle(textureView)
@@ -440,10 +667,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 clearAlpha
             )
             renderPassManager!!.beginRenderPass(clearColorFeature020, framebufferHandle)
+            if (diag) console.log("RENDER[$frameCount]: beginRenderPass OK, framebuffer=${framebufferHandle.handle?.let { it::class.simpleName }}")
 
             // Get the internal render pass encoder for legacy rendering code
             val renderPass = (renderPassManager as WebGPURenderPassManager).getPassEncoder()
                 .unsafeCast<GPURenderPassEncoder>()
+            if (diag) console.log("RENDER[$frameCount]: passEncoder type=${jsTypeOf(renderPass)}")
 
             // T009: Render scene with frustum culling
             val sceneBrdf = scene.environmentBrdfLut as? Texture2D
@@ -451,14 +680,21 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             val environmentBinding = environmentManager.prepare(scene.environment, sceneBrdf)
 
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Traversing scene graph and rendering meshes...")
+            var firstMeshName: String? = null
+            var lastMeshName: String? = null
             scene.traverse { obj ->
                 if (obj is Mesh) {
+                    if (firstMeshName == null) firstMeshName = obj.name
+                    lastMeshName = obj.name
                     renderMesh(obj, camera, renderPass, environmentBinding, lightingUniforms)
                 }
             }
+            if (diag) console.log("RENDER[$frameCount]: meshes rendered=$drawCallCount, triangles=$triangleCount, first=$firstMeshName, last=$lastMeshName")
+
             // T020: End render pass using manager
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Ending render pass...")
             renderPassManager!!.endRenderPass()
+            if (diag) console.log("RENDER[$frameCount]: endRenderPass OK")
 
             // Submit commands
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Finishing command encoder...")
@@ -467,12 +703,17 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             val queue = gpuQueue
             if (queue != null) {
                 queue.submit(listOf(commandBufferWrapper))
+                if (diag) console.log("RENDER[$frameCount]: submitted via gpuQueue wrapper")
             } else {
                 val commandBuffer = commandBufferWrapper.unwrapHandle() as GPUCommandBuffer
                 val commandBuffers = js("[]").unsafeCast<Array<GPUCommandBuffer>>()
                 commandBuffers.asDynamic().push(commandBuffer)
                 device!!.queue.submit(commandBuffers)
+                if (diag) console.log("RENDER[$frameCount]: submitted via device.queue fallback")
             }
+
+            // Blit offscreen render target to visible canvas (Firefox+Linux workaround)
+            presentationCanvas?.let { blitCtx?.drawImage(renderCanvas, 0, 0) }
 
             // T009: Log frustum culling statistics
             if (culledCount > 0 || visibleCount > 0) {
@@ -484,17 +725,19 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 console.warn("ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â T021: Frame rendered $drawIndexInFrame meshes but buffer supports only ${UniformBufferManager.MAX_MESHES_PER_FRAME}")
             }
 
-            // T010: Log performance metrics (reduced verbosity)
-            console.log("T010 Performance: $drawCallCount draw calls, $triangleCount triangles, $visibleCount meshes")
+            // Performance metrics available via stats property
 
             if (enableFrameLogging) {
                 console.log("T033: [Frame $frameCount] Render completed successfully")
             }
 
             frameCount++
-        } catch (e: Exception) {
-            console.error("T033: ERROR during rendering frame $frameCount: ${e.message}")
-            console.error("T033: Stack trace: ${e.stackTraceToString()}")
+        } catch (e: dynamic) {
+            console.error("T033: ERROR during rendering frame $frameCount: ${e?.message ?: e}")
+            try {
+                console.error("T033: Stack: ${e?.stack ?: "no stack"}")
+            } catch (_: dynamic) {
+            }
         } finally {
             statsTracker.frameEnd()
         }
@@ -515,30 +758,35 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             return
         }
 
-        mesh.updateMatrixWorld()
+        val meshDiag = frameCount < DIAG_FRAMES
 
-        if (drawCallCount < 5) {
-            console.log("T021 Model matrix: " + mesh.matrixWorld.elements.joinToString(", "))
-        }
+        mesh.updateMatrixWorld()
 
         val geometry = mesh.geometry
         val cameraPosition = floatArrayOf(camera.position.x, camera.position.y, camera.position.z)
-        val material = mesh.material ?: run {
+        val originalMaterial = mesh.material ?: run {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: ${mesh.name} - SKIP: no material")
             console.warn("Mesh ${mesh.name} missing material; skipping")
             return
         }
+        if (meshDiag && enableFrameLogging) console.log("  MESH[$drawIndexInFrame]: ${mesh.name}, material=${originalMaterial::class.simpleName}, visible=${mesh.visible}")
+
+        val hasEnvironment = environmentBinding != null
+
+        // When no environment map is available, downgrade MeshStandardMaterial to
+        // MeshBasicMaterial so the pipeline can be created without IBL bindings.
+        val material = if (!hasEnvironment && originalMaterial is MeshStandardMaterial) {
+            MeshBasicMaterial().apply { color = originalMaterial.color }
+        } else {
+            originalMaterial
+        }
+
         val resolvedDescriptor = MaterialDescriptorRegistry.resolve(material) ?: run {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: SKIP: no descriptor for ${material::class.simpleName}")
             console.warn("No material descriptor registered for ${material::class.simpleName}")
             return
         }
         val descriptor = resolvedDescriptor.descriptor
-
-        val requiresEnvironment =
-            descriptor.requiresBinding(MaterialBindingSource.ENVIRONMENT_PREFILTER)
-        if (requiresEnvironment && environmentBinding == null) {
-            console.warn("Skipping ${descriptor.key} without prefiltered environment")
-            return
-        }
 
         val materialUniforms = when (material) {
             is MeshStandardMaterial -> {
@@ -549,11 +797,12 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     material.opacity
                 )
                 val roughness = PrefilterMipSelector.clamp01(material.roughness)
+                val envIntensity = if (hasEnvironment) material.envMapIntensity else 0f
                 val uniforms = MaterialUniformData(
                     baseColor = baseColor,
                     roughness = roughness,
                     metalness = material.metalness,
-                    envIntensity = material.envMapIntensity,
+                    envIntensity = envIntensity,
                     prefilterMipCount = environmentBinding?.mipCount ?: 1,
                     cameraPosition = cameraPosition,
                     ambientColor = lightingUniforms.ambientColor,
@@ -562,7 +811,9 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     mainLightDirection = lightingUniforms.mainLightDirection,
                     mainLightColor = lightingUniforms.mainLightColor
                 )
-                environmentBinding?.let { statsTracker.recordIBLMaterial(roughness, it.mipCount) }
+                if (hasEnvironment) {
+                    environmentBinding?.let { statsTracker.recordIBLMaterial(roughness, it.mipCount) }
+                }
                 uniforms
             }
 
@@ -594,6 +845,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val buildOptions = descriptor.buildGeometryOptions(geometry)
         val buffers = geometryCache.getOrCreate(geometry, frameCount, buildOptions)
         if (buffers == null) {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: SKIP: buffer creation failed")
             console.warn("Failed to create buffers for mesh")
             return
         }
@@ -632,6 +884,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             buffers.vertexStreams.map { it.layout }
         )
         if (pipeline == null) {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: SKIP: pipeline creation failed")
             console.warn("Failed to create pipeline for mesh")
             return
         }
@@ -646,8 +899,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 materialUniforms
             )
         ) {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: SKIP: updateUniforms returned false")
             return
         }
+        if (meshDiag && enableFrameLogging) console.log("  MESH[$drawIndexInFrame]: uniforms updated OK")
 
         renderPass.setPipeline(pipeline)
         buffers.vertexStreams.forEachIndexed { slot, stream ->
@@ -657,11 +912,13 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val bindGroupWrapper = uniformManager.bindGroup()
         val bindGroup = bindGroupWrapper?.unwrapHandle() as? GPUBindGroup
         if (bindGroup == null) {
+            if (meshDiag) console.log("  MESH[$drawIndexInFrame]: SKIP: bindGroup is null")
             console.warn("Failed to acquire uniform bind group")
             return
         }
 
         val dynamicOffset = uniformManager.dynamicOffset(drawIndexInFrame)
+        if (meshDiag && enableFrameLogging) console.log("  MESH[$drawIndexInFrame]: bindGroup OK, dynamicOffset=$dynamicOffset")
         val offsetsArray = js("[]")
         offsetsArray[0] = dynamicOffset
         renderPass.setBindGroup(0, bindGroup, offsetsArray)
@@ -673,11 +930,13 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         if (buffers.indexBuffer != null && buffers.indexCount > 0) {
             renderPass.setIndexBuffer(buffers.indexBuffer!!, buffers.indexFormat)
             renderPass.drawIndexed(buffers.indexCount, instanceCount, 0, 0, 0)
+            if (meshDiag && enableFrameLogging) console.log("  MESH[$drawIndexInFrame]: drawIndexed(${buffers.indexCount}, instances=$instanceCount)")
             val trianglesDrawn = (buffers.indexCount / 3) * instanceCount
             triangleCount += trianglesDrawn
             statsTracker.recordDrawCall(trianglesDrawn)
         } else {
             renderPass.draw(buffers.vertexCount, instanceCount, 0, 0)
+            if (meshDiag && enableFrameLogging) console.log("  MESH[$drawIndexInFrame]: draw(${buffers.vertexCount}, instances=$instanceCount)")
             val trianglesDrawn = (buffers.vertexCount / 3) * instanceCount
             triangleCount += trianglesDrawn
             statsTracker.recordDrawCall(trianglesDrawn)
@@ -735,28 +994,40 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val fragmentExtra = StringBuilder()
         val fragmentBindings = StringBuilder()
 
+        // Varying locations are independent of vertex input locations.
+        // Start after the hardcoded varyings in each shader template:
+        //   basic:        color@0                            → next = 1
+        //   meshStandard: worldNormal@0, viewDir@1, albedo@2 → next = 3
+        var varyingLocation = when (materialKey) {
+            "material.meshStandard" -> 3
+            else -> 1
+        }
+
         metadata.bindingFor(GeometryAttribute.UV0)?.let { binding ->
             vertexInputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
-            vertexOutputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
-            vertexAssignExtra.appendLine("    out.uv = in.uv;")
-            fragmentInputExtra.appendLine("    @location(${binding.location}) uv: vec2<f32>,")
+            vertexOutputExtra.appendLine("    @location($varyingLocation) uv: vec2<f32>,")
+            vertexAssignExtra.appendLine("    output.uv = input.uv;")
+            fragmentInputExtra.appendLine("    @location($varyingLocation) uv: vec2<f32>,")
+            varyingLocation++
         }
 
         metadata.bindingFor(GeometryAttribute.UV1)?.let { binding ->
             vertexInputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
-            vertexOutputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
-            vertexAssignExtra.appendLine("    out.uv2 = in.uv2;")
-            fragmentInputExtra.appendLine("    @location(${binding.location}) uv2: vec2<f32>,")
+            vertexOutputExtra.appendLine("    @location($varyingLocation) uv2: vec2<f32>,")
+            vertexAssignExtra.appendLine("    output.uv2 = input.uv2;")
+            fragmentInputExtra.appendLine("    @location($varyingLocation) uv2: vec2<f32>,")
+            varyingLocation++
         }
 
         metadata.bindingFor(GeometryAttribute.TANGENT)?.let { binding ->
             vertexInputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
-            vertexOutputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
-            vertexAssignExtra.appendLine("    out.tangent = in.tangent;")
-            fragmentInputExtra.appendLine("    @location(${binding.location}) tangent: vec4<f32>,")
+            vertexOutputExtra.appendLine("    @location($varyingLocation) tangent: vec4<f32>,")
+            vertexAssignExtra.appendLine("    output.tangent = input.tangent;")
+            fragmentInputExtra.appendLine("    @location($varyingLocation) tangent: vec4<f32>,")
+            varyingLocation++
             if (materialKey == "material.meshStandard") {
-                fragmentExtra.appendLine("    let tangent = normalize(in.tangent.xyz);")
-                fragmentExtra.appendLine("    let anisotropy = clamp(1.0 - abs(dot(normalize(in.viewDir), tangent)), 0.0, 1.0);")
+                fragmentExtra.appendLine("    let tangent = normalize(input.tangent.xyz);")
+                fragmentExtra.appendLine("    let anisotropy = clamp(1.0 - abs(dot(normalize(input.viewDir), tangent)), 0.0, 1.0);")
                 fragmentExtra.appendLine("    color = color * (0.75 + 0.25 * anisotropy);")
             }
         }
@@ -850,7 +1121,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     if (textureBinding != null && samplerBinding != null) {
                         fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
                         fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
-                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, in.uv);")
+                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, input.uv);")
                         fragmentInitExtra.appendLine("    color = clamp(color * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
                         usesAlbedoMap = true
                     }
@@ -870,7 +1141,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     if (textureBinding != null && samplerBinding != null) {
                         fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
                         fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
-                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, in.uv);")
+                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, input.uv);")
                         fragmentInitExtra.appendLine("    baseColor = clamp(baseColor * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
                         usesAlbedoMap = true
                     }
@@ -888,10 +1159,10 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                         if (textureBinding != null && samplerBinding != null) {
                             fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialNormalTexture: texture_2d<f32>;")
                             fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialNormalSampler: sampler;")
-                            fragmentInitExtra.appendLine("    let mappedNormal = textureSample(materialNormalTexture, materialNormalSampler, in.uv).xyz * 2.0 - vec3<f32>(1.0);")
+                            fragmentInitExtra.appendLine("    let mappedNormal = textureSample(materialNormalTexture, materialNormalSampler, input.uv).xyz * 2.0 - vec3<f32>(1.0);")
                             fragmentInitExtra.appendLine("    let baseNormal = N;")
-                            fragmentInitExtra.appendLine("    let tangent = normalize(in.tangent.xyz);")
-                            fragmentInitExtra.appendLine("    let bitangent = normalize(cross(baseNormal, tangent)) * in.tangent.w;")
+                            fragmentInitExtra.appendLine("    let tangent = normalize(input.tangent.xyz);")
+                            fragmentInitExtra.appendLine("    let bitangent = normalize(cross(baseNormal, tangent)) * input.tangent.w;")
                             fragmentInitExtra.appendLine("    let tbn = mat3x3<f32>(tangent, bitangent, baseNormal);")
                             fragmentInitExtra.appendLine("    N = normalize(tbn * mappedNormal);")
                             usesNormalMap = true
@@ -964,8 +1235,20 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
      * Called by RendererFactory's resize() implementation.
      */
     fun setSize(width: Int, height: Int, updateStyle: Boolean) {
-        canvas.width = width
-        canvas.height = height
+        renderCanvas.width = width
+        renderCanvas.height = height
+        presentationCanvas?.let { it.width = width; it.height = height }
+        // Reconfigure canvas context after dimension change (required by Firefox)
+        val ctx = contextDynamic
+        val dev = device
+        if (ctx != null && dev != null) {
+            val configObj = js("({})")
+            configObj.device = dev
+            configObj.format = canvasFormat
+            configObj.usage = js("GPUTextureUsage.RENDER_ATTACHMENT")
+            configObj.alphaMode = "opaque"
+            ctx.configure(configObj)
+        }
         viewport = Viewport(0, 0, width, height)
         ensureDepthTexture(width, height)
     }
@@ -1006,7 +1289,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             cullMode = renderState.cullMode,
             frontFace = renderState.frontFace,
             depthStencilState = depthState,
-            colorTarget = renderState.colorTarget
+            colorTarget = renderState.colorTarget.copy(format = canvasTextureFormat)
         )
         val cacheKey = PipelineKey.fromDescriptor(pipelineDescriptor)
 
@@ -1046,7 +1329,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     pipeline.create(pipelineLayoutWrapper?.unwrapHandle() as? GPUPipelineLayout)
                 when (creationResult) {
                     is io.materia.core.Result.Success<*> -> {
-                        console.log("Pipeline ready for ${resolved.descriptor.key}, isReady=${pipeline.isReady}")
+                        // Pipeline ready
                     }
 
                     is io.materia.core.Result.Error -> {

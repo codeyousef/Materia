@@ -171,11 +171,11 @@ class FirstPersonControls(
 
         // Calculate input direction
         if (Key.W in state.keysDown) {
-            inputDirection.z -= 1f
+            inputDirection.z += 1f
             hasInput = true
         }
         if (Key.S in state.keysDown) {
-            inputDirection.z += 1f
+            inputDirection.z -= 1f
             hasInput = true
         }
         if (Key.A in state.keysDown) {

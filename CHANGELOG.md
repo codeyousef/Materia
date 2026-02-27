@@ -5,6 +5,67 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5.0] - 2026-02-27
+
+### Fixed
+
+- **FirstPersonControls movement inversion**: Fixed W/S key movement direction — W now moves forward (+Z) and S moves
+  backward (-Z), correcting previously inverted controls.
+- **WGSL struct trailing semicolons**: Removed trailing semicolons from WGSL struct definitions in all material
+  shaders (basic and PBR), fixing compatibility with stricter WGSL parsers.
+- **WGSL shader variable naming**: Renamed `in`/`out` variables to `input`/`output` throughout all material shaders to
+  avoid potential reserved word conflicts in WGSL.
+- **Varying location mismatch**: Fixed inter-stage varying locations for UV, UV2, and tangent attributes. Varying
+  locations are now assigned independently from vertex input locations, preventing mismatches in the basic and PBR
+  shader pipelines.
+- **MeshStandardMaterial without environment map**: MeshStandardMaterial now gracefully downgrades to MeshBasicMaterial
+  when no environment map is available, instead of skipping the mesh entirely.
+- **WebGPU canvas format**: Renderer now queries `navigator.gpu.getPreferredCanvasFormat()` instead of hardcoding
+  `bgra8unorm`, fixing rendering on platforms that prefer `rgba8unorm`.
+- **WebGPU pipeline color target format**: Pipeline color target format now matches the queried canvas format instead of
+  using a hardcoded default.
+- **WebGPU resize reconfiguration**: `setSize()` now reconfigures the canvas context after dimension changes, fixing
+  blank rendering after resize on Firefox.
+- **WebGPU render pass colorAttachments**: Changed from `arrayOf()` (Kotlin typed array) to `js("[]").push()` (native JS
+  array) for compatibility with all WebGPU implementations.
+- **WebGPU swapchain alpha mode**: Changed from `opaque` to `premultiplied` in `WebGPUSwapchain` for correct alpha
+  compositing.
+- **WebGL material color extraction**: `WebGLRenderer` now extracts color from both `MeshBasicMaterial` and
+  `MeshStandardMaterial`, instead of only `MeshBasicMaterial`.
+- **Reduced render loop log spam**: Removed per-frame `T010 Performance` console.log that fired every frame; metrics
+  remain available via the stats property.
+
+### Added
+
+- **WGSL shader validation probe**: On initialization, the WebGPU renderer now compiles a representative test shader and
+  checks for compilation errors (via both `getCompilationInfo()` and `pushErrorScope/popErrorScope`). If the browser
+  cannot compile WGSL shaders, initialization returns an error for graceful fallback.
+- **Firefox+Linux blit workaround**: Detects Firefox on Linux (Bug 1966566) and renders to an offscreen canvas, blitting
+  the result to the visible canvas via a 2D context for correct presentation.
+- **Diagnostic raw clear**: Added `WebGPURenderer.diagnosticRawClear()` method for debugging presentation issues —
+  performs a red clear bypassing the full pipeline.
+- **Diagnostic frame logging**: First 3 frames log detailed render pass, mesh, and submission diagnostics
+  unconditionally for easier debugging.
+- **WebGPU error listener**: Added `uncapturederror` event listener on the GPU device to surface validation errors to
+  the console.
+- **WebGPU type declarations**: Added `GPUCompilationInfo`, `GPUCompilationMessage` external interfaces and
+  `pushErrorScope`/`popErrorScope` methods to `GPUDevice`.
+- **Partial init cleanup**: Added `cleanupPartialInit()` to properly release GPU resources when initialization fails
+  after partial setup.
+- **MaterialDescriptorRegistry**: `COLOR` attribute is now required (not optional) for both basic and standard
+  materials, ensuring vertex colors are always bound.
+- **MaterialShaderLibrary replacements**: Basic and PBR shader descriptors now include default empty replacement values
+  for all template placeholders, preventing unresolved `{{...}}` tokens.
+- **RenderPassManager diagnostics**: Added `enableDiagnostics` flag for logging render pass descriptor details.
+- **WebGPU shader source logging**: Shader module creation now logs the full WGSL source for debugging.
+
+### Changed
+
+- **WebGPURenderer context handling**: Canvas context is now stored as both typed (`GPUCanvasContext`) and dynamic
+  references, using dynamic dispatch for `getCurrentTexture()` to match the working pattern from SigilEffectCanvas.
+- **Error handling in render loop**: Catch block now uses `dynamic` instead of `Exception` to capture all JS errors
+  including non-Kotlin exceptions.
+
 ## [0.3.4.6] - 2025-12-15
 
 ### Fixed

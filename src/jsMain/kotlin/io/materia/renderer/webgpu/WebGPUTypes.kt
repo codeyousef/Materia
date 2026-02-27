@@ -89,6 +89,8 @@ external interface GPUDevice {
     fun createShaderModule(descriptor: GPUShaderModuleDescriptor): GPUShaderModule
     fun createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline
     fun createCommandEncoder(descriptor: GPUCommandEncoderDescriptor = definedExternally): GPUCommandEncoder
+    fun pushErrorScope(filter: String)
+    fun popErrorScope(): dynamic /* Promise<GPUError?> */
 }
 
 // ============================================================================
@@ -233,6 +235,17 @@ external interface GPUShaderModuleDescriptor {
 
 external interface GPUShaderModule {
     fun getCompilationInfo(): dynamic /* Promise<GPUCompilationInfo> */
+}
+
+external interface GPUCompilationInfo {
+    val messages: Array<GPUCompilationMessage>
+}
+
+external interface GPUCompilationMessage {
+    val message: String
+    val type: String  /* "error" | "warning" | "info" */
+    val lineNum: Int
+    val linePos: Int
 }
 
 // ============================================================================

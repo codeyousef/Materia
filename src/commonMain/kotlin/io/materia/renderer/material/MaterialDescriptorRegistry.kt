@@ -126,18 +126,18 @@ object MaterialDescriptorRegistry {
 
     private val BASIC_REQUIRED_ATTRIBUTES = setOf(
         GeometryAttribute.POSITION,
-        GeometryAttribute.NORMAL
+        GeometryAttribute.NORMAL,
+        GeometryAttribute.COLOR
     )
     private val BASIC_OPTIONAL_ATTRIBUTES = setOf(
-        GeometryAttribute.COLOR,
         GeometryAttribute.UV0
     )
     private val STANDARD_REQUIRED_ATTRIBUTES = setOf(
         GeometryAttribute.POSITION,
-        GeometryAttribute.NORMAL
+        GeometryAttribute.NORMAL,
+        GeometryAttribute.COLOR
     )
     private val STANDARD_OPTIONAL_ATTRIBUTES = setOf(
-        GeometryAttribute.COLOR,
         GeometryAttribute.UV0,
         GeometryAttribute.UV1,
         GeometryAttribute.TANGENT

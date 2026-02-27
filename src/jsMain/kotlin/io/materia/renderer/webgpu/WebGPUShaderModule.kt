@@ -23,6 +23,7 @@ class WebGPUShaderModule(
             shaderDescriptor.code = descriptor.code
             descriptor.label?.let { shaderDescriptor.label = it }
 
+            console.log("WGSL source (${descriptor.label ?: "unnamed"}):\n${descriptor.code}")
             console.log("Creating shader module...")
             module = device.createShaderModule(shaderDescriptor)
             console.log("Shader module created successfully")

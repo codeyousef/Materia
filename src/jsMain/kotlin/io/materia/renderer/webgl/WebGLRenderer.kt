@@ -8,27 +8,14 @@ import io.materia.core.scene.DrawMode
 import io.materia.core.scene.Mesh
 import io.materia.core.scene.Scene
 import io.materia.geometry.BufferAttribute
+import io.materia.geometry.InstancedPointsGeometry
 import io.materia.material.MeshBasicMaterial
+import io.materia.material.MeshStandardMaterial
 import io.materia.points.Points
 import io.materia.points.PointsMaterial
-import io.materia.renderer.BackendType
-import io.materia.renderer.DepthFormat
-import io.materia.renderer.PowerPreference
-import io.materia.renderer.RenderStats
-import io.materia.renderer.Renderer
-import io.materia.renderer.RendererCapabilities
-import io.materia.renderer.RendererConfig
-import io.materia.renderer.RendererInitializationException
-import io.materia.renderer.TextureFormat
-import io.materia.geometry.InstancedPointsGeometry
+import io.materia.renderer.*
 import kotlinx.browser.window
-import org.khronos.webgl.ArrayBufferView
-import org.khronos.webgl.Float32Array
-import org.khronos.webgl.Uint16Array
-import org.khronos.webgl.Uint32Array
-import org.khronos.webgl.WebGLBuffer
-import org.khronos.webgl.WebGLProgram
-import org.khronos.webgl.WebGLRenderingContext
+import org.khronos.webgl.*
 import org.khronos.webgl.WebGLRenderingContext.Companion.ARRAY_BUFFER
 import org.khronos.webgl.WebGLRenderingContext.Companion.COLOR_BUFFER_BIT
 import org.khronos.webgl.WebGLRenderingContext.Companion.COMPILE_STATUS
@@ -42,15 +29,12 @@ import org.khronos.webgl.WebGLRenderingContext.Companion.LINE_LOOP
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINE_STRIP
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINK_STATUS
 import org.khronos.webgl.WebGLRenderingContext.Companion.POINTS
-import org.khronos.webgl.WebGLRenderingContext.Companion.SHADER_TYPE
 import org.khronos.webgl.WebGLRenderingContext.Companion.STATIC_DRAW
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLES
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLE_FAN
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLE_STRIP
 import org.khronos.webgl.WebGLRenderingContext.Companion.VERTEX_SHADER
-import org.khronos.webgl.WebGLUniformLocation
 import org.w3c.dom.HTMLCanvasElement
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -442,7 +426,11 @@ class WebGLRenderer(
         if (vertexCount == 0) return null
 
         val colorAttribute = geometry.getAttribute("color")
-        val materialColor = (mesh.material as? MeshBasicMaterial)?.color ?: Color.WHITE
+        val materialColor = when (val mat = mesh.material) {
+            is MeshBasicMaterial -> mat.color
+            is MeshStandardMaterial -> mat.color
+            else -> Color.WHITE
+        }
         val vertexData = buildVertexData(positionAttribute, colorAttribute, materialColor)
 
         val existing = meshBuffers[mesh.id]

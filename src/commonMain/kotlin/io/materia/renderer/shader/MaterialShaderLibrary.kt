@@ -82,13 +82,31 @@ object MaterialShaderLibrary {
     private val basicDescriptor = MaterialShaderDescriptor(
         key = "material.basic",
         vertexChunks = listOf("material.basic.vertex.main"),
-        fragmentChunks = listOf("material.basic.fragment.main")
+        fragmentChunks = listOf("material.basic.fragment.main"),
+        replacements = mapOf(
+            "VERTEX_INPUT_EXTRA" to "",
+            "VERTEX_OUTPUT_EXTRA" to "",
+            "VERTEX_ASSIGN_EXTRA" to "",
+            "FRAGMENT_INPUT_EXTRA" to "",
+            "FRAGMENT_INIT_EXTRA" to "",
+            "FRAGMENT_EXTRA" to "",
+            "FRAGMENT_BINDINGS" to ""
+        )
     )
 
     private val meshStandardDescriptor = MaterialShaderDescriptor(
         key = "material.meshStandard",
         vertexChunks = listOf("material.pbr.vertex.main"),
-        fragmentChunks = listOf("material.pbr.fragment.main")
+        fragmentChunks = listOf("material.pbr.fragment.main"),
+        replacements = mapOf(
+            "VERTEX_INPUT_EXTRA" to "",
+            "VERTEX_OUTPUT_EXTRA" to "",
+            "VERTEX_ASSIGN_EXTRA" to "",
+            "FRAGMENT_INPUT_EXTRA" to "",
+            "FRAGMENT_INIT_EXTRA" to "",
+            "FRAGMENT_EXTRA" to "",
+            "FRAGMENT_BINDINGS" to ""
+        )
     )
 
     fun basic(): MaterialShaderDescriptor {
@@ -142,7 +160,7 @@ private object BuiltInMaterialChunks {
                     mainLightColor: vec4<f32>,
                     morphInfluences0: vec4<f32>,
                     morphInfluences1: vec4<f32>,
-                };
+                }
 
                 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
             """.trimIndent()
@@ -156,13 +174,13 @@ private object BuiltInMaterialChunks {
                     @location(1) normal: vec3<f32>,
                     @location(2) color: vec3<f32>,
                     {{VERTEX_INPUT_EXTRA}}
-                };
+                }
 
                 struct BasicVertexOutput {
                     @builtin(position) position: vec4<f32>,
                     @location(0) color: vec3<f32>,
                     {{VERTEX_OUTPUT_EXTRA}}
-                };
+                }
             """.trimIndent()
         ),
         ShaderChunk(
@@ -173,18 +191,18 @@ private object BuiltInMaterialChunks {
                 #include <material.basic.vertex.input>
 
                 @vertex
-                fn vs_main(in: VertexInput) -> BasicVertexOutput {
-                    var out: BasicVertexOutput;
-                    var position = in.position;
-                    var normal = in.normal;
-                    var vertexColor = in.color;
+                fn vs_main(input: VertexInput) -> BasicVertexOutput {
+                    var output: BasicVertexOutput;
+                    var position = input.position;
+                    var normal = input.normal;
+                    var vertexColor = input.color;
                     {{VERTEX_ASSIGN_EXTRA}}
                     let worldPosition = uniforms.modelMatrix * vec4<f32>(position, 1.0);
                     let viewPosition = uniforms.viewMatrix * worldPosition;
-                    out.position = uniforms.projectionMatrix * viewPosition;
+                    output.position = uniforms.projectionMatrix * viewPosition;
                     let materialColor = uniforms.baseColor.rgb;
-                    out.color = materialColor * vertexColor;
-                    return out;
+                    output.color = materialColor * vertexColor;
+                    return output;
                 }
             """.trimIndent()
         ),
@@ -195,7 +213,7 @@ private object BuiltInMaterialChunks {
                 struct BasicFragmentInput {
                     @location(0) color: vec3<f32>,
                     {{FRAGMENT_INPUT_EXTRA}}
-                };
+                }
             """.trimIndent()
         ),
         ShaderChunk(
@@ -207,8 +225,8 @@ private object BuiltInMaterialChunks {
                 {{FRAGMENT_BINDINGS}}
 
                 @fragment
-                fn fs_main(in: BasicFragmentInput) -> @location(0) vec4<f32> {
-                    var color = in.color;
+                fn fs_main(input: BasicFragmentInput) -> @location(0) vec4<f32> {
+                    var color = input.color;
                     {{FRAGMENT_INIT_EXTRA}}
                     {{FRAGMENT_EXTRA}}
                     return vec4<f32>(color, uniforms.baseColor.a);
@@ -224,7 +242,7 @@ private object BuiltInMaterialChunks {
                     @location(1) normal: vec3<f32>,
                     @location(2) color: vec3<f32>,
                     {{VERTEX_INPUT_EXTRA}}
-                };
+                }
 
                 struct PbrVertexOutput {
                     @builtin(position) position: vec4<f32>,
@@ -232,7 +250,7 @@ private object BuiltInMaterialChunks {
                     @location(1) viewDir: vec3<f32>,
                     @location(2) albedo: vec3<f32>,
                     {{VERTEX_OUTPUT_EXTRA}}
-                };
+                }
             """.trimIndent()
         ),
         ShaderChunk(
@@ -243,30 +261,30 @@ private object BuiltInMaterialChunks {
                 #include <material.pbr.vertex.input>
 
                 @vertex
-                fn vs_main(in: PbrVertexInput) -> PbrVertexOutput {
-                    var out: PbrVertexOutput;
-                    var position = in.position;
-                    var normal = in.normal;
-                    var vertexColor = max(in.color, vec3<f32>(1.0));
+                fn vs_main(input: PbrVertexInput) -> PbrVertexOutput {
+                    var output: PbrVertexOutput;
+                    var position = input.position;
+                    var normal = input.normal;
+                    var vertexColor = max(input.color, vec3<f32>(1.0));
                     {{VERTEX_ASSIGN_EXTRA}}
 
                     let worldPosition = uniforms.modelMatrix * vec4<f32>(position, 1.0);
                     let viewPosition = uniforms.viewMatrix * worldPosition;
-                    out.position = uniforms.projectionMatrix * viewPosition;
+                    output.position = uniforms.projectionMatrix * viewPosition;
 
                     let normalMatrix = mat3x3<f32>(
                         uniforms.modelMatrix[0].xyz,
                         uniforms.modelMatrix[1].xyz,
                         uniforms.modelMatrix[2].xyz
                     );
-                    out.worldNormal = normalize(normalMatrix * normal);
+                    output.worldNormal = normalize(normalMatrix * normal);
 
                     let cameraPos = uniforms.cameraPosition.xyz;
-                    out.viewDir = cameraPos - worldPosition.xyz;
+                    output.viewDir = cameraPos - worldPosition.xyz;
 
                     let materialColor = uniforms.baseColor.rgb;
-                    out.albedo = materialColor * vertexColor;
-                    return out;
+                    output.albedo = materialColor * vertexColor;
+                    return output;
                 }
             """.trimIndent()
         ),
@@ -312,7 +330,7 @@ private object BuiltInMaterialChunks {
                     @location(1) viewDir: vec3<f32>,
                     @location(2) albedo: vec3<f32>,
                     {{FRAGMENT_INPUT_EXTRA}}
-                };
+                }
             """.trimIndent()
         ),
         ShaderChunk(
@@ -326,10 +344,10 @@ private object BuiltInMaterialChunks {
                 {{FRAGMENT_BINDINGS}}
 
                 @fragment
-                fn fs_main(in: PbrFragmentInput) -> @location(0) vec4<f32> {
-                    var N = normalize(in.worldNormal);
-                    let V = normalize(in.viewDir);
-                    var baseColor = clamp(in.albedo, vec3<f32>(0.0), vec3<f32>(1.0));
+                fn fs_main(input: PbrFragmentInput) -> @location(0) vec4<f32> {
+                    var N = normalize(input.worldNormal);
+                    let V = normalize(input.viewDir);
+                    var baseColor = clamp(input.albedo, vec3<f32>(0.0), vec3<f32>(1.0));
                     {{FRAGMENT_INIT_EXTRA}}
 
                     let roughness = uniforms.pbrParams.x;

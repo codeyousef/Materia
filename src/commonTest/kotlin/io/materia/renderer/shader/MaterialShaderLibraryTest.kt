@@ -71,7 +71,7 @@ class MaterialShaderLibraryTest {
             "    @group(1) @binding(1) var materialSampler: sampler;"
         ).joinToString("\n")
         val fragmentInit = """
-            let sample = textureSample(materialAlbedo, materialSampler, in.uv).rgb;
+            let sample = textureSample(materialAlbedo, materialSampler, input.uv).rgb;
         """.trimIndent().prependIndent("    ")
         val fragmentExtra = "    color = sample;"
 
@@ -112,7 +112,7 @@ class MaterialShaderLibraryTest {
     fun fragmentOverridesPreserveLiteralBraces() {
         val overrides = emptyOverrideMap()
         overrides["FRAGMENT_INIT_EXTRA"] = """
-            var emissive = in.albedo;
+            var emissive = input.albedo;
             emissive = emissive * {{EMISSIVE_SCALE}};
         """.trimIndent().prependIndent("    ")
 

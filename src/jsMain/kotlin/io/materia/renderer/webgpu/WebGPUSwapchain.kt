@@ -46,7 +46,7 @@ class WebGPUSwapchain(
                 device: device,
                 format: 'bgra8unorm',
                 usage: GPUTextureUsage.RENDER_ATTACHMENT,
-                alphaMode: 'opaque'
+                alphaMode: 'premultiplied'
             })"""
             )
 

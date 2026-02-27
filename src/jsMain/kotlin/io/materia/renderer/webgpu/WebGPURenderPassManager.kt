@@ -25,6 +25,9 @@ class WebGPURenderPassManager(
     private var renderPassActive = false
     private var pipelineBound = false
 
+    /** Set to true to enable descriptor logging for this frame's render pass */
+    var enableDiagnostics: Boolean = false
+
     /**
      * Get the internal GPURenderPassEncoder for legacy rendering code.
      * This is a temporary method to support the transition from direct WebGPU API usage
@@ -78,7 +81,9 @@ class WebGPURenderPassManager(
             colorAttachment.clearValue = clearValue
 
             val descriptor = js("{}")
-            descriptor.colorAttachments = arrayOf(colorAttachment)
+            val colorAttachments = js("[]")
+            colorAttachments.push(colorAttachment)
+            descriptor.colorAttachments = colorAttachments
 
             depthView?.let { depthTextureView ->
                 val depthAttachment = js("{}")
@@ -89,11 +94,25 @@ class WebGPURenderPassManager(
                 descriptor.depthStencilAttachment = depthAttachment
             }
 
+            // Diagnostic: log render pass descriptor details
+            if (enableDiagnostics) {
+                console.log(
+                    "PASS-DESC: colorView type=${jsTypeOf(colorView)}, " +
+                            "clear=[${clearValue.r}, ${clearValue.g}, ${clearValue.b}, ${clearValue.a}], " +
+                            "depthView=${depthView != null}, " +
+                            "colorAttachments.length=${colorAttachments.length}"
+                )
+            }
+
             // Begin render pass
             passEncoder = commandEncoder.beginRenderPass(descriptor)
 
             if (passEncoder == null || passEncoder == undefined) {
                 throw RenderPassException("Failed to begin render pass")
+            }
+
+            if (enableDiagnostics) {
+                console.log("PASS-DESC: passEncoder=${jsTypeOf(passEncoder)}, active=true")
             }
 
             renderPassActive = true
