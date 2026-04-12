@@ -63,6 +63,15 @@ jobs:
         run: |
           VERSION=$(grep "^VERSION=" version.properties | cut -d'=' -f2)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ -f CHANGELOG.md ]]; then
+            CHANGELOG_VERSION=$(sed -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | head -n 1)
+            if [[ -n "$CHANGELOG_VERSION" && "$CHANGELOG_VERSION" != "$VERSION" ]]; then
+              echo "::error::Latest CHANGELOG.md version $CHANGELOG_VERSION does not match version.properties $VERSION"
+              exit 1
+            fi
+          fi
+
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             TAG="${GITHUB_REF_NAME}"
             if [[ "$TAG" != "v$VERSION" ]]; then
