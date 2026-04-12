@@ -10,20 +10,8 @@ internal class DefaultAssetResolver : AssetResolver {
     override suspend fun load(uri: String, basePath: String?): ByteArray {
         return when {
             uri.startsWith("data:", ignoreCase = true) -> decodeDataUri(uri)
-            else -> fetchBytes(resolveUri(uri, basePath))
+            else -> fetchBytes(resolveAssetUri(uri, basePath))
         }
-    }
-
-    private fun resolveUri(uri: String, basePath: String?): String {
-        if (uri.startsWith("http://", ignoreCase = true) ||
-            uri.startsWith("https://", ignoreCase = true)
-        ) {
-            return uri
-        }
-
-        val base = basePath ?: return uri
-        val separator = if (base.endsWith("/")) "" else "/"
-        return base + separator + uri
     }
 
     private suspend fun fetchBytes(url: String): ByteArray {

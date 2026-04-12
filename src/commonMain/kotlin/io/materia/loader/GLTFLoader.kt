@@ -102,7 +102,7 @@ class GLTFLoader(
         val normalizedUrl = url.replace('\\', '/')
         val basePath = normalizedUrl.substringBeforeLast('/', missingDelimiterValue = "")
             .takeIf { it.isNotEmpty() }
-        val documentBytes = loadDocumentBytes(normalizedUrl, basePath)
+        val documentBytes = loadDocumentBytes(normalizedUrl)
         val document = json.decodeFromString<GltfDocument>(documentBytes.decodeToString())
 
         val buffers = loadBuffers(document.buffers, basePath, progress)
@@ -171,10 +171,10 @@ class GLTFLoader(
         )
     }
 
-    private suspend fun loadDocumentBytes(url: String, basePath: String?): ByteArray {
+    private suspend fun loadDocumentBytes(url: String): ByteArray {
         return when {
             url.startsWith("data:", ignoreCase = true) -> DataUriDecoder.decode(url)
-            else -> resolver.load(url, basePath)
+            else -> resolver.load(url)
         }
     }
 

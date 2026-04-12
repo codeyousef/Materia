@@ -5,6 +5,17 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6.0] - 2026-04-12
+
+### Fixed
+
+- **GLTFLoader top-level model fetch path**: The root model URL is now fetched exactly as provided instead of being resolved against its own derived base path, preventing duplicated prefixes such as `models/models/example.glb` and `/assets/models//assets/models/example.glb`.
+- **Asset URI resolution for rooted and absolute paths**: Dependent glTF resource URIs now treat rooted paths (`/foo`), protocol-relative paths (`//foo`), and absolute URLs (`https://...`) as already resolved so they are not prefixed again.
+
+### Added
+
+- **GLTF loader regression tests**: Added coverage for top-level relative and rooted model URLs plus dependent relative and rooted asset URIs to prevent URL re-prefixing regressions.
+
 ## [0.3.5.0] - 2026-02-27
 
 ### Fixed

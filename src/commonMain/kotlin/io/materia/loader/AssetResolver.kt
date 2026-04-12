@@ -21,6 +21,29 @@ interface AssetResolver {
 
 internal expect fun createDefaultAssetResolver(): AssetResolver
 
+private val absoluteAssetUriPattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+internal fun resolveAssetUri(uri: String, basePath: String? = null): String {
+    if (uri.isEmpty() || isAbsoluteAssetUri(uri)) {
+        return uri
+    }
+
+    val base = basePath?.trimEnd('/') ?: return uri
+    if (base.isEmpty()) {
+        return uri
+    }
+
+    if (uri == base || uri.startsWith("$base/")) {
+        return uri
+    }
+
+    return "$base/$uri"
+}
+
+internal fun isAbsoluteAssetUri(uri: String): Boolean {
+    return uri.startsWith("/") || uri.startsWith("//") || absoluteAssetUriPattern.containsMatchIn(uri)
+}
+
 /**
  * Decoded bitmap data returned by [PlatformImageDecoder].
  */
