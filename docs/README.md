@@ -169,7 +169,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            implementation("io.materia:materia-engine:0.5.0.0")
+            implementation("io.materia:materia-engine:0.4.0.0")
         }
     }
 }

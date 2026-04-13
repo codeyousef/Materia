@@ -5,27 +5,25 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0.0] - 2026-04-13
+## [0.4.0.0] - 2026-04-14
 
 ### Added
 
 - **`Data3DTexture` public API**: Added a multiplatform 3D texture type for byte-, float-, and int-backed volume data, including solid-color and noise helpers plus voxel read/write utilities.
 - **Volume texture contract and fallback coverage**: Added multiplatform tests for `Data3DTexture` creation and mutation, shared CPU volume sampling, Vulkan shader generation, and a JS smoke test that forces the WebGL fallback path.
 - **Runnable volume-texture examples**: Added the new multiplatform `examples:volume-texture` scene for JVM and JS plus a dedicated `examples:volume-texture-android` wrapper app that renders the shared scene on Android.
+- **Apple beta platform support**: Added Apple source-set wiring plus shared engine/GPU implementations for iOS and macOS, including the native triangle macOS/iOS example path and Apple host apps for the volume-texture demo.
 - **Android volume-texture runtime**: Added a Filament/OpenGL Android bridge that boots the shared `VolumeTextureExample` scene headlessly, samples the volume texture on the CPU, and renders the result through Android-friendly mesh vertex colors.
 - **Android example automation**: Added adb-aware `runAndroid` and `smokeAndroid` tasks for the volume-texture Android wrapper, alongside the existing triangle Android smoke workflow.
 - **Volume texture documentation**: Added a dedicated volume-texture guide, example README coverage, and an Android reference screenshot documenting the current Android output.
 - **Android Filament material assets**: Added checked-in Filament material sources and compiled payloads used by the Android wrapper/runtime path.
-- **Apple triangle launch paths**: Added native Apple bring-up for `examples:triangle`, including the exported `MateriaTriangle` framework for iOS host apps and the dedicated `:examples:triangle:runMacos` executable path.
-- **Apple volume-texture wrapper app**: Added `examples/volume-texture-ios-app`, a native iOS / Mac Catalyst shell that bundles the working `Data3DTexture` JS/WebGL example for Apple platforms.
 
 ### Changed
 
 - **Basic material volume-texture support**: `MeshBasicMaterial.map` can now be a `Data3DTexture`, with real GPU 3D texture sampling on JS WebGPU and JVM Vulkan, plus CPU-sampled vertex-color fallback on Android and WebGL.
-- **Android rendering path**: Replaced the previous Android renderer stub path with a concrete wgpu-backed implementation, added explicit Android runtime compatibility checks, and expanded the Android example strategy around working Filament/OpenGL wrapper apps.
+- **Android renderer implementation**: Replaced the stubbed public Android renderer path with a concrete wgpu-backed implementation, added explicit Android runtime compatibility checks, and expanded the Android example strategy around working Filament/OpenGL wrapper apps.
+- **Apple example/runtime coverage**: The triangle example now exercises the shared Apple engine path on macOS and iOS, while the volume-texture demo includes an Apple host-app path for iOS Simulator and Mac Catalyst.
 - **Material texture bindings**: The built-in basic material descriptor and backend texture managers now expose optional 3D texture bindings and upload paths in the WebGPU and Vulkan pipelines.
-- **Example and guide coverage**: Volume-texture docs and example metadata now include the Android wrapper path and the verified Android capture artifact.
-- **Apple docs and example metadata**: README, guides, and example docs now describe the split Apple runtime model: shared native triangle paths plus the wrapper-based `volume-texture` Apple path.
 
 ### Fixed
 
@@ -33,33 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JS WebGPU material routing**: Corrected WebGPU material plumbing so shared scene material types and texture paths reach the intended shader and binding code.
 - **Android renderer bootstrap**: Fixed Android engine surface initialization so renderer startup no longer fails with `Call GpuSurface.attachRenderSurface first` during example boot.
 - **Android wgpu diagnostics**: Android renderer failures now detect the upstream `ValueLayout.Companion` mismatch and report an explicit compatibility error instead of a raw linkage failure.
-- **Unlit Apple triangle pipeline contract**: Unlit color rendering now uses a position-only vertex layout with uniform-driven color, fixing the simulator-side validation failure triggered by position-only triangle geometry.
-- **iOS triangle host lifecycle**: Triangle startup now waits until the `MTKView` is onscreen and resizes to the real drawable size after boot, fixing the full-frame flat-color render on the simulator.
-
-## [0.4.0.0] - 2026-04-12
-
-### Added
-
-- **`Data3DTexture` public API**: Added a multiplatform 3D texture type for byte-, float-, and int-backed volume data, including solid-color and noise helpers plus voxel read/write utilities.
-- **`Data3DTexture` contract coverage**: Added root multiplatform tests for 3D texture creation, mutation, cloning, and data access behavior.
-- **Volume-texture material consumer**: `MeshBasicMaterial.map` can now be a `Data3DTexture`, with centered local-space volume sampling wired through the built-in WebGPU and Vulkan material pipelines.
-- **Runnable volume-texture example**: Added a new multiplatform `examples:volume-texture` scene that renders a generated `Data3DTexture` on both a box and a sphere through the root renderer API.
-- **Android example smoke automation**: Added adb-aware `smokeAndroid` tasks for the triangle Android example and its wrapper project, plus README guidance for install/run/smoke validation.
-- **Volume texture fallback coverage**: Added tests for shared CPU volume sampling and Vulkan shader generation when `MeshBasicMaterial.map` is a `Data3DTexture`.
-- **WebGL fallback smoke coverage**: Added a JS runtime smoke test that forces `RendererFactory` onto the WebGL fallback path and renders a `Data3DTexture`-mapped mesh.
-- **Volume texture guide**: Added documentation covering `Data3DTexture` usage, local-space coordinate mapping, and backend-specific behavior.
-
-### Changed
-
-- **Android renderer implementation**: Replaced the stubbed public Android renderer with a real wgpu4k-backed renderer and routed the Android factory to the concrete implementation.
-- **Basic material texture bindings**: The built-in basic material descriptor now exposes optional 3D volume texture and sampler bindings alongside existing albedo bindings.
-- **Android and WebGL fallback rendering**: `MeshBasicMaterial.map = Data3DTexture` now falls back to CPU volume sampling that bakes colors into mesh vertices when the backend does not use the GPU 3D texture path.
-
-### Fixed
-
-- **JS WebGPU material typing**: Corrected the WebGPU material plumbing to use the shared scene material interface so `MeshStandardMaterial` texture handling reaches the intended code paths.
-- **Android engine surface bootstrap**: `EngineRenderer` now pre-initializes the GPU context from the provided render surface before requesting an adapter, fixing Android example launches that previously failed with `Call GpuSurface.attachRenderSurface first`.
-- **Android wgpu compatibility diagnostics**: Android renderer/bootstrap failures now detect the upstream `wgpu4k` `ValueLayout.Companion` runtime mismatch and surface an explicit compatibility error instead of the raw linkage failure.
+- **Native metadata publication**: Removed a JVM-only annotation from the native JSON IO implementation so `compileNativeMainKotlinMetadata` succeeds during publish.
 
 ## [0.3.6.0] - 2026-04-12
 

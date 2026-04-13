@@ -4,7 +4,6 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 import okio.FileSystem
 import okio.Path.Companion.toPath
-import kotlin.jvm.JvmName
 
 actual suspend fun readTextResource(urlOrPath: String): String {
     val path = urlOrPath.toPath()
@@ -16,7 +15,6 @@ actual suspend fun readTextResource(urlOrPath: String): String {
     }
 }
 
-@JvmName("saveJsonWithSerializer")
 actual fun <T> saveJson(
     path: String,
     serializer: SerializationStrategy<T>,

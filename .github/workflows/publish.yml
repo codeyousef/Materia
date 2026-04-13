@@ -92,6 +92,15 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
         timeout-minutes: 20
 
+      - name: Compile native metadata
+        run: |
+          ./gradlew --no-daemon --max-workers=4 --console=plain \
+            :compileNativeMainKotlinMetadata \
+            --stacktrace
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+        timeout-minutes: 10
+
       - name: Ensure tag does not already exist
         shell: bash
         run: |

@@ -22,6 +22,10 @@
   <img src="https://img.shields.io/badge/Status-Alpha-red.svg" alt="Alpha Status" />
 </p>
 
+<p align="center">
+  <strong><a href="https://x.com/deepissuemassaj">Follow development on X: @deepissuemassaj</a></strong>
+</p>
+
 ---
 
 ## ✨ Highlights
