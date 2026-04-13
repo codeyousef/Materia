@@ -1,0 +1,368 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0EB49D7D63DCD5DDE31026C3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7990DDBC07D8A5D451374B8C /* AppDelegate.swift */; };
+		205372186C9C225CA4D2FA19 /* volume-texture.js in Resources */ = {isa = PBXBuildFile; fileRef = 547DA6CC74EAFD0FDD2A3959 /* volume-texture.js */; };
+		8512BE8362F51D81FD4F614D /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAAAAB0EE8867862D0FA3526 /* SceneDelegate.swift */; };
+		B7DAC3B876F293A276A0C338 /* index.html in Resources */ = {isa = PBXBuildFile; fileRef = D4BB205BF9A8428ACE4FEFA6 /* index.html */; };
+		E4AEE30B7F65CF2C0E4E677C /* VolumeTextureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B178381A6BE5B6CEC4992E8C /* VolumeTextureViewController.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		547DA6CC74EAFD0FDD2A3959 /* volume-texture.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "volume-texture.js"; sourceTree = "<group>"; };
+		7090AAF9ED7A9E83CF7D770F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		794495143B81222BECB6F982 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		7990DDBC07D8A5D451374B8C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B178381A6BE5B6CEC4992E8C /* VolumeTextureViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeTextureViewController.swift; sourceTree = "<group>"; };
+		BB23DCE1A03C50F157704030 /* MateriaVolumeTextureDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MateriaVolumeTextureDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAAAAB0EE8867862D0FA3526 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		D4BB205BF9A8428ACE4FEFA6 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		2BCC2F7A21292D35967F1E83 /* Web */ = {
+			isa = PBXGroup;
+			children = (
+				794495143B81222BECB6F982 /* .gitkeep */,
+				D4BB205BF9A8428ACE4FEFA6 /* index.html */,
+				547DA6CC74EAFD0FDD2A3959 /* volume-texture.js */,
+			);
+			path = Web;
+			sourceTree = "<group>";
+		};
+		9EB44B6E10086EFDFFA56CA4 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				7990DDBC07D8A5D451374B8C /* AppDelegate.swift */,
+				7090AAF9ED7A9E83CF7D770F /* Info.plist */,
+				CAAAAB0EE8867862D0FA3526 /* SceneDelegate.swift */,
+				B178381A6BE5B6CEC4992E8C /* VolumeTextureViewController.swift */,
+				2BCC2F7A21292D35967F1E83 /* Web */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D360B7E9C512416205B485C3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB23DCE1A03C50F157704030 /* MateriaVolumeTextureDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D8EAE7289C70997F579B6776 = {
+			isa = PBXGroup;
+			children = (
+				9EB44B6E10086EFDFFA56CA4 /* App */,
+				D360B7E9C512416205B485C3 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3847175ADE3695E1DBF1A7E0 /* MateriaVolumeTextureDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F54A6898A0DDD164BB9C7738 /* Build configuration list for PBXNativeTarget "MateriaVolumeTextureDemo" */;
+			buildPhases = (
+				0AD124C172AE6FCBDBB7B389 /* Build Volume Texture Web Bundle */,
+				18EF7ACDB4E68DE80BA84669 /* Sources */,
+				CE9BAC2869294BCC65BFC4B3 /* Resources */,
+				376D04248FA23E7FFCA66C44 /* Embed Volume Texture Web Assets */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MateriaVolumeTextureDemo;
+			packageProductDependencies = (
+			);
+			productName = MateriaVolumeTextureDemo;
+			productReference = BB23DCE1A03C50F157704030 /* MateriaVolumeTextureDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9555EBE9F05C93802CD31796 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 3A8B8C4CF3F5AE85FCF48832 /* Build configuration list for PBXProject "MateriaVolumeTextureDemo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D8EAE7289C70997F579B6776;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D360B7E9C512416205B485C3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3847175ADE3695E1DBF1A7E0 /* MateriaVolumeTextureDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CE9BAC2869294BCC65BFC4B3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7DAC3B876F293A276A0C338 /* index.html in Resources */,
+				205372186C9C225CA4D2FA19 /* volume-texture.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0AD124C172AE6FCBDBB7B389 /* Build Volume Texture Web Bundle */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Volume Texture Web Bundle";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\ncd \"$SRCROOT/../..\"\n./gradlew :examples:volume-texture:jsBrowserDevelopmentWebpack --console=plain\n";
+		};
+		376D04248FA23E7FFCA66C44 /* Embed Volume Texture Web Assets */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Volume Texture Web Assets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nWEB_DST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Web\"\nmkdir -p \"$WEB_DST\"\ncp \"$SRCROOT/../volume-texture/build/processedResources/js/main/index.html\" \"$WEB_DST/index.html\"\ncp \"$SRCROOT/../volume-texture/build/kotlin-webpack/js/developmentExecutable/volume-texture.js\" \"$WEB_DST/volume-texture.js\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		18EF7ACDB4E68DE80BA84669 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0EB49D7D63DCD5DDE31026C3 /* AppDelegate.swift in Sources */,
+				8512BE8362F51D81FD4F614D /* SceneDelegate.swift in Sources */,
+				E4AEE30B7F65CF2C0E4E677C /* VolumeTextureViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3AC84975BE30D1D43958804C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9DA95DF9CCCAA8A2DA996F9A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.materia.volumetexturedemo;
+				PRODUCT_NAME = MateriaVolumeTextureDemo;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Release;
+		};
+		D3ED332EAE67495938B9D075 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.materia.volumetexturedemo;
+				PRODUCT_NAME = MateriaVolumeTextureDemo;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Debug;
+		};
+		F143FDBDB209890FB8379812 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3A8B8C4CF3F5AE85FCF48832 /* Build configuration list for PBXProject "MateriaVolumeTextureDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3AC84975BE30D1D43958804C /* Debug */,
+				F143FDBDB209890FB8379812 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F54A6898A0DDD164BB9C7738 /* Build configuration list for PBXNativeTarget "MateriaVolumeTextureDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D3ED332EAE67495938B9D075 /* Debug */,
+				9DA95DF9CCCAA8A2DA996F9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9555EBE9F05C93802CD31796 /* Project object */;
+}

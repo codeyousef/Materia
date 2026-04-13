@@ -48,13 +48,13 @@ sealed class MaterialBindingBlueprint(
 
     class UnlitColor(renderState: RenderState) : MaterialBindingBlueprint(renderState) {
         override val vertexLayout: GpuVertexBufferLayout =
-            UnlitPipelineFactory.vertexLayoutWithColor()
+            UnlitPipelineFactory.vertexLayoutWithPosition()
         override val primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.TRIANGLE_LIST
     }
 
     class UnlitLines(renderState: RenderState) : MaterialBindingBlueprint(renderState) {
         override val vertexLayout: GpuVertexBufferLayout =
-            UnlitPipelineFactory.vertexLayoutWithColor()
+            UnlitPipelineFactory.vertexLayoutWithPosition()
         override val primitiveTopology: GpuPrimitiveTopology = GpuPrimitiveTopology.LINE_LIST
     }
 

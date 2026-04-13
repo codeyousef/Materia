@@ -1,6 +1,6 @@
 # Renderer API Reference
 
-The renderer module provides a unified GPU rendering backend that works identically across WebGPU (JavaScript) and Vulkan (JVM).
+The renderer module provides unified rendering APIs across WebGPU (JavaScript), Vulkan (JVM), and the current Apple beta runtime paths.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The renderer module provides a unified GPU rendering backend that works identica
 import io.materia.engine.renderer.*
 ```
 
-The Materia rendering system provides a **"Write Once, Run Everywhere"** architecture similar to Three.js, where scene graph, materials, and rendering code work identically across all platforms.
+The Materia rendering system aims for a **"Write Once, Run Everywhere"** architecture similar to Three.js. Today, the core cross-platform path is solid on JS and JVM, while Apple support is split between the shared engine path used by `examples:triangle` and wrapper-app paths for some legacy `RendererFactory` examples such as `volume-texture`.
 
 ---
 
@@ -164,6 +164,48 @@ val window = KmpWindow(WindowConfig(
 val renderer = WebGPURenderer()
 renderer.initialize(window.getRenderSurface())
 ```
+
+---
+
+### Apple Runtime Model
+
+Apple support is currently split by API family:
+
+- `examples:triangle` uses the shared Apple engine/gpu path. On iOS, the app owns an `MTKView` or `CAMetalLayer` and bridges it into Materia. On macOS, `./gradlew :examples:triangle:runMacos` launches the native executable.
+- `examples:volume-texture` still uses the older root `RendererFactory` API. The current native Apple implementation for that API does not yet draw scene content, so the working Apple path is `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`, which embeds the generated JS/WebGL bundle inside a native iOS or Mac Catalyst shell.
+
+#### iOS Host Shape
+
+```swift
+import MetalKit
+import UIKit
+import MateriaTriangle
+
+final class TriangleViewController: UIViewController {
+    private let metalView = MTKView(frame: .zero)
+    private var controller: TriangleIosController?
+    private var hasStarted = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        controller = TriangleIosHostKt.createDefaultTriangleIosController(metalView: metalView)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !hasStarted else { return }
+        hasStarted = true
+        controller?.start(onReady: { print($0) }, onError: { print($0) })
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        controller?.resizeToDrawableSize()
+    }
+}
+```
+
+Use `open examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj` for the native iOS host app and `open examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj` for the current Apple `Data3DTexture` example path.
 
 ---
 

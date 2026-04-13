@@ -1,7 +1,7 @@
 # WebGPU/Vulkan Backend - Beta Documentation
 
 **Status**: Public Beta
-**Version**: 0.1.0-alpha01
+**Version**: 0.5.0.0
 **Last Updated**: 2025-10-06
 
 ## Overview

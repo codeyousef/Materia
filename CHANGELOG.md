@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Android example automation**: Added adb-aware `runAndroid` and `smokeAndroid` tasks for the volume-texture Android wrapper, alongside the existing triangle Android smoke workflow.
 - **Volume texture documentation**: Added a dedicated volume-texture guide, example README coverage, and an Android reference screenshot documenting the current Android output.
 - **Android Filament material assets**: Added checked-in Filament material sources and compiled payloads used by the Android wrapper/runtime path.
+- **Apple triangle launch paths**: Added native Apple bring-up for `examples:triangle`, including the exported `MateriaTriangle` framework for iOS host apps and the dedicated `:examples:triangle:runMacos` executable path.
+- **Apple volume-texture wrapper app**: Added `examples/volume-texture-ios-app`, a native iOS / Mac Catalyst shell that bundles the working `Data3DTexture` JS/WebGL example for Apple platforms.
 
 ### Changed
 
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Android rendering path**: Replaced the previous Android renderer stub path with a concrete wgpu-backed implementation, added explicit Android runtime compatibility checks, and expanded the Android example strategy around working Filament/OpenGL wrapper apps.
 - **Material texture bindings**: The built-in basic material descriptor and backend texture managers now expose optional 3D texture bindings and upload paths in the WebGPU and Vulkan pipelines.
 - **Example and guide coverage**: Volume-texture docs and example metadata now include the Android wrapper path and the verified Android capture artifact.
+- **Apple docs and example metadata**: README, guides, and example docs now describe the split Apple runtime model: shared native triangle paths plus the wrapper-based `volume-texture` Apple path.
 
 ### Fixed
 
@@ -30,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JS WebGPU material routing**: Corrected WebGPU material plumbing so shared scene material types and texture paths reach the intended shader and binding code.
 - **Android renderer bootstrap**: Fixed Android engine surface initialization so renderer startup no longer fails with `Call GpuSurface.attachRenderSurface first` during example boot.
 - **Android wgpu diagnostics**: Android renderer failures now detect the upstream `ValueLayout.Companion` mismatch and report an explicit compatibility error instead of a raw linkage failure.
+- **Unlit Apple triangle pipeline contract**: Unlit color rendering now uses a position-only vertex layout with uniform-driven color, fixing the simulator-side validation failure triggered by position-only triangle geometry.
+- **iOS triangle host lifecycle**: Triangle startup now waits until the `MTKView` is onscreen and resizes to the real drawable size after boot, fixing the full-frame flat-color render on the simulator.
 
 ## [0.4.0.0] - 2026-04-12
 

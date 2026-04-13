@@ -98,3 +98,5 @@ settings.gradle.kts.bak
 Thumbs.db
 .directory
 xcuserdata/
+examples/volume-texture-ios-app/App/Web/index.html
+examples/volume-texture-ios-app/App/Web/volume-texture.js

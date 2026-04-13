@@ -175,14 +175,15 @@ kotlin {
         }
     }
 
-    // iOS Targets - Disabled on Windows
-    // iosX64()
-    // iosArm64()
-    // iosSimulatorArm64()
+    val hostOs = System.getProperty("os.name").lowercase()
+    if (!hostOs.contains("win")) {
+        iosX64()
+        iosArm64()
+        iosSimulatorArm64()
 
-    // macOS Targets - Disabled on Windows
-    // macosX64()
-    // macosArm64()
+        macosX64()
+        macosArm64()
+    }
 
     // Windows Target - Disabled (not a primary target, stub implementations only)
     // mingwX64 {
@@ -290,31 +291,70 @@ kotlin {
         }
     }
 
-        // Native shared code - Disabled (not primary targets)
-        // val nativeMain by creating {
-        //     dependsOn(commonMain)
-        // }
+        val nativeMain by creating {
+            dependsOn(commonMain)
+        }
 
-        // Apple shared code - Disabled on Windows
-        // val appleMain by creating {
-        //     dependsOn(nativeMain)
-        // }
+        val appleMain by creating {
+            dependsOn(nativeMain)
+        }
 
-        // val iosX64Main by getting {
-        //     dependsOn(appleMain)
-        // }
-        // val iosArm64Main by getting {
-        //     dependsOn(appleMain)
-        // }
-        // val iosSimulatorArm64Main by getting {
-        //     dependsOn(appleMain)
-        // }
-        // val macosX64Main by getting {
-        //     dependsOn(appleMain)
-        // }
-        // val macosArm64Main by getting {
-        //     dependsOn(appleMain)
-        // }
+        val iosMain by creating {
+            dependsOn(appleMain)
+            kotlin.exclude("io/materia/xr/**")
+        }
+
+        val macosMain by creating {
+            dependsOn(appleMain)
+        }
+
+        val iosX64Main by getting {
+            dependsOn(iosMain)
+        }
+        val iosArm64Main by getting {
+            dependsOn(iosMain)
+        }
+        val iosSimulatorArm64Main by getting {
+            dependsOn(iosMain)
+        }
+        val macosX64Main by getting {
+            dependsOn(macosMain)
+        }
+        val macosArm64Main by getting {
+            dependsOn(macosMain)
+        }
+
+        val nativeTest by creating {
+            dependsOn(commonTest)
+        }
+
+        val appleTest by creating {
+            dependsOn(nativeTest)
+        }
+
+        val iosTest by creating {
+            dependsOn(appleTest)
+        }
+
+        val macosTest by creating {
+            dependsOn(appleTest)
+        }
+
+        val iosX64Test by getting {
+            dependsOn(iosTest)
+        }
+        val iosArm64Test by getting {
+            dependsOn(iosTest)
+        }
+        val iosSimulatorArm64Test by getting {
+            dependsOn(iosTest)
+        }
+        val macosX64Test by getting {
+            dependsOn(macosTest)
+        }
+        val macosArm64Test by getting {
+            dependsOn(macosTest)
+        }
 
         // Linux Target - Disabled
         // val linuxX64Main by getting {

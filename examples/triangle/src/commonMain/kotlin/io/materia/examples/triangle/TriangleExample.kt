@@ -127,12 +127,7 @@ class TriangleExample(
             layout = GeometryLayout(
                 stride = Float.SIZE_BYTES * GPU_TRIANGLE_COMPONENTS,
                 attributes = mapOf(
-                    AttributeSemantic.POSITION to GeometryAttribute(0, 3, AttributeType.FLOAT32),
-                    AttributeSemantic.COLOR to GeometryAttribute(
-                        Float.SIZE_BYTES * 3,
-                        3,
-                        AttributeType.FLOAT32
-                    )
+                    AttributeSemantic.POSITION to GeometryAttribute(0, 3, AttributeType.FLOAT32)
                 )
             )
         )
@@ -189,8 +184,8 @@ class TriangleExample(
         }
 
         val camera = PerspectiveCamera(fovDegrees = 60f, aspect = aspect, near = 0.1f, far = 100f)
-        camera.transform.setPosition(0f, 0f, 0f)
-        camera.lookAt(Vec3.Forward)
+        camera.transform.setPosition(0f, 0f, 2.5f)
+        camera.lookAt(Vec3.Zero)
 
         return Triple(scene, camera, listOf(triangleMesh, pointsMesh))
     }
@@ -199,21 +194,21 @@ class TriangleExample(
         private const val DEFAULT_WIDTH = 1280
         private const val DEFAULT_HEIGHT = 720
 
-        private const val GPU_TRIANGLE_COMPONENTS = 6
+        private const val GPU_TRIANGLE_COMPONENTS = 3
         private const val GPU_POINTS_COMPONENTS = 11
 
         private val GPU_TRIANGLE_VERTEX_DATA = floatArrayOf(
-            0f, 0.5f, -4.5f, 1f, 0.4f, 0.2f,
-            -0.5f, -0.5f, -4.5f, 1f, 0.4f, 0.2f,
-            0.5f, -0.5f, -4.5f, 1f, 0.4f, 0.2f
+            0f, 0.6f, 0f,
+            -0.6f, -0.6f, 0f,
+            0.6f, -0.6f, 0f
         )
 
         private val GPU_POINTS_VERTEX_DATA = floatArrayOf(
-            -0.75f, 0.6f, -4.5f, 0.3f, 0.9f, 0.5f, 1f, 0f, 0f, 0f, 0f,
-            0.0f, 0.85f, -4.5f, 0.6f, 0.9f, 0.2f, 1.2f, 0.1f, 0f, 0f, 0f,
-            0.65f, 0.55f, -4.5f, 0.2f, 0.8f, 1.0f, 0.9f, 0.2f, 0f, 0f, 0f,
-            -0.6f, -0.65f, -4.5f, 0.95f, 0.4f, 0.2f, 1.1f, 0.3f, 0f, 0f, 0f,
-            0.7f, -0.7f, -4.5f, 0.8f, 0.3f, 0.9f, 1.4f, 0.4f, 0f, 0f, 0f
+            -0.75f, 0.6f, 0f, 0.3f, 0.9f, 0.5f, 1f, 0f, 0f, 0f, 0f,
+            0.0f, 0.85f, 0f, 0.6f, 0.9f, 0.2f, 1.2f, 0.1f, 0f, 0f, 0f,
+            0.65f, 0.55f, 0f, 0.2f, 0.8f, 1.0f, 0.9f, 0.2f, 0f, 0f, 0f,
+            -0.6f, -0.65f, 0f, 0.95f, 0.4f, 0.2f, 1.1f, 0.3f, 0f, 0f, 0f,
+            0.7f, -0.7f, 0f, 0.8f, 0.3f, 0.9f, 1.4f, 0.4f, 0f, 0f, 0f
         )
     }
 }

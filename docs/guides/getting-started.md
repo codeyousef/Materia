@@ -47,7 +47,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("io.materia:materia-core:0.1.0-alpha01")
+                implementation("io.materia:materia-core:0.5.0.0")
             }
         }
     }

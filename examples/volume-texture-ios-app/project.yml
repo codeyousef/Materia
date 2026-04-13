@@ -1,0 +1,36 @@
+name: MateriaVolumeTextureDemo
+options:
+  minimumXcodeGenVersion: 2.45.3
+targets:
+  MateriaVolumeTextureDemo:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.materia.volumetexturedemo
+        PRODUCT_NAME: MateriaVolumeTextureDemo
+        INFOPLIST_FILE: App/Info.plist
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        SUPPORTS_MACCATALYST: YES
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/Frameworks"
+    preBuildScripts:
+      - name: Build Volume Texture Web Bundle
+        script: |
+          set -euo pipefail
+          cd "$SRCROOT/../.."
+          ./gradlew :examples:volume-texture:jsBrowserDevelopmentWebpack --console=plain
+    postBuildScripts:
+      - name: Embed Volume Texture Web Assets
+        script: |
+          set -euo pipefail
+          WEB_DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Web"
+          mkdir -p "$WEB_DST"
+          cp "$SRCROOT/../volume-texture/build/processedResources/js/main/index.html" "$WEB_DST/index.html"
+          cp "$SRCROOT/../volume-texture/build/kotlin-webpack/js/developmentExecutable/volume-texture.js" "$WEB_DST/volume-texture.js"

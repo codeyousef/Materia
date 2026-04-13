@@ -13,12 +13,13 @@ Core functionality including math primitives, scene graph, and utilities.
 - **Transform**: Position, rotation, scale management
 - **Utilities**: Event system, layers, helpers
 
-### [Renderer](renderer/README.md)
+### [Renderer](renderer.md)
 
-Rendering system and GPU abstraction.
+Rendering system, GPU abstraction, and Apple runtime notes.
 
 - **WebGPU**: WebGPU rendering backend
 - **Vulkan**: Vulkan rendering backend
+- **Apple Runtime**: Host-owned `MTKView` / `CAMetalLayer` integration and current wrapper-app paths
 - **Buffer**: Vertex and index buffer management
 - **State**: Rendering state management
 - **Shader**: Shader compilation and management
@@ -110,6 +111,15 @@ Asset loading system.
 - **Texture**: Image and texture loading
 - **Font**: Font loading for text
 
+### [Texture](texture.md)
+
+Textures, samplers, and volume texture data.
+
+- **Texture**: Base texture type
+- **DataTexture**: Raw 2D pixel data
+- **Data3DTexture**: Byte/float/int-backed volume textures
+- **Sampling**: Filter, wrap, and upload behavior
+
 ## Quick Reference
 
 ### Core Classes
@@ -145,6 +155,14 @@ Asset loading system.
 | `ShaderMaterial`       | Custom shader material    |
 | `PointsMaterial`       | Material for point clouds |
 | `LineMaterial`         | Material for lines        |
+
+### Texture Classes
+
+| Class           | Description                          |
+|-----------------|--------------------------------------|
+| `Texture`       | Base texture class                   |
+| `DataTexture`   | 2D data-backed texture               |
+| `Data3DTexture` | 3D data-backed texture / volume data |
 
 ### Camera Classes
 

@@ -8,6 +8,7 @@ This example is the first runnable scene dedicated to `Data3DTexture`. It render
 |---|---|---|
 | Desktop (JVM Vulkan) | `./gradlew :examples:volume-texture:runJvm` | Uses the real Vulkan 3D texture path. |
 | Browser (WebGPU/WebGL) | `./gradlew :examples:volume-texture:jsBrowserRun` | Uses WebGPU when available and falls back to WebGL through `RendererFactory`. |
+| iOS / macOS desktop (Mac Catalyst) wrapper | Build `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj` for an iOS Simulator destination or `My Mac (Mac Catalyst)` | Bundles the working JS/WebGL example inside a native app shell because the current Apple native renderer for this API is still stubbed. |
 | Android (Filament/OpenGL) | `./gradlew :examples:volume-texture-android:runAndroid` | Boots the shared scene headlessly, samples the volume texture on the CPU into vertex colors, and renders through the working Android Filament path. |
 
 ## What To Look For

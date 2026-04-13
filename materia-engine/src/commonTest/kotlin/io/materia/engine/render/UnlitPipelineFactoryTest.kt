@@ -46,7 +46,10 @@ class UnlitPipelineFactoryTest {
         assertEquals(GpuVertexStepMode.INSTANCE, pointsBlueprint.vertexLayout.stepMode)
         assertEquals(GpuPrimitiveTopology.TRIANGLE_LIST, colorBlueprint.primitiveTopology)
         assertEquals(GpuPrimitiveTopology.POINT_LIST, pointsBlueprint.primitiveTopology)
-        assertEquals(Float.SIZE_BYTES * 6, colorBlueprint.vertexLayout.arrayStride)
+        assertEquals(Float.SIZE_BYTES * 3, colorBlueprint.vertexLayout.arrayStride)
+        assertEquals(1, colorBlueprint.vertexLayout.attributes.size)
+        assertEquals(0, colorBlueprint.vertexLayout.attributes.single().offset)
+        assertEquals(GpuVertexFormat.FLOAT32x3, colorBlueprint.vertexLayout.attributes.single().format)
         assertEquals(Float.SIZE_BYTES * 11, pointsBlueprint.vertexLayout.arrayStride)
     }
 }

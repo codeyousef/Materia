@@ -4,13 +4,14 @@ This guide covers platform-specific considerations when using Materia across dif
 
 ## Platform Overview
 
-| Platform                     | Rendering Backend           | Status | Min Version     |
-|------------------------------|-----------------------------|--------|-----------------|
-| JVM                          | Vulkan via LWJGL            | Stable | Java 17+        |
-| JavaScript                   | WebGPU with WebGL2 fallback | Stable | Modern browsers |
-| Android                      | Native Vulkan API           | Stable | API 24+         |
-| iOS                          | MoltenVK (Vulkan-to-Metal)  | Beta   | iOS 14+         |
-| Native (Linux/Windows/macOS) | Direct Vulkan               | Beta   | OS-dependent    |
+| Platform              | Rendering Backend                           | Status | Min Version     |
+|-----------------------|---------------------------------------------|--------|-----------------|
+| JVM                   | Vulkan via LWJGL                            | Stable | Java 17+        |
+| JavaScript            | WebGPU with WebGL2 fallback                 | Stable | Modern browsers |
+| Android               | Native Vulkan API                           | Stable | API 24+         |
+| iOS                   | MoltenVK via host-owned `MTKView`/`CAMetalLayer` | Beta   | Xcode 15+       |
+| macOS Apple Native    | MoltenVK via shared engine/gpu path         | Beta   | Xcode 15+       |
+| Native (Linux/Windows)| Direct Vulkan                               | Beta   | OS-dependent    |
 
 ## JVM (Desktop)
 
@@ -32,7 +33,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation("io.materia:materia-jvm:1.0.0")
+                implementation("io.materia:materia-jvm:0.5.0.0")
                 implementation("org.lwjgl:lwjgl:3.3.3")
                 implementation("org.lwjgl:lwjgl-vulkan:3.3.3")
 
@@ -121,7 +122,7 @@ kotlin {
     sourceSets {
         val jsMain by getting {
             dependencies {
-                implementation("io.materia:materia-js:1.0.0")
+                implementation("io.materia:materia-js:0.5.0.0")
             }
         }
     }
@@ -266,7 +267,7 @@ kotlin {
     sourceSets {
         val androidMain by getting {
             dependencies {
-                implementation("io.materia:materia-android:1.0.0")
+                implementation("io.materia:materia-android:0.5.0.0")
                 implementation("androidx.core:core-ktx:1.12.0")
                 implementation("androidx.appcompat:appcompat:1.6.1")
             }
@@ -402,66 +403,90 @@ val renderer = VulkanRenderer(surface).apply {
 
 ## iOS
 
+### Runtime Model
+
+- Materia uses MoltenVK through the shared Apple `wgpu4k` path.
+- iOS window creation is host-owned. Your app provides an `MTKView` or `CAMetalLayer`, and Materia builds the render surface around that host view.
+- The repository includes a minimal sample host in `examples/triangle/src/iosMain/kotlin/io/materia/examples/triangle/TriangleIosHost.kt`.
+- The `Data3DTexture` / `volume-texture` example still uses the older root `RendererFactory` API. On Apple, the current working path is `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`, which wraps the generated JS/WebGL bundle in a native iOS / Mac Catalyst shell.
+
 ### Setup
 
 ```kotlin
-// build.gradle.kts
 kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
-
-    sourceSets {
-        val iosMain by creating {
-            dependsOn(commonMain.get())
-            dependencies {
-                implementation("io.materia:materia-ios:1.0.0")
-            }
-        }
-
-        val iosX64Main by getting { dependsOn(iosMain) }
-        val iosArm64Main by getting { dependsOn(iosMain) }
-        val iosSimulatorArm64Main by getting { dependsOn(iosMain) }
-    }
 }
 ```
 
 ### Swift Integration
 
-```swift
-import UIKit
-import Materia
+The sample host is exported through the `MateriaTriangle` Apple framework. The integration shape is:
 
-class GameViewController: UIViewController {
-    var renderer: VulkanRenderer!
-    var displayLink: CADisplayLink!
+```swift
+import MetalKit
+import UIKit
+import MateriaTriangle
+
+final class TriangleViewController: UIViewController {
+    private let metalView = MTKView(frame: .zero)
+    private var controller: TriangleIosController?
+    private var hasStarted = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Create Metal view
-        let metalView = MTKView(frame: view.bounds)
-        metalView.device = MTLCreateSystemDefaultDevice()
+        metalView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(metalView)
 
-        // Initialize Materia renderer (uses MoltenVK)
-        renderer = VulkanRenderer(metalView: metalView)
+        NSLayoutConstraint.activate([
+            metalView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            metalView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            metalView.topAnchor.constraint(equalTo: view.topAnchor),
+            metalView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
 
-        // Start render loop
-        displayLink = CADisplayLink(target: self, selector: #selector(renderLoop))
-        displayLink.add(to: .main, forMode: .default)
+        controller = TriangleIosHostKt.createDefaultTriangleIosController(metalView: metalView)
     }
 
-    @objc func renderLoop() {
-        renderer.render(scene: scene, camera: camera)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasStarted else { return }
+        hasStarted = true
+
+        controller?.start(
+            onReady: { bootLog in
+                print(bootLog)
+            },
+            onError: { message in
+                print("MateriaTriangle iOS host error: \(message)")
+            }
+        )
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        controller?.resizeToDrawableSize()
     }
 
     deinit {
-        displayLink.invalidate()
-        renderer.dispose()
+        controller?.stop()
     }
 }
 ```
+
+### Supported Launch Paths
+
+- `./gradlew :examples:triangle:linkDebugFrameworkIosSimulatorArm64`
+- `./gradlew :examples:triangle:linkReleaseFrameworkIosArm64`
+- `./gradlew :examples:triangle:compileKotlinIosArm64`
+- `./gradlew :examples:triangle:compileKotlinIosX64`
+- `./gradlew :examples:triangle:compileKotlinIosSimulatorArm64`
+- `open examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj`
+- `open examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`
+- There is no `runIos` Gradle task in this repository yet; the iOS runtime path is through a host app that embeds the generated Kotlin framework.
 
 ### Performance Considerations
 
@@ -471,6 +496,13 @@ class GameViewController: UIViewController {
 - **App Store**: Ensure compliance with guidelines
 
 ## Native (Linux/Windows/macOS)
+
+### Current Launch Paths
+
+- Desktop runnable examples are split by API family. `:examples:triangle:runMacos` uses a dedicated Kotlin/Native macOS executable backed by the shared Apple engine/gpu path.
+- `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj` can also run on `My Mac (Mac Catalyst)` for the current Apple `Data3DTexture` example path.
+- JVM entry points such as `:examples:triangle:runJvm` and `:examples:volume-texture:runJvm` remain the primary desktop path for Vulkan-backed examples.
+- The direct Vulkan setup below applies to Linux/Windows and non-Apple native experimentation. Apple runtime setup uses the shared MoltenVK path instead of raw `platform.vulkan` initialization.
 
 ### Setup
 
@@ -485,7 +517,7 @@ kotlin {
         val nativeMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.materia:materia-native:1.0.0")
+                implementation("io.materia:materia-native:0.5.0.0")
             }
         }
 

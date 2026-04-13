@@ -1,13 +1,13 @@
 # Materia Documentation
 
-Welcome to the Materia documentation! Materia is a Kotlin Multiplatform 3D rendering engine that works seamlessly across JVM, JavaScript/WebAssembly, and Android platforms with Three.js-style ergonomics.
+Welcome to the Materia documentation! Materia is a Kotlin Multiplatform 3D rendering engine that works across JVM, JavaScript/WebAssembly, Android, and Apple beta targets with Three.js-style ergonomics.
 
 ## Table of Contents
 
 ### Getting Started
 - [Quickstart Guide](quickstart.md) - Get up and running in minutes
 - [Getting Started](guides/getting-started.md) - Detailed setup and first scene
-- [Platform-Specific Guide](guides/platform-specific.md) - JVM, JS, and Android setup
+- [Platform-Specific Guide](guides/platform-specific.md) - JVM, JS, Android, and Apple beta setup
 - [Volume Textures](guides/volume-textures.md) - `Data3DTexture` usage and backend behavior
 - [Examples](examples/basic-usage.md) - Code samples and demos
 
@@ -79,7 +79,12 @@ Welcome to the Materia documentation! Materia is a Kotlin Multiplatform 3D rende
 | **JVM (Desktop)** | Vulkan via LWJGL 3.3.6 | ✅ Ready |
 | **Browser (JS/WASM)** | WebGPU (WebGL2 fallback) | ✅ Ready |
 | **Android** | Vulkan (API 24+) | ✅ Ready |
-| **iOS/macOS** | MoltenVK | 🟡 In Progress |
+| **iOS** | MoltenVK via host-owned `MTKView` / `CAMetalLayer` | 🟡 Beta |
+| **macOS Apple Native** | MoltenVK via shared engine/gpu path | 🟡 Beta |
+
+Apple beta runtime model:
+- `:examples:triangle` exercises the shared Apple engine path. Use `./gradlew :examples:triangle:runMacos` on macOS, or embed the exported `MateriaTriangle` framework through `examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj` on iOS.
+- `examples:volume-texture` currently uses the legacy root `RendererFactory` API. On Apple, the working path is `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`, which bundles the generated JS/WebGL build inside a native iOS / Mac Catalyst shell.
 
 ---
 
@@ -164,7 +169,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            implementation("io.materia:materia-engine:0.1.0-alpha01")
+            implementation("io.materia:materia-engine:0.5.0.0")
         }
     }
 }
@@ -182,16 +187,19 @@ cd Materia
 # Run Triangle demo
 ./gradlew :examples:triangle:runJvm          # Desktop
 ./gradlew :examples:triangle:jsBrowserRun    # Browser
+./gradlew :examples:triangle:runMacos        # Apple Native (macOS host only)
+open examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj
 
 # Run Volume Texture demo
 ./gradlew :examples:volume-texture:runJvm
 ./gradlew :examples:volume-texture:jsBrowserRun
-
-# Run VoxelCraft (Minecraft-style)
-./gradlew :examples:voxelcraft:runJvm
+open examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj
 
 # Run Embedding Galaxy (particles)
 ./gradlew :examples:embedding-galaxy:runJvm
+
+# Run Force Graph (network visualization)
+./gradlew :examples:force-graph:runJvm
 ```
 
 ---

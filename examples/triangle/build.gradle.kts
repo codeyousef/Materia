@@ -4,6 +4,8 @@ plugins {
     id("com.android.library")
 }
 
+val hostOs = System.getProperty("os.name")
+
 kotlin {
     jvm {
         compilerOptions {
@@ -36,13 +38,43 @@ kotlin {
         }
     }
 
+    if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+        val iosTargets = listOf(
+            iosX64(),
+            iosArm64(),
+            iosSimulatorArm64()
+        )
+        val macosTargets = listOf(
+            macosX64(),
+            macosArm64()
+        )
+        val appleTargets = iosTargets + macosTargets
+
+        appleTargets.forEach { target ->
+            target.binaries.framework {
+                baseName = "MateriaTriangle"
+                isStatic = false
+                export(project(":"))
+                export(project(":materia-gpu"))
+                export(project(":materia-engine"))
+            }
+        }
+
+        macosTargets.forEach { target ->
+            target.binaries.executable {
+                baseName = "materia-triangle"
+                entryPoint = "io.materia.examples.triangle.main"
+            }
+        }
+    }
+
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation(project(":materia-gpu"))
-                implementation(project(":materia-engine"))
+                api(project(":materia-gpu"))
+                api(project(":materia-engine"))
                 implementation(libs.kotlinx.coroutines.core)
-                implementation(project(":"))
+                api(project(":"))
             }
         }
 
@@ -90,6 +122,69 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
             }
+        }
+
+        if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+            val nativeMain by creating {
+                dependsOn(commonMain)
+            }
+
+            val appleMain by creating {
+                dependsOn(nativeMain)
+            }
+
+            val iosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val macosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val iosX64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosSimulatorArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val macosX64Main by getting {
+                dependsOn(macosMain)
+            }
+
+            val macosArm64Main by getting {
+                dependsOn(macosMain)
+            }
+        }
+    }
+}
+
+if (hostOs.startsWith("Mac", ignoreCase = true)) {
+    val hostArch = System.getProperty("os.arch")
+    val macosTargetName = if (hostArch.contains("aarch64") || hostArch.contains("arm64")) {
+        "MacosArm64"
+    } else {
+        "MacosX64"
+    }
+
+    tasks.register<Exec>("runMacos") {
+        group = "run"
+        description = "Run the macOS Apple Native version of the triangle example"
+        dependsOn("linkDebugExecutable$macosTargetName")
+
+        val executablePath = layout.buildDirectory.file(
+            "bin/$macosTargetName/debugExecutable/materia-triangle.kexe"
+        )
+        commandLine(executablePath.get().asFile.absolutePath)
+
+        doFirst {
+            println("🍎 Launching Materia Triangle Example (macOS Native)")
+            println("Bootstrapping MoltenVK through the Apple Native executable path")
         }
     }
 }

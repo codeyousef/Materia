@@ -3,6 +3,8 @@ plugins {
     kotlin("plugin.serialization")
 }
 
+val hostOs = System.getProperty("os.name")
+
 kotlin {
     jvm {
         compilerOptions {
@@ -32,6 +34,14 @@ kotlin {
                 enabled = false
             }
         }
+    }
+
+    if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+        iosX64()
+        iosArm64()
+        iosSimulatorArm64()
+        macosX64()
+        macosArm64()
     }
 
     sourceSets {
@@ -86,6 +96,44 @@ kotlin {
                 implementation(libs.kotlin.test)
             }
         }
+
+        if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+            val nativeMain by creating {
+                dependsOn(commonMain)
+            }
+
+            val appleMain by creating {
+                dependsOn(nativeMain)
+            }
+
+            val iosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val macosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val iosX64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosSimulatorArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val macosX64Main by getting {
+                dependsOn(macosMain)
+            }
+
+            val macosArm64Main by getting {
+                dependsOn(macosMain)
+            }
+        }
     }
 }
 
@@ -108,12 +156,16 @@ tasks.register<JavaExec>("runJvm") {
         "-XX:+UseG1GC"
     )
 
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("mac") || osName.contains("darwin")) {
+        jvmArgs("-XstartOnFirstThread")
+    }
+
     val java22Home = file("/usr/lib/jvm/java-22-openjdk")
     if (java22Home.exists()) {
         executable = file("$java22Home/bin/java").absolutePath
     }
 
-    val osName = System.getProperty("os.name").lowercase()
     if (osName.contains("linux")) {
         val jemallocPath = "/usr/lib/libjemalloc.so"
         if (file(jemallocPath).exists()) {

@@ -1,0 +1,43 @@
+name: MateriaTriangleDemo
+options:
+  minimumXcodeGenVersion: 2.45.3
+targets:
+  MateriaTriangleDemo:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.materia.triangleiosdemo
+        PRODUCT_NAME: MateriaTriangleDemo
+        INFOPLIST_FILE: App/Info.plist
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
+        FRAMEWORK_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/../triangle/build/bin/iosSimulatorArm64/debugFramework
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -framework
+          - MateriaTriangle
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/Frameworks"
+    preBuildScripts:
+      - name: Build MateriaTriangle Simulator Framework
+        script: |
+          set -euo pipefail
+          cd "$SRCROOT/../.."
+          ./gradlew :examples:triangle:linkDebugFrameworkIosSimulatorArm64 --console=plain
+    postBuildScripts:
+      - name: Embed MateriaTriangle Framework
+        script: |
+          set -euo pipefail
+          FRAMEWORK_SRC="$SRCROOT/../triangle/build/bin/iosSimulatorArm64/debugFramework/MateriaTriangle.framework"
+          FRAMEWORK_DST="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
+          mkdir -p "$FRAMEWORK_DST"
+          rsync -a --delete "$FRAMEWORK_SRC" "$FRAMEWORK_DST/"

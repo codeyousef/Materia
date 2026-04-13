@@ -5,9 +5,13 @@ import io.materia.engine.geometry.AttributeType
 import io.materia.engine.geometry.Geometry
 import io.materia.engine.geometry.GeometryAttribute
 import io.materia.engine.geometry.GeometryLayout
+import io.materia.engine.material.Material
 import io.materia.engine.math.Mat4
 import io.materia.engine.math.mat4
 import io.materia.engine.material.RenderState
+import io.materia.engine.material.UnlitColorMaterial
+import io.materia.engine.material.UnlitLineMaterial
+import io.materia.engine.material.UnlitPointsMaterial
 import io.materia.engine.scene.InstancedPoints
 import io.materia.engine.scene.Mesh
 import io.materia.engine.scene.VertexBuffer
@@ -105,7 +109,18 @@ class SceneRenderer(
             val resources = meshCache[mesh] ?: return@forEach
             val worldMatrix = mesh.getWorldMatrix()
             val mvp = TMP_MAT.multiply(viewProjection, worldMatrix)
-            resources.uniformBuffer.writeFloats(mvp.toFloatArray(copy = true))
+            val uniformData = resources.uniformData
+            mvp.toFloatArray(copy = false).copyInto(
+                destination = uniformData,
+                startIndex = 0,
+                endIndex = MODEL_VIEW_PROJECTION_FLOATS
+            )
+            val materialColor = mesh.material.toUniformColor()
+            uniformData[MODEL_VIEW_PROJECTION_FLOATS] = materialColor.r
+            uniformData[MODEL_VIEW_PROJECTION_FLOATS + 1] = materialColor.g
+            uniformData[MODEL_VIEW_PROJECTION_FLOATS + 2] = materialColor.b
+            uniformData[MODEL_VIEW_PROJECTION_FLOATS + 3] = materialColor.a
+            resources.uniformBuffer.writeFloats(uniformData)
 
             pass.setPipeline(resources.pipeline.pipeline)
             pass.setBindGroup(0, resources.bindGroup)
@@ -127,7 +142,7 @@ class SceneRenderer(
             val resources = pointsCache[pointNode] ?: return@forEach
             val worldMatrix = pointNode.getWorldMatrix()
             val mvp = TMP_MAT.multiply(viewProjection, worldMatrix)
-            resources.uniformBuffer.writeFloats(mvp.toFloatArray(copy = true))
+            resources.uniformBuffer.writeFloats(mvp.toFloatArray(copy = false))
 
             pass.setPipeline(resources.pipeline.pipeline)
             pass.setBindGroup(0, resources.bindGroup)
@@ -189,7 +204,7 @@ class SceneRenderer(
         val uniformBuffer = device.createBuffer(
             GpuBufferDescriptor(
                 label = "${mesh.name}-uniforms",
-                size = Float.SIZE_BYTES * 16L,
+                size = Float.SIZE_BYTES * MESH_UNIFORM_FLOATS.toLong(),
                 usage = gpuBufferUsage(GpuBufferUsage.UNIFORM, GpuBufferUsage.COPY_DST)
             )
         )
@@ -201,7 +216,14 @@ class SceneRenderer(
         )
 
         val resources =
-            MeshResources(mesh.geometry, pipeline, geometry, uniformBuffer, bindGroup, blueprint)
+            MeshResources(
+                sourceGeometry = mesh.geometry,
+                pipeline = pipeline,
+                geometry = geometry,
+                uniformBuffer = uniformBuffer,
+                bindGroup = bindGroup,
+                blueprint = blueprint
+            )
         meshCache[mesh] = resources
         return resources
     }
@@ -275,7 +297,8 @@ class SceneRenderer(
         val geometry: UploadedGeometry,
         val uniformBuffer: io.materia.gpu.GpuBuffer,
         val bindGroup: io.materia.gpu.GpuBindGroup,
-        val blueprint: MaterialBindingBlueprint
+        val blueprint: MaterialBindingBlueprint,
+        val uniformData: FloatArray = FloatArray(MESH_UNIFORM_FLOATS)
     ) {
         fun dispose() {
             uniformBuffer.destroy()
@@ -305,6 +328,8 @@ class SceneRenderer(
     )
 
     private companion object {
+        private const val MODEL_VIEW_PROJECTION_FLOATS = 16
+        private const val MESH_UNIFORM_FLOATS = MODEL_VIEW_PROJECTION_FLOATS + 4
         private val TMP_MAT = mat4()
     }
 
@@ -325,4 +350,10 @@ class SceneRenderer(
             layout = layout
         )
     }
+}
+
+private fun Material.toUniformColor() = when (this) {
+    is UnlitColorMaterial -> color
+    is UnlitLineMaterial -> color
+    is UnlitPointsMaterial -> baseColor
 }

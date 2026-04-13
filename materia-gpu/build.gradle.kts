@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.androidLibrary)
 }
 
+val hostOs = System.getProperty("os.name")
+
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     jvm {
@@ -29,6 +31,14 @@ kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
+    }
+
+    if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+        iosX64()
+        iosArm64()
+        iosSimulatorArm64()
+        macosX64()
+        macosArm64()
     }
 
     sourceSets {
@@ -71,6 +81,44 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 // wgpu4k-toolkit handles Android via its native helper - no custom native bridge needed
+            }
+        }
+
+        if (!hostOs.startsWith("Windows", ignoreCase = true)) {
+            val nativeMain by creating {
+                dependsOn(commonMain)
+            }
+
+            val appleMain by creating {
+                dependsOn(nativeMain)
+            }
+
+            val iosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val macosMain by creating {
+                dependsOn(appleMain)
+            }
+
+            val iosX64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val iosSimulatorArm64Main by getting {
+                dependsOn(iosMain)
+            }
+
+            val macosX64Main by getting {
+                dependsOn(macosMain)
+            }
+
+            val macosArm64Main by getting {
+                dependsOn(macosMain)
             }
         }
     }

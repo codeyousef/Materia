@@ -1,22 +1,19 @@
-/**
- * Native stub for DateTimeUtils.
- * Native platforms are not primary targets for Materia.
- */
-
 package io.materia.datetime
 
-import kotlinx.datetime.Clock
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.posix.time
 
 /**
  * Native actual for currentTimeMillis function.
  */
+@OptIn(ExperimentalForeignApi::class)
 actual fun currentTimeMillis(): Long {
-    return Clock.System.now().toEpochMilliseconds()
+    return time(null).toLong() * 1000L
 }
 
 /**
  * Native actual for currentTimeString function.
  */
 actual fun currentTimeString(): String {
-    return Clock.System.now().toString()
+    return currentTimeMillis().toString()
 }

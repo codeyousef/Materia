@@ -44,7 +44,7 @@
 | **Browser (JS/WASM)** | WebGPU (WebGL2 fallback) | ✅ Ready |
 | **JVM (Linux/macOS/Windows)** | Vulkan via LWJGL 3.3.6 | ✅ Ready |
 | **Android** | Vulkan (API 24+) | ✅ Ready |
-| **Native (macOS/iOS)** | MoltenVK | 🟡 In Progress |
+| **Native Apple (macOS/iOS)** | MoltenVK | 🟡 Beta |
 
 ---
 
@@ -55,6 +55,7 @@
 - JDK 17+
 - Node.js ≥ 18 (for JS target)
 - Android SDK API 34 (for Android target)
+- Xcode 15+ with Metal-capable simulator/device (for Apple beta targets)
 - Vulkan drivers or WebGPU-enabled browser
 
 ### Build
@@ -77,20 +78,19 @@ cd Materia
 
 ## 📦 Examples
 
-Run any example with Gradle:
+Run the Gradle-based examples directly, or open the Apple host apps in Xcode:
 
 ```bash
 # Triangle demo
 ./gradlew :examples:triangle:runJvm          # Desktop
 ./gradlew :examples:triangle:jsBrowserRun    # Browser
+./gradlew :examples:triangle:runMacos        # Apple Native (macOS host only)
+open examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj  # Native iOS host app
 
 # Volume texture demo
 ./gradlew :examples:volume-texture:runJvm    # Desktop
 ./gradlew :examples:volume-texture:jsBrowserRun
-
-# VoxelCraft (Minecraft-style demo)
-./gradlew :examples:voxelcraft:runJvm
-./gradlew :examples:voxelcraft:jsBrowserRun
+open examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj  # iOS Simulator / My Mac (Mac Catalyst)
 
 # Embedding Galaxy (particle visualization)
 ./gradlew :examples:embedding-galaxy:runJvm
@@ -102,6 +102,10 @@ Run any example with Gradle:
 **Browser Requirements:** Chrome 113+, Edge 113+, or Firefox Nightly with WebGPU enabled.
 
 **Android:** Connect a device/emulator with Vulkan support, then run `:examples:triangle-android:installDebug`.
+
+**Apple Beta:** The active shared modules and example modules compile for `iosArm64`, `iosX64`, `iosSimulatorArm64`, `macosArm64`, and `macosX64`. The current runtime model is split:
+- `:examples:triangle` exercises the shared Apple engine path. `./gradlew :examples:triangle:runMacos` launches the macOS native executable, and `examples/triangle-ios-app/MateriaTriangleDemo.xcodeproj` hosts the exported `MateriaTriangle` framework on iOS.
+- `examples:volume-texture` still uses the legacy root `RendererFactory` API. The current working Apple path is `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`, which packages the generated JS/WebGL bundle for iOS Simulator and `My Mac (Mac Catalyst)`.
 
 ---
 

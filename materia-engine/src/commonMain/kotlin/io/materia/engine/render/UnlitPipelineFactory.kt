@@ -84,7 +84,7 @@ object UnlitPipelineFactory {
                 fragmentShader = fragmentModule,
                 colorFormats = listOf(colorFormat),
                 depthStencilFormat = depthFormat,
-                vertexBuffers = listOf(vertexLayoutWithColor()),
+                vertexBuffers = listOf(vertexLayoutWithPosition()),
                 primitiveTopology = primitiveTopology,
                 bindGroupLayouts = listOf(layout),
                 cullMode = renderState.toCullMode(),
@@ -191,20 +191,15 @@ object UnlitPipelineFactory {
             )
         )
 
-    internal fun vertexLayoutWithColor(): GpuVertexBufferLayout =
+    internal fun vertexLayoutWithPosition(): GpuVertexBufferLayout =
         GpuVertexBufferLayout(
-            arrayStride = Float.SIZE_BYTES * 6,
+            arrayStride = Float.SIZE_BYTES * 3,
             stepMode = GpuVertexStepMode.VERTEX,
             attributes = listOf(
                 GpuVertexAttribute(
                     shaderLocation = 0,
                     format = GpuVertexFormat.FLOAT32x3,
                     offset = 0
-                ),
-                GpuVertexAttribute(
-                    shaderLocation = 1,
-                    format = GpuVertexFormat.FLOAT32x3,
-                    offset = Float.SIZE_BYTES * 3
                 )
             )
         )
@@ -240,31 +235,35 @@ object UnlitPipelineFactory {
 
 private object ShaderSource {
     val UNLIT_COLOR_VERT = """
+        struct UnlitUniforms {
+            modelViewProjection : mat4x4<f32>,
+            color : vec4<f32>,
+        };
+
         struct VertexInput {
             @location(0) position : vec3<f32>,
-            @location(1) color : vec3<f32>,
         };
 
         struct VertexOutput {
             @builtin(position) position : vec4<f32>,
-            @location(0) color : vec3<f32>,
+            @location(0) color : vec4<f32>,
         };
 
         @group(0) @binding(0)
-        var<uniform> uModelViewProjection : mat4x4<f32>;
+        var<uniform> uUnlit : UnlitUniforms;
 
         @vertex
         fn main(input : VertexInput) -> VertexOutput {
             var output : VertexOutput;
-            output.position = uModelViewProjection * vec4<f32>(input.position, 1.0);
-            output.color = input.color;
+            output.position = uUnlit.modelViewProjection * vec4<f32>(input.position, 1.0);
+            output.color = uUnlit.color;
             return output;
         }
     """.trimIndent()
 
     val UNLIT_COLOR_FRAG = """
         struct FragmentInput {
-            @location(0) color : vec3<f32>,
+            @location(0) color : vec4<f32>,
         };
 
         struct FragmentOutput {
@@ -274,7 +273,7 @@ private object ShaderSource {
         @fragment
         fn main(input : FragmentInput) -> FragmentOutput {
             var output : FragmentOutput;
-            output.color = vec4<f32>(input.color, 1.0);
+            output.color = input.color;
             return output;
         }
     """.trimIndent()

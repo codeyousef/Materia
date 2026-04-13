@@ -220,7 +220,7 @@ texture.needsUpdate = true
 
 ## Data3DTexture
 
-3D texture (volume).
+3D texture (volume) for voxel grids, density fields, and procedural color volumes.
 
 ### Constructor
 
@@ -229,7 +229,15 @@ class Data3DTexture(
     data: ByteArray,
     width: Int,
     height: Int,
-    depth: Int
+    depth: Int,
+    format: TextureFormat = TextureFormat.RGBA8,
+    type: TextureType = TextureType.UNSIGNED_BYTE,
+    magFilter: TextureFilter = TextureFilter.NEAREST,
+    minFilter: TextureFilter = TextureFilter.NEAREST,
+    wrapS: TextureWrap = TextureWrap.CLAMP_TO_EDGE,
+    wrapT: TextureWrap = TextureWrap.CLAMP_TO_EDGE,
+    wrapR: TextureWrap = TextureWrap.CLAMP_TO_EDGE,
+    textureName: String = "Data3DTexture"
 )
 ```
 
@@ -237,26 +245,74 @@ class Data3DTexture(
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `wrapR` | `TextureWrapping` | Depth wrap mode |
+| `width` | `Int` | Volume width in voxels |
+| `height` | `Int` | Volume height in voxels |
+| `depth` | `Int` | Volume depth in voxels |
+| `wrapR` | `TextureWrap` | Depth wrap mode |
+| `format` | `TextureFormat` | GPU/storage format |
+| `type` | `TextureType` | Backing scalar type |
+| `generateMipmaps` | `Boolean` | Disabled by default for generated volumes |
+| `flipY` | `Boolean` | Disabled by default |
+| `unpackAlignment` | `Int` | Defaults to `1` for dense voxel uploads |
+
+### Factory Helpers
+
+```kotlin
+Data3DTexture.fromFloatArray(data, width, height, depth)
+Data3DTexture.fromIntArray(data, width, height, depth)
+Data3DTexture.solidColor(Color.GREEN, width = 4, height = 4, depth = 4)
+Data3DTexture.createNoise(width = 32, height = 32, depth = 32, seed = 42)
+```
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `setData(data: ByteArray)` | Replace the byte-backed volume payload |
+| `setFloatData(data: FloatArray)` | Replace the volume payload with float data |
+| `setIntData(data: IntArray)` | Replace the volume payload with int data |
+| `getData()` / `getFloatData()` / `getIntData()` | Read back the current payload |
+| `getVoxel(x, y, z)` | Read a voxel as `Color` |
+| `setVoxel(x, y, z, color)` | Write a voxel color and mark the texture dirty |
+| `clear(color)` | Fill the entire volume |
+| `mapVoxels { ... }` | Transform every voxel in-place |
+| `getDataSize()` | Report the backing storage size in bytes |
+
+### Backend Behavior
+
+- JS WebGPU: uploads `Data3DTexture` as a real GPU 3D texture and samples it in the fragment shader.
+- JVM Vulkan: uploads `Data3DTexture` as a real GPU 3D image and samples it in the fragment shader.
+- WebGL fallback and Android wrapper paths: sample the volume on the CPU and bake the result into vertex colors.
+- Apple `volume-texture` example path: currently runs through `examples/volume-texture-ios-app/MateriaVolumeTextureDemo.xcodeproj`, which packages the generated JS/WebGL bundle in a native iOS / Mac Catalyst shell.
 
 ### Example
 
 ```kotlin
-// Create 3D noise texture
-val size = 32
-val data = ByteArray(size * size * size)
+import io.materia.core.math.Color
+import io.materia.core.scene.Mesh
+import io.materia.geometry.primitives.BoxGeometry
+import io.materia.material.MeshBasicMaterial
+import io.materia.renderer.TextureWrap
+import io.materia.texture.Data3DTexture
 
-for (z in 0 until size) {
-    for (y in 0 until size) {
-        for (x in 0 until size) {
-            val i = z * size * size + y * size + x
-            data[i] = (noise3D(x, y, z) * 255).toByte()
-        }
-    }
+val texture = Data3DTexture.createNoise(
+    width = 32,
+    height = 32,
+    depth = 32,
+    seed = 42
+).apply {
+    wrapR = TextureWrap.REPEAT
 }
 
-val texture = Data3DTexture(data, size, size, size)
-texture.format = TextureFormat.RED
+texture.setVoxel(0, 0, 0, Color.RED)
+
+val material = MeshBasicMaterial().apply {
+    color = Color.WHITE
+    map = texture
+}
+
+val mesh = Mesh(BoxGeometry(2f, 2f, 2f), material)
+scene.add(mesh)
 ```
 
 ---

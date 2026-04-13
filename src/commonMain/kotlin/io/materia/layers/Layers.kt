@@ -1,5 +1,8 @@
 package io.materia.layers
 
+import kotlin.experimental.ExperimentalObjCRefinement
+import kotlin.native.HiddenFromObjC
+
 /**
  * Layer-based visibility system using a 32-bit bitmask.
  * Objects can be assigned to layers, and cameras/raycasters can filter which layers to render/test.
@@ -243,6 +246,8 @@ class Layers {
             val UI = Layers().apply { set(1) }
 
             /** Debug visualization layer */
+            @OptIn(ExperimentalObjCRefinement::class)
+            @HiddenFromObjC
             val DEBUG = Layers().apply { set(2) }
 
             /** Shadow casters layer */
