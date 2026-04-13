@@ -5,6 +5,32 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0.0] - 2026-04-13
+
+### Added
+
+- **`Data3DTexture` public API**: Added a multiplatform 3D texture type for byte-, float-, and int-backed volume data, including solid-color and noise helpers plus voxel read/write utilities.
+- **Volume texture contract and fallback coverage**: Added multiplatform tests for `Data3DTexture` creation and mutation, shared CPU volume sampling, Vulkan shader generation, and a JS smoke test that forces the WebGL fallback path.
+- **Runnable volume-texture examples**: Added the new multiplatform `examples:volume-texture` scene for JVM and JS plus a dedicated `examples:volume-texture-android` wrapper app that renders the shared scene on Android.
+- **Android volume-texture runtime**: Added a Filament/OpenGL Android bridge that boots the shared `VolumeTextureExample` scene headlessly, samples the volume texture on the CPU, and renders the result through Android-friendly mesh vertex colors.
+- **Android example automation**: Added adb-aware `runAndroid` and `smokeAndroid` tasks for the volume-texture Android wrapper, alongside the existing triangle Android smoke workflow.
+- **Volume texture documentation**: Added a dedicated volume-texture guide, example README coverage, and an Android reference screenshot documenting the current Android output.
+- **Android Filament material assets**: Added checked-in Filament material sources and compiled payloads used by the Android wrapper/runtime path.
+
+### Changed
+
+- **Basic material volume-texture support**: `MeshBasicMaterial.map` can now be a `Data3DTexture`, with real GPU 3D texture sampling on JS WebGPU and JVM Vulkan, plus CPU-sampled vertex-color fallback on Android and WebGL.
+- **Android rendering path**: Replaced the previous Android renderer stub path with a concrete wgpu-backed implementation, added explicit Android runtime compatibility checks, and expanded the Android example strategy around working Filament/OpenGL wrapper apps.
+- **Material texture bindings**: The built-in basic material descriptor and backend texture managers now expose optional 3D texture bindings and upload paths in the WebGPU and Vulkan pipelines.
+- **Example and guide coverage**: Volume-texture docs and example metadata now include the Android wrapper path and the verified Android capture artifact.
+
+### Fixed
+
+- **Vulkan uniform-buffer lifetime tracking**: Fixed a Vulkan buffer-manager bug that could report `Buffer has been destroyed` after descriptor or uniform-buffer recreation, unblocking the JVM volume-texture example.
+- **JS WebGPU material routing**: Corrected WebGPU material plumbing so shared scene material types and texture paths reach the intended shader and binding code.
+- **Android renderer bootstrap**: Fixed Android engine surface initialization so renderer startup no longer fails with `Call GpuSurface.attachRenderSurface first` during example boot.
+- **Android wgpu diagnostics**: Android renderer failures now detect the upstream `ValueLayout.Companion` mismatch and report an explicit compatibility error instead of a raw linkage failure.
+
 ## [0.4.0.0] - 2026-04-12
 
 ### Added

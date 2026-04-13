@@ -40,6 +40,13 @@ scene.add(mesh)
 
 - Desktop: `./gradlew :examples:volume-texture:runJvm`
 - Browser: `./gradlew :examples:volume-texture:jsBrowserRun`
+- Android: `./gradlew :examples:volume-texture-android:runAndroid`
+
+## Android Reference Capture
+
+The current Android wrapper renders the shared volume-texture scene through the Filament/OpenGL fallback path.
+
+![Android volume texture capture](images/volume-texture-android.png)
 
 ## Coordinate Mapping
 
