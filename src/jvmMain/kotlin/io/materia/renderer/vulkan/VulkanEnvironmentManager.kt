@@ -1015,7 +1015,8 @@ internal class VulkanEnvironmentManager(
 
     private fun MaterialBindingType.toVulkanDescriptorType(): Int = when (this) {
         MaterialBindingType.TEXTURE_2D,
-        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.TEXTURE_CUBE,
+        MaterialBindingType.TEXTURE_3D -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 
         MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
     }

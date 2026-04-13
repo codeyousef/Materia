@@ -9,6 +9,7 @@ import io.materia.core.math.Quaternion
 import io.materia.core.math.Vector3
 import io.materia.renderer.Texture
 import io.materia.renderer.Texture3D
+import io.materia.texture.Data3DTexture
 import kotlin.math.*
 
 private var nextAdvancedLightId = 1000
@@ -466,6 +467,11 @@ class VolumetricLightImpl(
      * Sample a single texel from 3D texture with procedural fallback
      */
     private fun sampleTexel3D(texture: Texture3D, x: Int, y: Int, z: Int): Float {
+        if (texture is Data3DTexture) {
+            val voxel = texture.getVoxel(x, y, z)
+            return ((voxel.r + voxel.g + voxel.b) / 3f).coerceIn(0f, 1f)
+        }
+
         // When texture data is available, samples actual texel
         // Uses procedural pattern as fallback for demonstration
         val fx = x.toFloat() / texture.width

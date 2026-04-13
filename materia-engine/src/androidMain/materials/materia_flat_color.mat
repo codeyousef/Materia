@@ -1,0 +1,20 @@
+material {
+    name : "MateriaFlatColor",
+    shadingModel : unlit,
+    blending : opaque,
+    doubleSided : true,
+    flipUV : false,
+    parameters : [
+        {
+            type : float4,
+            name : triangleColor
+        }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = materialParams.triangleColor;
+    }
+}

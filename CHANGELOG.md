@@ -5,6 +5,31 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0.0] - 2026-04-12
+
+### Added
+
+- **`Data3DTexture` public API**: Added a multiplatform 3D texture type for byte-, float-, and int-backed volume data, including solid-color and noise helpers plus voxel read/write utilities.
+- **`Data3DTexture` contract coverage**: Added root multiplatform tests for 3D texture creation, mutation, cloning, and data access behavior.
+- **Volume-texture material consumer**: `MeshBasicMaterial.map` can now be a `Data3DTexture`, with centered local-space volume sampling wired through the built-in WebGPU and Vulkan material pipelines.
+- **Runnable volume-texture example**: Added a new multiplatform `examples:volume-texture` scene that renders a generated `Data3DTexture` on both a box and a sphere through the root renderer API.
+- **Android example smoke automation**: Added adb-aware `smokeAndroid` tasks for the triangle Android example and its wrapper project, plus README guidance for install/run/smoke validation.
+- **Volume texture fallback coverage**: Added tests for shared CPU volume sampling and Vulkan shader generation when `MeshBasicMaterial.map` is a `Data3DTexture`.
+- **WebGL fallback smoke coverage**: Added a JS runtime smoke test that forces `RendererFactory` onto the WebGL fallback path and renders a `Data3DTexture`-mapped mesh.
+- **Volume texture guide**: Added documentation covering `Data3DTexture` usage, local-space coordinate mapping, and backend-specific behavior.
+
+### Changed
+
+- **Android renderer implementation**: Replaced the stubbed public Android renderer with a real wgpu4k-backed renderer and routed the Android factory to the concrete implementation.
+- **Basic material texture bindings**: The built-in basic material descriptor now exposes optional 3D volume texture and sampler bindings alongside existing albedo bindings.
+- **Android and WebGL fallback rendering**: `MeshBasicMaterial.map = Data3DTexture` now falls back to CPU volume sampling that bakes colors into mesh vertices when the backend does not use the GPU 3D texture path.
+
+### Fixed
+
+- **JS WebGPU material typing**: Corrected the WebGPU material plumbing to use the shared scene material interface so `MeshStandardMaterial` texture handling reaches the intended code paths.
+- **Android engine surface bootstrap**: `EngineRenderer` now pre-initializes the GPU context from the provided render surface before requesting an adapter, fixing Android example launches that previously failed with `Call GpuSurface.attachRenderSurface first`.
+- **Android wgpu compatibility diagnostics**: Android renderer/bootstrap failures now detect the upstream `wgpu4k` `ValueLayout.Companion` runtime mismatch and surface an explicit compatibility error instead of the raw linkage failure.
+
 ## [0.3.6.0] - 2026-04-12
 
 ### Fixed

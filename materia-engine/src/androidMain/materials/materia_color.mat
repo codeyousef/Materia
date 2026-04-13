@@ -1,0 +1,15 @@
+material {
+    name : "${NAME}",
+    shadingModel : unlit,
+    requires : [ color ],
+    blending : ${BLENDING},
+    doubleSided : false,
+    flipUV : false
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = getColor();
+    }
+}

@@ -10,7 +10,8 @@ The triangle example is the fast path validation that our GPU layer boots end-to
 |-----------------------|----------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
 | Web (wasmJs + WebGPU) | `./gradlew :examples:triangle:wasmJsBrowserRun`                                                                      | Opens a dev server with hot reload. Requires a WebGPU-capable browser. |
 | Desktop (JVM Vulkan)  | `./gradlew :examples:triangle:run`                                                                                   | Launches a GLFW window with vsync enabled.                             |
-| Android (Vulkan)      | `./gradlew :examples:triangle:installDebug` then `adb shell am start -n com.materia.examples.triangle/.MainActivity` | Uses the same renderer path as desktop.                                |
+| Android (Vulkan)      | `./gradlew :examples:triangle:runAndroid` | Installs and launches the Android demo using the SDK `adb` binary. |
+| Android smoke test    | `./gradlew :examples:triangle:smokeAndroid` | Installs, launches, and waits for `TriangleActivity` to log renderer boot success. |
 
 iOS/macOS MoltenVK targets will reuse the desktop scene once the native launcher is wired up.
 
@@ -22,9 +23,10 @@ iOS/macOS MoltenVK targets will reuse the desktop scene once the native launcher
 - **Web (WebGPU):** 60 FPS on Chrome 120+ or Safari TP. Expect the dev server to cold-start in <15 seconds.
 - **Android:** 60 FPS on mid-tier 2022 hardware (Adreno 640+, Mali-G77+). Surface recreation should stay under 100 ms.
 
-If the window fails to present, capture logs with `--stacktrace` and verify driver support:
+If the window fails to present, run the smoke task or capture logs with `--stacktrace` and verify driver support:
 
 ```bash
+./gradlew :examples:triangle:smokeAndroid
 ./gradlew :examples:triangle:run --stacktrace
 ```
 

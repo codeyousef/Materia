@@ -67,6 +67,7 @@ data class MaterialBinding(
 enum class MaterialBindingType {
     TEXTURE_2D,
     TEXTURE_CUBE,
+    TEXTURE_3D,
     SAMPLER
 }
 
@@ -77,7 +78,8 @@ enum class MaterialBindingSource {
     NORMAL_MAP,
     ROUGHNESS_MAP,
     METALNESS_MAP,
-    AO_MAP
+    AO_MAP,
+    VOLUME_TEXTURE
 }
 
 /**
@@ -256,7 +258,7 @@ object MaterialDescriptorRegistry {
             key = "material.basic",
             shader = MaterialShaderLibrary.basic(),
             uniformBlock = defaultUniformBlock,
-            bindings = albedoBindings(),
+            bindings = albedoBindings() + volumeBindings(),
             renderState = MaterialRenderState(),
             requiredAttributes = BASIC_REQUIRED_ATTRIBUTES,
             optionalAttributes = BASIC_OPTIONAL_ATTRIBUTES
@@ -412,6 +414,25 @@ object MaterialDescriptorRegistry {
             group = MATERIAL_TEXTURE_GROUP,
             binding = 9,
             source = MaterialBindingSource.AO_MAP,
+            required = false
+        )
+    )
+
+    private fun volumeBindings(): List<MaterialBinding> = listOf(
+        MaterialBinding(
+            name = "volumeTexture",
+            type = MaterialBindingType.TEXTURE_3D,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 10,
+            source = MaterialBindingSource.VOLUME_TEXTURE,
+            required = false
+        ),
+        MaterialBinding(
+            name = "volumeSampler",
+            type = MaterialBindingType.SAMPLER,
+            group = MATERIAL_TEXTURE_GROUP,
+            binding = 11,
+            source = MaterialBindingSource.VOLUME_TEXTURE,
             required = false
         )
     )

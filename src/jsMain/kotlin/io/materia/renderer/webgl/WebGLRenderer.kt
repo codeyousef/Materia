@@ -14,6 +14,8 @@ import io.materia.material.MeshStandardMaterial
 import io.materia.points.Points
 import io.materia.points.PointsMaterial
 import io.materia.renderer.*
+import io.materia.texture.Data3DTexture
+import io.materia.texture.VolumeTextureSampler
 import kotlinx.browser.window
 import org.khronos.webgl.*
 import org.khronos.webgl.WebGLRenderingContext.Companion.ARRAY_BUFFER
@@ -431,7 +433,13 @@ class WebGLRenderer(
             is MeshStandardMaterial -> mat.color
             else -> Color.WHITE
         }
-        val vertexData = buildVertexData(positionAttribute, colorAttribute, materialColor)
+        val volumeTexture = (mesh.material as? MeshBasicMaterial)?.map as? Data3DTexture
+        val vertexData = buildVertexData(
+            position = positionAttribute,
+            color = colorAttribute,
+            materialColor = materialColor,
+            volumeTexture = volumeTexture
+        )
 
         val existing = meshBuffers[mesh.id]
         val vertexBuffer = existing?.vertexBuffer ?: gl.createBuffer()
@@ -676,28 +684,47 @@ class WebGLRenderer(
     private fun buildVertexData(
         position: BufferAttribute,
         color: BufferAttribute?,
-        materialColor: Color
+        materialColor: Color,
+        volumeTexture: Data3DTexture? = null
     ): VertexData {
         val vertexCount = position.count
         val vertexArray = Float32Array(vertexCount * COMPONENTS_PER_VERTEX)
         var writeIndex = 0
+        val volumeSampler = volumeTexture?.let(VolumeTextureSampler::from)
 
         val useColorAttribute = color != null && color.itemSize >= COLOR_COMPONENTS
         for (i in 0 until vertexCount) {
-            vertexArray.put(writeIndex++, position.getX(i))
-            vertexArray.put(writeIndex++, position.getY(i))
-            vertexArray.put(writeIndex++, position.getZ(i))
+            val positionX = position.getX(i)
+            val positionY = position.getY(i)
+            val positionZ = position.getZ(i)
+            vertexArray.put(writeIndex++, positionX)
+            vertexArray.put(writeIndex++, positionY)
+            vertexArray.put(writeIndex++, positionZ)
+
+            var red: Float
+            var green: Float
+            var blue: Float
 
             if (useColorAttribute) {
                 val source = color!!
-                vertexArray.put(writeIndex++, source.getX(i))
-                vertexArray.put(writeIndex++, source.getY(i))
-                vertexArray.put(writeIndex++, source.getZ(i))
+                red = source.getX(i) * materialColor.r
+                green = source.getY(i) * materialColor.g
+                blue = source.getZ(i) * materialColor.b
             } else {
-                vertexArray.put(writeIndex++, materialColor.r)
-                vertexArray.put(writeIndex++, materialColor.g)
-                vertexArray.put(writeIndex++, materialColor.b)
+                red = materialColor.r
+                green = materialColor.g
+                blue = materialColor.b
             }
+
+            volumeSampler?.sampleLocalPosition(positionX, positionY, positionZ)?.let { sample ->
+                red *= sample.r
+                green *= sample.g
+                blue *= sample.b
+            }
+
+            vertexArray.put(writeIndex++, red)
+            vertexArray.put(writeIndex++, green)
+            vertexArray.put(writeIndex++, blue)
             vertexArray.put(writeIndex++, 1f)
         }
 

@@ -128,7 +128,7 @@ enum class ShaderDataType(val byteSize: Int) {
     VEC2(8), VEC3(12), VEC4(16),
     MAT3(36), MAT4(64),
     FLOAT_ARRAY(4), INT_ARRAY(4),
-    TEXTURE_2D(0), TEXTURE_CUBE(0), SAMPLER(0)
+    TEXTURE_2D(0), TEXTURE_CUBE(0), TEXTURE_3D(0), SAMPLER(0)
 }
 
 enum class BufferUsage {

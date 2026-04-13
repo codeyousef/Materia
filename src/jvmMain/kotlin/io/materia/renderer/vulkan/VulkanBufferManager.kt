@@ -28,6 +28,7 @@ class VulkanBufferManager(
 
     // Track destroyed buffers to prevent double-free
     private val destroyedBuffers = mutableSetOf<Long>()
+    private var nextAllocationId: Long = 1L
 
     /**
      * Create vertex buffer from float array.
@@ -111,7 +112,7 @@ class VulkanBufferManager(
 
                 // Return handle with both VkBuffer and VkDeviceMemory
                 BufferHandle(
-                    handle = VulkanBufferHandleData(buffer, memory),
+                    handle = VulkanBufferHandleData(buffer, memory, allocateId()),
                     size = sizeBytes,
                     usage = BufferUsage.VERTEX
                 )
@@ -194,7 +195,7 @@ class VulkanBufferManager(
                 vkUnmapMemory(device, memory)
 
                 BufferHandle(
-                    handle = VulkanBufferHandleData(buffer, memory),
+                    handle = VulkanBufferHandleData(buffer, memory, allocateId()),
                     size = sizeBytes,
                     usage = BufferUsage.INDEX
                 )
@@ -264,7 +265,7 @@ class VulkanBufferManager(
                 vkBindBufferMemory(device, buffer, memory, 0)
 
                 BufferHandle(
-                    handle = VulkanBufferHandleData(buffer, memory),
+                    handle = VulkanBufferHandleData(buffer, memory, allocateId()),
                     size = sizeBytes,
                     usage = BufferUsage.UNIFORM
                 )
@@ -295,7 +296,7 @@ class VulkanBufferManager(
             ?: throw InvalidBufferException("Buffer handle is not a VulkanBufferHandleData")
 
         // Check if destroyed
-        if (destroyedBuffers.contains(bufferData.buffer)) {
+        if (destroyedBuffers.contains(bufferData.allocationId)) {
             throw InvalidBufferException("Buffer has been destroyed")
         }
 
@@ -347,7 +348,7 @@ class VulkanBufferManager(
             ?: throw InvalidBufferException("Buffer handle is not a VulkanBufferHandleData")
 
         // Check if already destroyed
-        if (destroyedBuffers.contains(bufferData.buffer)) {
+        if (destroyedBuffers.contains(bufferData.allocationId)) {
             throw InvalidBufferException("Buffer has already been destroyed")
         }
 
@@ -359,11 +360,14 @@ class VulkanBufferManager(
             vkFreeMemory(device, bufferData.memory, null)
 
             // Mark as destroyed
-            destroyedBuffers.add(bufferData.buffer)
+            destroyedBuffers.add(bufferData.allocationId)
         } catch (e: Exception) {
             throw InvalidBufferException("Failed to destroy buffer: ${e.message}")
         }
     }
+
+    @Synchronized
+    private fun allocateId(): Long = nextAllocationId++
 
     /**
      * Find suitable memory type from memory type bits.
@@ -400,5 +404,6 @@ class VulkanBufferManager(
  */
 data class VulkanBufferHandleData(
     val buffer: Long,
-    val memory: Long
+    val memory: Long,
+    val allocationId: Long
 )

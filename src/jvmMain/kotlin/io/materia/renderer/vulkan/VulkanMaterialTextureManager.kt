@@ -10,6 +10,7 @@ import io.materia.renderer.material.MaterialBindingSource
 import io.materia.renderer.material.MaterialBindingType
 import io.materia.renderer.material.MaterialDescriptor
 import io.materia.texture.Texture
+import io.materia.texture.Data3DTexture
 import io.materia.texture.Texture2D
 import kotlin.math.log2
 import org.lwjgl.system.MemoryStack
@@ -56,7 +57,9 @@ internal class VulkanMaterialTextureManager(
         var metalnessTextureId: Int,
         var metalnessVersion: Int,
         var aoTextureId: Int,
-        var aoVersion: Int
+        var aoVersion: Int,
+        var volumeTextureId: Int,
+        var volumeVersion: Int
     )
 
     private val textureCache = mutableMapOf<Int, VulkanTextureResource>()
@@ -73,6 +76,8 @@ internal class VulkanMaterialTextureManager(
         createFallbackTexture(Texture2D.solidColor(Color.BLACK).apply { needsUpdate = false })
     private val fallbackAo =
         createFallbackTexture(Texture2D.solidColor(Color.WHITE).apply { needsUpdate = false })
+    private val fallbackVolume =
+        createFallbackTexture(Data3DTexture.solidColor(Color.WHITE).apply { needsUpdate = false })
 
     fun prepare(
         material: Material,
@@ -94,7 +99,9 @@ internal class VulkanMaterialTextureManager(
                 metalnessTextureId = fallbackMetalness.textureId,
                 metalnessVersion = fallbackMetalness.version,
                 aoTextureId = fallbackAo.textureId,
-                aoVersion = fallbackAo.version
+                aoVersion = fallbackAo.version,
+                volumeTextureId = fallbackVolume.textureId,
+                volumeVersion = fallbackVolume.version
             )
         }
 
@@ -124,6 +131,12 @@ internal class VulkanMaterialTextureManager(
         val aoTexture = if (requiresAo) extractAoTexture(material) else null
         val aoResource = ensureTextureResource(aoTexture, fallbackAo)
 
+        val requiresVolume = descriptor.bindings.any {
+            it.source == MaterialBindingSource.VOLUME_TEXTURE && it.type == MaterialBindingType.TEXTURE_3D
+        }
+        val volumeTexture = if (requiresVolume) extractVolumeTexture(material) else null
+        val volumeResource = ensureTextureResource(volumeTexture, fallbackVolume)
+
         val texturesChanged =
             bindingState.albedoTextureId != albedoResource.textureId ||
                     bindingState.albedoVersion != albedoResource.version ||
@@ -134,7 +147,9 @@ internal class VulkanMaterialTextureManager(
                     bindingState.metalnessTextureId != metalnessResource.textureId ||
                     bindingState.metalnessVersion != metalnessResource.version ||
                     bindingState.aoTextureId != aoResource.textureId ||
-                    bindingState.aoVersion != aoResource.version
+                    bindingState.aoVersion != aoResource.version ||
+                    bindingState.volumeTextureId != volumeResource.textureId ||
+                    bindingState.volumeVersion != volumeResource.version
 
         if (texturesChanged) {
             updateDescriptorSet(
@@ -143,7 +158,8 @@ internal class VulkanMaterialTextureManager(
                 normalResource,
                 roughnessResource,
                 metalnessResource,
-                aoResource
+                aoResource,
+                volumeResource
             )
 
             bindingState.albedoTextureId = albedoResource.textureId
@@ -156,6 +172,8 @@ internal class VulkanMaterialTextureManager(
             bindingState.metalnessVersion = metalnessResource.version
             bindingState.aoTextureId = aoResource.textureId
             bindingState.aoVersion = aoResource.version
+            bindingState.volumeTextureId = volumeResource.textureId
+            bindingState.volumeVersion = volumeResource.version
         }
 
         return MaterialTextureBinding(bindingState.descriptorSet)
@@ -169,6 +187,7 @@ internal class VulkanMaterialTextureManager(
         fallbackRoughness.destroy(device)
         fallbackMetalness.destroy(device)
         fallbackAo.destroy(device)
+        fallbackVolume.destroy(device)
         materialBindings.clear()
     }
 
@@ -198,21 +217,43 @@ internal class VulkanMaterialTextureManager(
         else -> null
     }
 
+    private fun extractVolumeTexture(material: Material): Data3DTexture? = when (material) {
+        is MeshBasicMaterial -> material.map as? Data3DTexture
+        else -> null
+    }
+
     private fun ensureTextureResource(
         texture: Texture?,
         fallback: VulkanTextureResource
-    ): VulkanTextureResource {
-        val texture2D = texture as? Texture2D ?: return fallback
+    ): VulkanTextureResource = when (texture) {
+        is Texture2D -> ensureTexture2DResource(texture)
+        is Data3DTexture -> ensureTexture3DResource(texture)
+        else -> fallback
+    }
 
-        val cached = textureCache[texture2D.id]
-        if (cached != null && cached.version == texture2D.version && !texture2D.needsUpdate) {
+    private fun ensureTexture2DResource(texture: Texture2D): VulkanTextureResource {
+        val cached = textureCache[texture.id]
+        if (cached != null && cached.version == texture.version && !texture.needsUpdate) {
             return cached
         }
 
         cached?.destroy(device)
-        val resource = createTextureResource(texture2D)
-        textureCache[texture2D.id] = resource
-        texture2D.needsUpdate = false
+        val resource = createTextureResource(texture)
+        textureCache[texture.id] = resource
+        texture.needsUpdate = false
+        return resource
+    }
+
+    private fun ensureTexture3DResource(texture: Data3DTexture): VulkanTextureResource {
+        val cached = textureCache[texture.id]
+        if (cached != null && cached.version == texture.version && !texture.needsUpdate) {
+            return cached
+        }
+
+        cached?.destroy(device)
+        val resource = createTextureResource(texture)
+        textureCache[texture.id] = resource
+        texture.needsUpdate = false
         return resource
     }
 
@@ -222,20 +263,15 @@ internal class VulkanMaterialTextureManager(
         return createTextureResource(texture)
     }
 
+    private fun createFallbackTexture(texture: Data3DTexture): VulkanTextureResource {
+        texture.version = -1
+        texture.needsUpdate = false
+        return createTextureResource(texture)
+    }
+
     private fun createTextureResource(texture: Texture2D): VulkanTextureResource {
-        val format = when (texture.format) {
-            io.materia.renderer.TextureFormat.RGBA8,
-            io.materia.renderer.TextureFormat.SRGB8_ALPHA8 -> VK_FORMAT_R8G8B8A8_UNORM
-
-            io.materia.renderer.TextureFormat.RGBA32F -> VK_FORMAT_R32G32B32A32_SFLOAT
-            else -> VK_FORMAT_R8G8B8A8_UNORM
-        }
-
-        val pixelSize = when (format) {
-            VK_FORMAT_R8G8B8A8_UNORM -> 4
-            VK_FORMAT_R32G32B32A32_SFLOAT -> 16
-            else -> 4
-        }
+        val format = toVulkanTextureFormat(texture.format)
+        val pixelSize = pixelSizeForFormat(format)
 
         val rawData = acquireTextureData(texture, pixelSize)
         val imageSize = rawData.remaining().toLong()
@@ -400,7 +436,163 @@ internal class VulkanMaterialTextureManager(
         }
     }
 
-    private fun createImageView(image: Long, format: Int, mipLevels: Int): Long =
+    private fun createTextureResource(texture: Data3DTexture): VulkanTextureResource {
+        val format = toVulkanTextureFormat(texture.format)
+        val rawData = acquireTextureData(texture)
+        val imageSize = rawData.remaining().toLong()
+
+        MemoryStack.stackPush().use { stack ->
+            val stagingBufferInfo = VkBufferCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO)
+                .size(imageSize)
+                .usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+                .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+
+            val pStagingBuffer = stack.mallocLong(1)
+            check(vkCreateBuffer(device, stagingBufferInfo, null, pStagingBuffer) == VK_SUCCESS) {
+                "Failed to create staging buffer"
+            }
+            val stagingBuffer = pStagingBuffer[0]
+
+            val stagingMemRequirements = VkMemoryRequirements.malloc(stack)
+            vkGetBufferMemoryRequirements(device, stagingBuffer, stagingMemRequirements)
+
+            val stagingAllocInfo = VkMemoryAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                .allocationSize(stagingMemRequirements.size())
+                .memoryTypeIndex(
+                    findMemoryType(
+                        stagingMemRequirements.memoryTypeBits(),
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT or VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+                    )
+                )
+
+            val pStagingMemory = stack.mallocLong(1)
+            check(vkAllocateMemory(device, stagingAllocInfo, null, pStagingMemory) == VK_SUCCESS) {
+                "Failed to allocate staging buffer memory"
+            }
+            val stagingMemory = pStagingMemory[0]
+            vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0)
+
+            val ppData = stack.mallocPointer(1)
+            vkMapMemory(device, stagingMemory, 0, imageSize, 0, ppData)
+            val mapped = ppData.getByteBuffer(0, rawData.remaining())
+            mapped.put(rawData).flip()
+            vkUnmapMemory(device, stagingMemory)
+            MemoryUtil.memFree(rawData)
+
+            val imageInfo = VkImageCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO)
+                .imageType(VK_IMAGE_TYPE_3D)
+                .extent { it.width(texture.width).height(texture.height).depth(texture.depth) }
+                .mipLevels(1)
+                .arrayLayers(1)
+                .format(format)
+                .tiling(VK_IMAGE_TILING_OPTIMAL)
+                .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                .usage(VK_IMAGE_USAGE_SAMPLED_BIT or VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+                .samples(VK_SAMPLE_COUNT_1_BIT)
+
+            val pImage = stack.mallocLong(1)
+            check(vkCreateImage(device, imageInfo, null, pImage) == VK_SUCCESS) {
+                "Failed to create 3D image"
+            }
+            val image = pImage[0]
+
+            val memRequirements = VkMemoryRequirements.malloc(stack)
+            vkGetImageMemoryRequirements(device, image, memRequirements)
+
+            val allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO)
+                .allocationSize(memRequirements.size())
+                .memoryTypeIndex(
+                    findMemoryType(
+                        memRequirements.memoryTypeBits(),
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                    )
+                )
+
+            val pMemory = stack.mallocLong(1)
+            check(vkAllocateMemory(device, allocInfo, null, pMemory) == VK_SUCCESS) {
+                "Failed to allocate 3D image memory"
+            }
+            val imageMemory = pMemory[0]
+            vkBindImageMemory(device, image, imageMemory, 0)
+
+            executeSingleTimeCommands { cmd, innerStack ->
+                transitionImageLayout(
+                    cmd,
+                    innerStack,
+                    image,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    0,
+                    1
+                )
+
+                val region = VkBufferImageCopy.calloc(1, innerStack)
+                region.bufferOffset(0)
+                    .bufferRowLength(0)
+                    .bufferImageHeight(0)
+                    .imageSubresource { sub ->
+                        sub.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                        sub.mipLevel(0)
+                        sub.baseArrayLayer(0)
+                        sub.layerCount(1)
+                    }
+                    .imageOffset { it.x(0).y(0).z(0) }
+                    .imageExtent { it.width(texture.width).height(texture.height).depth(texture.depth) }
+
+                vkCmdCopyBufferToImage(
+                    cmd,
+                    stagingBuffer,
+                    image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    region
+                )
+
+                transitionImageLayout(
+                    cmd,
+                    innerStack,
+                    image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    1,
+                    0,
+                    1
+                )
+            }
+
+            vkDestroyBuffer(device, stagingBuffer, null)
+            vkFreeMemory(device, stagingMemory, null)
+
+            val imageView = createImageView(
+                image = image,
+                format = format,
+                mipLevels = 1,
+                viewType = VK_IMAGE_VIEW_TYPE_3D
+            )
+            val sampler = createSampler(texture)
+
+            return VulkanTextureResource(
+                image = image,
+                memory = imageMemory,
+                imageView = imageView,
+                sampler = sampler,
+                textureId = texture.id,
+                version = texture.version
+            )
+        }
+    }
+
+    private fun createImageView(
+        image: Long,
+        format: Int,
+        mipLevels: Int,
+        viewType: Int = VK_IMAGE_VIEW_TYPE_2D
+    ): Long =
         MemoryStack.stackPush().use { stack ->
             val components = VkComponentMapping.calloc(stack)
                 .r(VK_COMPONENT_SWIZZLE_IDENTITY)
@@ -418,7 +610,7 @@ internal class VulkanMaterialTextureManager(
             val createInfo = VkImageViewCreateInfo.calloc(stack)
                 .sType(VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO)
                 .image(image)
-                .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                .viewType(viewType)
                 .format(format)
                 .components(components)
                 .subresourceRange(subresourceRange)
@@ -466,6 +658,37 @@ internal class VulkanMaterialTextureManager(
             pSampler[0]
         }
 
+    private fun createSampler(texture: Data3DTexture): Long =
+        MemoryStack.stackPush().use { stack ->
+            val createInfo = VkSamplerCreateInfo.calloc(stack)
+                .sType(VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO)
+                .magFilter(toVulkanFilter(texture.magFilter))
+                .minFilter(toVulkanFilter(texture.minFilter))
+                .mipmapMode(toVulkanMipmapMode(texture.minFilter))
+                .addressModeU(toVulkanAddressMode(texture.wrapS))
+                .addressModeV(toVulkanAddressMode(texture.wrapT))
+                .addressModeW(toVulkanAddressMode(texture.wrapR))
+                .anisotropyEnable(false)
+                .maxAnisotropy(1.0f)
+                .compareEnable(false)
+                .compareOp(VK_COMPARE_OP_ALWAYS)
+                .minLod(0f)
+                .maxLod(0f)
+                .borderColor(VK_BORDER_COLOR_INT_OPAQUE_BLACK)
+                .unnormalizedCoordinates(false)
+
+            val pSampler = stack.mallocLong(1)
+            check(
+                vkCreateSampler(
+                    device,
+                    createInfo,
+                    null,
+                    pSampler
+                ) == VK_SUCCESS
+            ) { "Failed to create 3D texture sampler" }
+            pSampler[0]
+        }
+
     private fun acquireTextureData(texture: Texture2D, pixelSize: Int): java.nio.ByteBuffer {
         val width = texture.width
         val height = texture.height
@@ -493,13 +716,33 @@ internal class VulkanMaterialTextureManager(
         }
     }
 
+    private fun acquireTextureData(texture: Data3DTexture): java.nio.ByteBuffer {
+        val byteData = texture.getData().takeIf { it.isNotEmpty() }
+        if (byteData != null) {
+            return MemoryUtil.memAlloc(byteData.size).put(byteData).flip() as java.nio.ByteBuffer
+        }
+
+        val floatData = texture.getFloatData()
+        if (floatData != null) {
+            val buffer = MemoryUtil.memAlloc(floatData.size * 4)
+            buffer.asFloatBuffer().put(floatData).flip()
+            return buffer
+        }
+
+        val intData = texture.getIntData()
+            ?: throw IllegalArgumentException("Texture ${texture.name} has no data to upload")
+        val bytes = ByteArray(intData.size) { index -> intData[index].coerceIn(0, 255).toByte() }
+        return MemoryUtil.memAlloc(bytes.size).put(bytes).flip() as java.nio.ByteBuffer
+    }
+
     private fun updateDescriptorSet(
         descriptorSet: Long,
         albedoResource: VulkanTextureResource,
         normalResource: VulkanTextureResource,
         roughnessResource: VulkanTextureResource,
         metalnessResource: VulkanTextureResource,
-        aoResource: VulkanTextureResource
+        aoResource: VulkanTextureResource,
+        volumeResource: VulkanTextureResource
     ) {
         MemoryStack.stackPush().use { stack ->
             val resourcesBySource = mapOf(
@@ -507,7 +750,8 @@ internal class VulkanMaterialTextureManager(
                 MaterialBindingSource.NORMAL_MAP to normalResource,
                 MaterialBindingSource.ROUGHNESS_MAP to roughnessResource,
                 MaterialBindingSource.METALNESS_MAP to metalnessResource,
-                MaterialBindingSource.AO_MAP to aoResource
+                MaterialBindingSource.AO_MAP to aoResource,
+                MaterialBindingSource.VOLUME_TEXTURE to volumeResource
             )
 
             fun sampled(resource: VulkanTextureResource): VkDescriptorImageInfo.Buffer {
@@ -534,7 +778,8 @@ internal class VulkanMaterialTextureManager(
                 val imageInfo = when (binding.type) {
                     MaterialBindingType.SAMPLER -> sampler(resource)
                     MaterialBindingType.TEXTURE_2D,
-                    MaterialBindingType.TEXTURE_CUBE -> sampled(resource)
+                    MaterialBindingType.TEXTURE_CUBE,
+                    MaterialBindingType.TEXTURE_3D -> sampled(resource)
                 }
 
                 writes[index]
@@ -593,6 +838,20 @@ internal class VulkanMaterialTextureManager(
         io.materia.renderer.TextureWrap.CLAMP_TO_EDGE -> VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
     }
 
+    private fun toVulkanTextureFormat(format: io.materia.renderer.TextureFormat): Int = when (format) {
+        io.materia.renderer.TextureFormat.RGBA8,
+        io.materia.renderer.TextureFormat.SRGB8_ALPHA8 -> VK_FORMAT_R8G8B8A8_UNORM
+
+        io.materia.renderer.TextureFormat.RGBA32F -> VK_FORMAT_R32G32B32A32_SFLOAT
+        else -> VK_FORMAT_R8G8B8A8_UNORM
+    }
+
+    private fun pixelSizeForFormat(format: Int): Int = when (format) {
+        VK_FORMAT_R8G8B8A8_UNORM -> 4
+        VK_FORMAT_R32G32B32A32_SFLOAT -> 16
+        else -> 4
+    }
+
     private fun calculateMipLevels(texture: Texture2D): Int {
         if (!texture.generateMipmaps) return 1
         val maxDim = maxOf(texture.width, texture.height)
@@ -602,7 +861,8 @@ internal class VulkanMaterialTextureManager(
 
     private fun MaterialBindingType.toVulkanDescriptorType(): Int = when (this) {
         MaterialBindingType.TEXTURE_2D,
-        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.TEXTURE_CUBE,
+        MaterialBindingType.TEXTURE_3D -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 
         MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
     }

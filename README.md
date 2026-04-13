@@ -84,6 +84,10 @@ Run any example with Gradle:
 ./gradlew :examples:triangle:runJvm          # Desktop
 ./gradlew :examples:triangle:jsBrowserRun    # Browser
 
+# Volume texture demo
+./gradlew :examples:volume-texture:runJvm    # Desktop
+./gradlew :examples:volume-texture:jsBrowserRun
+
 # VoxelCraft (Minecraft-style demo)
 ./gradlew :examples:voxelcraft:runJvm
 ./gradlew :examples:voxelcraft:jsBrowserRun
@@ -117,6 +121,7 @@ docs/                   # API reference and guides
 ## 📖 Documentation
 
 - [Getting Started Guide](docs/guides/getting-started.md)
+- [Volume Texture Guide](docs/guides/volume-textures.md)
 - [API Reference](docs/api-reference/README.md)
 - [Architecture Overview](docs/architecture/overview.md)
 - [Platform-Specific Notes](docs/guides/platform-specific.md)

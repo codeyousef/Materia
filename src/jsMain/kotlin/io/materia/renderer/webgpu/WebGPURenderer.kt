@@ -24,8 +24,9 @@ import io.materia.renderer.material.*
 import io.materia.renderer.shader.MaterialShaderDescriptor
 import io.materia.renderer.shader.MaterialShaderGenerator
 import io.materia.renderer.shader.withOverrides
+import io.materia.texture.Data3DTexture
+import io.materia.core.scene.Material as EngineMaterial
 import org.w3c.dom.HTMLCanvasElement
-import io.materia.material.Material as EngineMaterial
 
 /**
  * Main WebGPU renderer class implementing the Renderer interface.
@@ -862,16 +863,17 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         val shaderDescriptor = descriptor.shader.withOverrides(combinedOverrides)
 
         val materialTextureBinding =
-            if (materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap) {
+            if (materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap || materialOverrides.usesVolumeMap) {
                 materialTextureManager.prepare(
                     descriptor = descriptor,
                     material = material as? EngineMaterial,
                     useAlbedo = materialOverrides.usesAlbedoMap,
-                    useNormal = materialOverrides.usesNormalMap
+                    useNormal = materialOverrides.usesNormalMap,
+                    useVolume = materialOverrides.usesVolumeMap
                 )
             } else null
 
-        if ((materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap) && materialTextureBinding == null) {
+        if ((materialOverrides.usesAlbedoMap || materialOverrides.usesNormalMap || materialOverrides.usesVolumeMap) && materialTextureBinding == null) {
             console.warn("Material ${descriptor.key} requires texture bindings but none were prepared; skipping mesh")
             return
         }
@@ -956,6 +958,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             val groups = mutableSetOf<Int>()
             groups += descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP)
             groups += descriptor.bindingGroups(MaterialBindingSource.NORMAL_MAP)
+            groups += descriptor.bindingGroups(MaterialBindingSource.VOLUME_TEXTURE)
             if (groups.isNotEmpty()) {
                 val rawGroup = binding.bindGroup.unwrapHandle() as? GPUBindGroup ?: return@let
                 groups.sorted().forEach { group ->
@@ -979,7 +982,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     private data class MaterialOverrideResult(
         val overrides: Map<String, String>,
         val usesAlbedoMap: Boolean,
-        val usesNormalMap: Boolean
+        val usesNormalMap: Boolean,
+        val usesVolumeMap: Boolean
     )
 
     private fun buildAttributeOverrides(
@@ -1092,12 +1096,23 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         descriptor: MaterialDescriptor,
         metadata: GeometryMetadata
     ): MaterialOverrideResult {
+        val vertexOutputExtra = StringBuilder()
+        val vertexAssignExtra = StringBuilder()
+        val fragmentInputExtra = StringBuilder()
         val fragmentBindings = StringBuilder()
         val fragmentInitExtra = StringBuilder()
         val fragmentExtra = StringBuilder()
 
         val hasUv = metadata.bindingFor(GeometryAttribute.UV0) != null
         val hasTangent = metadata.bindingFor(GeometryAttribute.TANGENT) != null
+        val hasUv2 = metadata.bindingFor(GeometryAttribute.UV1) != null
+
+        val basicVolumeLocation = buildList {
+            add(1)
+            if (hasUv) add(1)
+            if (hasUv2) add(1)
+            if (hasTangent) add(1)
+        }.sum()
 
         fun MaterialDescriptor.bindingFor(
             source: MaterialBindingSource,
@@ -1106,24 +1121,50 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
 
         var usesAlbedoMap = false
         var usesNormalMap = false
+        var usesVolumeMap = false
 
         when (val typedMaterial = material) {
             is MeshBasicMaterial -> {
-                if (typedMaterial.map != null && hasUv) {
-                    val textureBinding = descriptor.bindingFor(
-                        MaterialBindingSource.ALBEDO_MAP,
-                        MaterialBindingType.TEXTURE_2D
-                    )
-                    val samplerBinding = descriptor.bindingFor(
-                        MaterialBindingSource.ALBEDO_MAP,
-                        MaterialBindingType.SAMPLER
-                    )
-                    if (textureBinding != null && samplerBinding != null) {
-                        fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
-                        fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
-                        fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, input.uv);")
-                        fragmentInitExtra.appendLine("    color = clamp(color * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
-                        usesAlbedoMap = true
+                when (val texture = typedMaterial.map) {
+                    is Data3DTexture -> {
+                        val textureBinding = descriptor.bindingFor(
+                            MaterialBindingSource.VOLUME_TEXTURE,
+                            MaterialBindingType.TEXTURE_3D
+                        )
+                        val samplerBinding = descriptor.bindingFor(
+                            MaterialBindingSource.VOLUME_TEXTURE,
+                            MaterialBindingType.SAMPLER
+                        )
+                        if (textureBinding != null && samplerBinding != null) {
+                            vertexOutputExtra.appendLine("    @location($basicVolumeLocation) volumeCoord: vec3<f32>,")
+                            vertexAssignExtra.appendLine("    output.volumeCoord = clamp(position * 0.5 + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));")
+                            fragmentInputExtra.appendLine("    @location($basicVolumeLocation) volumeCoord: vec3<f32>,")
+                            fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialVolumeTexture: texture_3d<f32>;")
+                            fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialVolumeSampler: sampler;")
+                            fragmentInitExtra.appendLine("    let volumeSample = textureSample(materialVolumeTexture, materialVolumeSampler, input.volumeCoord);")
+                            fragmentInitExtra.appendLine("    color = clamp(color * volumeSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
+                            usesVolumeMap = true
+                        }
+                    }
+
+                    null -> Unit
+
+                    else -> if (hasUv) {
+                        val textureBinding = descriptor.bindingFor(
+                            MaterialBindingSource.ALBEDO_MAP,
+                            MaterialBindingType.TEXTURE_2D
+                        )
+                        val samplerBinding = descriptor.bindingFor(
+                            MaterialBindingSource.ALBEDO_MAP,
+                            MaterialBindingType.SAMPLER
+                        )
+                        if (textureBinding != null && samplerBinding != null) {
+                            fragmentBindings.appendLine("                @group(${textureBinding.group}) @binding(${textureBinding.binding}) var materialAlbedoTexture: texture_2d<f32>;")
+                            fragmentBindings.appendLine("                @group(${samplerBinding.group}) @binding(${samplerBinding.binding}) var materialAlbedoSampler: sampler;")
+                            fragmentInitExtra.appendLine("    let albedoSample = textureSample(materialAlbedoTexture, materialAlbedoSampler, input.uv);")
+                            fragmentInitExtra.appendLine("    color = clamp(color * albedoSample.rgb, vec3<f32>(0.0), vec3<f32>(1.0));")
+                            usesAlbedoMap = true
+                        }
                     }
                 }
             }
@@ -1175,6 +1216,15 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         }
 
         val overrides = mutableMapOf<String, String>()
+        if (vertexOutputExtra.isNotEmpty()) {
+            overrides["VERTEX_OUTPUT_EXTRA"] = vertexOutputExtra.toString()
+        }
+        if (vertexAssignExtra.isNotEmpty()) {
+            overrides["VERTEX_ASSIGN_EXTRA"] = vertexAssignExtra.toString()
+        }
+        if (fragmentInputExtra.isNotEmpty()) {
+            overrides["FRAGMENT_INPUT_EXTRA"] = fragmentInputExtra.toString()
+        }
         if (fragmentBindings.isNotEmpty()) {
             overrides["FRAGMENT_BINDINGS"] = fragmentBindings.toString()
         }
@@ -1188,7 +1238,8 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         return MaterialOverrideResult(
             overrides = overrides,
             usesAlbedoMap = usesAlbedoMap,
-            usesNormalMap = usesNormalMap
+            usesNormalMap = usesNormalMap,
+            usesVolumeMap = usesVolumeMap
         )
     }
 
@@ -1311,6 +1362,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                     val textureGroups = mutableSetOf<Int>()
                     textureGroups += resolved.descriptor.bindingGroups(MaterialBindingSource.ALBEDO_MAP)
                     textureGroups += resolved.descriptor.bindingGroups(MaterialBindingSource.NORMAL_MAP)
+                    textureGroups += resolved.descriptor.bindingGroups(MaterialBindingSource.VOLUME_TEXTURE)
                     textureGroups.filter { it > 0 }.forEach { group ->
                         layoutByGroup[group] = binding.layout
                     }

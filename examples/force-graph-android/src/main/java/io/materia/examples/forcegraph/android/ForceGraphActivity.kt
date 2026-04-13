@@ -132,12 +132,11 @@ class ForceGraphActivity : ComponentActivity() {
     }
 
     private fun initialiseRenderer() {
-        val holder = surfaceView.holder
         lifecycleScope.launch {
             Log.d(TAG, "initialiseRenderer coroutine started")
             val result = runCatching {
                 withContext(Dispatchers.Default) {
-                    val surface = SurfaceFactory.create(holder)
+                    val surface = SurfaceFactory.create(surfaceView)
                     withTimeout(10_000L) { // Increased from 5s to 10s to accommodate slower devices/emulators
                         example.boot(
                             renderSurface = surface,

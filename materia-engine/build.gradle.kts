@@ -64,6 +64,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.filament.android)
             }
         }
 
@@ -83,6 +84,7 @@ android {
     }
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    sourceSets["main"].assets.srcDirs("src/androidMain/assets")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

@@ -1,9 +1,10 @@
 package io.materia.renderer.webgpu
 
 import io.materia.renderer.webgpu.RenderStatsTracker
+import io.materia.core.scene.Material as EngineMaterial
 import io.materia.material.MeshBasicMaterial
 import io.materia.material.MeshStandardMaterial
-import io.materia.material.Material as EngineMaterial
+import io.materia.renderer.TextureFormat
 import io.materia.renderer.gpu.GpuBindGroup
 import io.materia.renderer.gpu.GpuBindGroupDescriptor
 import io.materia.renderer.gpu.GpuBindGroupEntry
@@ -30,8 +31,10 @@ import io.materia.renderer.gpu.unwrapHandle
 import io.materia.renderer.material.MaterialBindingSource
 import io.materia.renderer.material.MaterialBindingType
 import io.materia.renderer.material.MaterialDescriptor
+import io.materia.texture.Data3DTexture
 import io.materia.texture.Texture
 import io.materia.texture.Texture2D
+import org.khronos.webgl.Float32Array
 import org.khronos.webgl.Uint8Array
 
 internal data class MaterialTextureBinding(
@@ -50,12 +53,14 @@ internal class WebGPUMaterialTextureManager(
         var version: Int,
         var width: Int,
         var height: Int,
+        var depth: Int,
         var trackedBytes: Long
     )
 
     private data class LayoutKey(
         val useAlbedo: Boolean,
-        val useNormal: Boolean
+        val useNormal: Boolean,
+        val useVolume: Boolean
     )
 
     private data class BindGroupKey(
@@ -63,7 +68,21 @@ internal class WebGPUMaterialTextureManager(
         val albedoId: Int?,
         val albedoVersion: Int,
         val normalId: Int?,
-        val normalVersion: Int
+        val normalVersion: Int,
+        val volumeId: Int?,
+        val volumeVersion: Int
+    )
+
+    private data class TextureUpload(
+        val width: Int,
+        val height: Int,
+        val depth: Int,
+        val format: String,
+        val dimension: GpuTextureDimension,
+        val viewDimension: GpuTextureViewDimension,
+        val bytesPerTexel: Int,
+        val trackedBytes: Long,
+        val data: dynamic
     )
 
     private var currentDevice: GpuDevice? = null
@@ -75,6 +94,7 @@ internal class WebGPUMaterialTextureManager(
 
     private var fallbackAlbedo: CachedTexture? = null
     private var fallbackNormal: CachedTexture? = null
+    private var fallbackVolume: CachedTexture? = null
 
     fun onDeviceReady(device: GpuDevice) {
         if (currentDevice === device) return
@@ -88,20 +108,29 @@ internal class WebGPUMaterialTextureManager(
         fallbackAlbedo = createFallbackTexture(device, byteArrayOf(-1, -1, -1, -1))
         fallbackNormal =
             createFallbackTexture(device, byteArrayOf(127, 127, 255.toByte(), 255.toByte()))
+        fallbackVolume = createFallbackTexture(
+            device = device,
+            data = byteArrayOf(-1, -1, -1, -1),
+            depth = 1,
+            dimension = GpuTextureDimension.D3,
+            viewDimension = GpuTextureViewDimension.D3,
+            label = "MaterialVolumeFallback"
+        )
     }
 
     fun prepare(
         descriptor: MaterialDescriptor,
         material: EngineMaterial?,
         useAlbedo: Boolean,
-        useNormal: Boolean
+        useNormal: Boolean,
+        useVolume: Boolean
     ): MaterialTextureBinding? {
-        if (!useAlbedo && !useNormal) return null
+        if (!useAlbedo && !useNormal && !useVolume) return null
 
         val device = currentDevice ?: deviceProvider()?.also(::onDeviceReady) ?: return null
         val sampler = defaultSampler ?: return null
 
-        val layoutKey = LayoutKey(useAlbedo, useNormal)
+        val layoutKey = LayoutKey(useAlbedo, useNormal, useVolume)
         val layout = layoutCache.getOrPut(layoutKey) {
             createLayout(descriptor, layoutKey, device) ?: return null
         }
@@ -114,12 +143,26 @@ internal class WebGPUMaterialTextureManager(
             acquireTexture(device, normalSource(material)) ?: fallbackNormal
         } else fallbackNormal
 
+        val volumeTexture = if (useVolume) {
+            acquireTexture(device, volumeSource(material)) ?: fallbackVolume
+        } else fallbackVolume
+
         val albedoKey = albedoTexture?.let { it.gpuTexture.hashCode() }
         val normalKey = normalTexture?.let { it.gpuTexture.hashCode() }
+        val volumeKey = volumeTexture?.let { it.gpuTexture.hashCode() }
         val albedoVersion = albedoTexture?.version ?: -1
         val normalVersion = normalTexture?.version ?: -1
+        val volumeVersion = volumeTexture?.version ?: -1
 
-        val cacheKey = BindGroupKey(layoutKey, albedoKey, albedoVersion, normalKey, normalVersion)
+        val cacheKey = BindGroupKey(
+            layoutKey,
+            albedoKey,
+            albedoVersion,
+            normalKey,
+            normalVersion,
+            volumeKey,
+            volumeVersion
+        )
         bindGroupCache[cacheKey]?.let { return it }
 
         val entries = mutableListOf<GpuBindGroupEntry>()
@@ -162,6 +205,25 @@ internal class WebGPUMaterialTextureManager(
             )
         }
 
+        if (useVolume) {
+            val textureBinding = descriptor.bindingFor(
+                MaterialBindingSource.VOLUME_TEXTURE,
+                MaterialBindingType.TEXTURE_3D
+            ) ?: return null
+            val samplerBinding =
+                descriptor.bindingFor(MaterialBindingSource.VOLUME_TEXTURE, MaterialBindingType.SAMPLER)
+                    ?: return null
+            val textureView = (volumeTexture ?: fallbackVolume)?.view ?: return null
+            entries += GpuBindGroupEntry(
+                binding = textureBinding.binding,
+                resource = GpuBindingResource.Texture(textureView)
+            )
+            entries += GpuBindGroupEntry(
+                binding = samplerBinding.binding,
+                resource = GpuBindingResource.Sampler(sampler)
+            )
+        }
+
         if (entries.isEmpty()) return null
 
         val bindGroup = device.createBindGroup(
@@ -191,8 +253,13 @@ internal class WebGPUMaterialTextureManager(
             statsTracker?.recordTextureDisposed(it.trackedBytes)
             runCatching { it.gpuTexture.destroy() }
         }
+        fallbackVolume?.let {
+            statsTracker?.recordTextureDisposed(it.trackedBytes)
+            runCatching { it.gpuTexture.destroy() }
+        }
         fallbackAlbedo = null
         fallbackNormal = null
+        fallbackVolume = null
         defaultSampler = null
         layoutCache.clear()
         bindGroupCache.clear()
@@ -201,12 +268,17 @@ internal class WebGPUMaterialTextureManager(
 
     private fun albedoSource(material: EngineMaterial?): Texture2D? = when (material) {
         is MeshBasicMaterial -> material.map as? Texture2D
-        is MeshStandardMaterial -> material.map as? Texture2D
+        is MeshStandardMaterial -> material.map
         else -> null
     }
 
     private fun normalSource(material: EngineMaterial?): Texture2D? = when (material) {
-        is MeshStandardMaterial -> material.normalMap as? Texture2D
+        is MeshStandardMaterial -> material.normalMap
+        else -> null
+    }
+
+    private fun volumeSource(material: EngineMaterial?): Data3DTexture? = when (material) {
+        is MeshBasicMaterial -> material.map as? Data3DTexture
         else -> null
     }
 
@@ -239,23 +311,40 @@ internal class WebGPUMaterialTextureManager(
             entries += textureLayoutEntry(textureBinding.binding)
             entries += samplerLayoutEntry(samplerBinding.binding)
         }
+        if (key.useVolume) {
+            val textureBinding = descriptor.bindingFor(
+                MaterialBindingSource.VOLUME_TEXTURE,
+                MaterialBindingType.TEXTURE_3D
+            ) ?: return null
+            val samplerBinding =
+                descriptor.bindingFor(MaterialBindingSource.VOLUME_TEXTURE, MaterialBindingType.SAMPLER)
+                    ?: return null
+            entries += textureLayoutEntry(
+                binding = textureBinding.binding,
+                dimension = GpuTextureViewDimension.D3
+            )
+            entries += samplerLayoutEntry(samplerBinding.binding)
+        }
         if (entries.isEmpty()) return null
 
         return device.createBindGroupLayout(
             GpuBindGroupLayoutDescriptor(
                 entries = entries.sortedBy { it.binding },
-                label = "Material Texture Layout (${key.useAlbedo}, ${key.useNormal})"
+                label = "Material Texture Layout (${key.useAlbedo}, ${key.useNormal}, ${key.useVolume})"
             )
         )
     }
 
-    private fun textureLayoutEntry(binding: Int): GpuBindGroupLayoutEntry =
+    private fun textureLayoutEntry(
+        binding: Int,
+        dimension: GpuTextureViewDimension = GpuTextureViewDimension.D2
+    ): GpuBindGroupLayoutEntry =
         GpuBindGroupLayoutEntry(
             binding = binding,
             visibility = GpuShaderStage.FRAGMENT.bits,
             texture = GpuTextureBindingLayout(
                 sampleType = GpuTextureSampleType.FLOAT,
-                viewDimension = GpuTextureViewDimension.D2,
+                viewDimension = dimension,
                 multisampled = false
             )
         )
@@ -272,23 +361,17 @@ internal class WebGPUMaterialTextureManager(
         type: MaterialBindingType
     ) = bindings.firstOrNull { it.source == source && it.type == type }
 
-    private fun acquireTexture(device: GpuDevice, texture: Texture2D?): CachedTexture? {
+    private fun acquireTexture(device: GpuDevice, texture: Texture?): CachedTexture? {
         texture ?: return null
-        val width = texture.width
-        val height = texture.height
-        if (width <= 0 || height <= 0) return null
-
-        val data = texture.getData() ?: texture.getFloatData()?.let { floats ->
-            ByteArray(floats.size) { idx ->
-                (floats[idx].coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255).toByte()
-            }
-        } ?: return null
-
-        val bytesPerTexel = 4
-        val totalBytes = width.toLong() * height * bytesPerTexel
+        val upload = buildTextureUpload(texture) ?: return null
 
         val cached = textureCache[texture.id]
-        if (cached != null && cached.version == texture.version && cached.width == width && cached.height == height) {
+        if (cached != null &&
+            cached.version == texture.version &&
+            cached.width == upload.width &&
+            cached.height == upload.height &&
+            cached.depth == upload.depth
+        ) {
             return cached
         }
 
@@ -299,53 +382,216 @@ internal class WebGPUMaterialTextureManager(
 
         val gpuTexture = device.createTexture(
             GpuTextureDescriptor(
-                width = width,
-                height = height,
-                depthOrArrayLayers = 1,
+                width = upload.width,
+                height = upload.height,
+                depthOrArrayLayers = upload.depth,
                 mipLevelCount = 1,
                 sampleCount = 1,
-                dimension = GpuTextureDimension.D2,
-                format = "rgba8unorm",
+                dimension = upload.dimension,
+                format = upload.format,
                 usage = GpuTextureUsage.TEXTURE_BINDING.bits or GpuTextureUsage.COPY_DST.bits,
                 label = texture.name.ifEmpty { "MaterialTexture${texture.id}" }
             )
         )
-        writeTextureBytes(device, gpuTexture, width, height, data)
-        val view =
-            gpuTexture.createView(GpuTextureViewDescriptor(dimension = GpuTextureViewDimension.D2))
+        writeTextureData(device, gpuTexture, upload)
+        val view = gpuTexture.createView(
+            GpuTextureViewDescriptor(dimension = upload.viewDimension)
+        )
 
         val cachedTexture = CachedTexture(
             gpuTexture = gpuTexture,
             view = view,
             version = texture.version,
-            width = width,
-            height = height,
-            trackedBytes = totalBytes
+            width = upload.width,
+            height = upload.height,
+            depth = upload.depth,
+            trackedBytes = upload.trackedBytes
         )
         textureCache[texture.id] = cachedTexture
-        statsTracker?.recordTextureCreated(totalBytes)
+        statsTracker?.recordTextureCreated(upload.trackedBytes)
         texture.needsUpdate = false
         return cachedTexture
     }
 
-    private fun createFallbackTexture(device: GpuDevice, data: ByteArray): CachedTexture? {
+    private fun buildTextureUpload(texture: Texture): TextureUpload? = when (texture) {
+        is Texture2D -> buildTexture2DUpload(texture)
+        is Data3DTexture -> buildTexture3DUpload(texture)
+        else -> null
+    }
+
+    private fun buildTexture2DUpload(texture: Texture2D): TextureUpload? {
+        val upload = textureDataFor(
+            texture.format,
+            texture.getData(),
+            texture.getFloatData(),
+            null,
+            texture.width,
+            texture.height,
+            1
+        ) ?: return null
+        return upload.copy(
+            dimension = GpuTextureDimension.D2,
+            viewDimension = GpuTextureViewDimension.D2
+        )
+    }
+
+    private fun buildTexture3DUpload(texture: Data3DTexture): TextureUpload? {
+        val upload = textureDataFor(
+            texture.format,
+            texture.getData().takeIf { it.isNotEmpty() },
+            texture.getFloatData(),
+            texture.getIntData(),
+            texture.width,
+            texture.height,
+            texture.depth
+        ) ?: return null
+        return upload.copy(
+            dimension = GpuTextureDimension.D3,
+            viewDimension = GpuTextureViewDimension.D3
+        )
+    }
+
+    private fun textureDataFor(
+        format: TextureFormat,
+        byteData: ByteArray?,
+        floatData: FloatArray?,
+        intData: IntArray?,
+        width: Int,
+        height: Int,
+        depth: Int
+    ): TextureUpload? {
+        if (width <= 0 || height <= 0 || depth <= 0) return null
+
+        return when {
+            floatData != null && format == TextureFormat.RGBA32F -> {
+                val typed = Float32Array(floatData.size)
+                val dyn = typed.asDynamic()
+                for (i in floatData.indices) {
+                    dyn[i] = floatData[i]
+                }
+                TextureUpload(
+                    width = width,
+                    height = height,
+                    depth = depth,
+                    format = "rgba32float",
+                    dimension = GpuTextureDimension.D2,
+                    viewDimension = GpuTextureViewDimension.D2,
+                    bytesPerTexel = 16,
+                    trackedBytes = floatData.size.toLong() * 4L,
+                    data = typed
+                )
+            }
+
+            byteData != null -> {
+                val typed = Uint8Array(byteData.size)
+                val dyn = typed.asDynamic()
+                for (i in byteData.indices) {
+                    dyn[i] = byteData[i].toInt() and 0xFF
+                }
+                TextureUpload(
+                    width = width,
+                    height = height,
+                    depth = depth,
+                    format = when (format) {
+                        TextureFormat.SRGB8_ALPHA8 -> "rgba8unorm-srgb"
+                        else -> "rgba8unorm"
+                    },
+                    dimension = GpuTextureDimension.D2,
+                    viewDimension = GpuTextureViewDimension.D2,
+                    bytesPerTexel = 4,
+                    trackedBytes = byteData.size.toLong(),
+                    data = typed
+                )
+            }
+
+            intData != null -> {
+                val typed = Uint8Array(intData.size)
+                val dyn = typed.asDynamic()
+                for (i in intData.indices) {
+                    dyn[i] = intData[i].coerceIn(0, 255)
+                }
+                TextureUpload(
+                    width = width,
+                    height = height,
+                    depth = depth,
+                    format = "rgba8unorm",
+                    dimension = GpuTextureDimension.D2,
+                    viewDimension = GpuTextureViewDimension.D2,
+                    bytesPerTexel = 4,
+                    trackedBytes = intData.size.toLong(),
+                    data = typed
+                )
+            }
+
+            floatData != null -> {
+                val bytes = ByteArray(floatData.size) { index ->
+                    (floatData[index].coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255).toByte()
+                }
+                val typed = Uint8Array(bytes.size)
+                val dyn = typed.asDynamic()
+                for (i in bytes.indices) {
+                    dyn[i] = bytes[i].toInt() and 0xFF
+                }
+                TextureUpload(
+                    width = width,
+                    height = height,
+                    depth = depth,
+                    format = "rgba8unorm",
+                    dimension = GpuTextureDimension.D2,
+                    viewDimension = GpuTextureViewDimension.D2,
+                    bytesPerTexel = 4,
+                    trackedBytes = bytes.size.toLong(),
+                    data = typed
+                )
+            }
+
+            else -> null
+        }
+    }
+
+    private fun createFallbackTexture(
+        device: GpuDevice,
+        data: ByteArray,
+        depth: Int = 1,
+        dimension: GpuTextureDimension = GpuTextureDimension.D2,
+        viewDimension: GpuTextureViewDimension = GpuTextureViewDimension.D2,
+        label: String = "MaterialTextureFallback"
+    ): CachedTexture? {
         val gpuTexture = device.createTexture(
             GpuTextureDescriptor(
                 width = 1,
                 height = 1,
-                depthOrArrayLayers = 1,
+                depthOrArrayLayers = depth,
                 mipLevelCount = 1,
                 sampleCount = 1,
-                dimension = GpuTextureDimension.D2,
+                dimension = dimension,
                 format = "rgba8unorm",
                 usage = GpuTextureUsage.TEXTURE_BINDING.bits or GpuTextureUsage.COPY_DST.bits,
-                label = "MaterialTextureFallback"
+                label = label
             )
         )
-        writeTextureBytes(device, gpuTexture, 1, 1, data)
-        val view =
-            gpuTexture.createView(GpuTextureViewDescriptor(dimension = GpuTextureViewDimension.D2))
-        val trackedBytes = data.size.toLong()
+        val typed = Uint8Array(data.size)
+        val dyn = typed.asDynamic()
+        for (i in data.indices) {
+            dyn[i] = data[i].toInt() and 0xFF
+        }
+        writeTextureData(
+            device,
+            gpuTexture,
+            TextureUpload(
+                width = 1,
+                height = 1,
+                depth = depth,
+                format = "rgba8unorm",
+                dimension = dimension,
+                viewDimension = viewDimension,
+                bytesPerTexel = 4,
+                trackedBytes = data.size.toLong(),
+                data = typed
+            )
+        )
+        val view = gpuTexture.createView(GpuTextureViewDescriptor(dimension = viewDimension))
+        val trackedBytes = data.size.toLong() * depth
         statsTracker?.recordTextureCreated(trackedBytes)
         return CachedTexture(
             gpuTexture,
@@ -353,16 +599,15 @@ internal class WebGPUMaterialTextureManager(
             version = 0,
             width = 1,
             height = 1,
+            depth = depth,
             trackedBytes = trackedBytes
         )
     }
 
-    private fun writeTextureBytes(
+    private fun writeTextureData(
         device: GpuDevice,
         texture: GpuTexture,
-        width: Int,
-        height: Int,
-        data: ByteArray
+        upload: TextureUpload
     ) {
         val rawDevice = device.unwrapHandle() as? GPUDevice ?: return
         val rawTexture = texture.unwrapHandle() as? GPUTexture ?: return
@@ -378,20 +623,15 @@ internal class WebGPUMaterialTextureManager(
 
         val layout = js("({})")
         layout.offset = 0
-        layout.bytesPerRow = width * 4
-        layout.rowsPerImage = height
+        layout.bytesPerRow = upload.width * upload.bytesPerTexel
+        layout.rowsPerImage = upload.height
 
         val size = js("({})")
-        size.width = width
-        size.height = height
-        size.depthOrArrayLayers = 1
+        size.width = upload.width
+        size.height = upload.height
+        size.depthOrArrayLayers = upload.depth
 
-        val dataArray = Uint8Array(data.size)
-        val dyn = dataArray.asDynamic()
-        for (i in data.indices) {
-            dyn[i] = data[i].toInt() and 0xFF
-        }
-        rawDevice.queue.writeTexture(destination, dataArray, layout, size)
+        rawDevice.queue.writeTexture(destination, upload.data, layout, size)
     }
 }
 

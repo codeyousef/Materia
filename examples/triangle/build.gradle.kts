@@ -171,6 +171,13 @@ tasks.register("runAndroid") {
     notCompatibleWithConfigurationCache("Delegates to Android install task")
 }
 
+tasks.register("smokeAndroid") {
+    group = "verification"
+    description = "Run the Android triangle smoke test (delegates to :examples:triangle-android:smokeAndroid)"
+    dependsOn(":examples:triangle-android:smokeAndroid")
+    notCompatibleWithConfigurationCache("Delegates to Android smoke task")
+}
+
 android {
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
     namespace = "io.materia.examples.triangle"

@@ -6,6 +6,7 @@ import io.materia.renderer.material.MaterialBindingSource
 import io.materia.renderer.material.MaterialBindingType
 import io.materia.renderer.material.MaterialDescriptorRegistry
 import io.materia.texture.Texture2D
+import io.materia.texture.Data3DTexture
 import io.materia.renderer.material.requiresBinding
 import kotlin.test.Test
 import kotlin.test.assertNotNull
@@ -70,6 +71,28 @@ class MaterialTextureSmokeTest {
             normalSamplerBinding,
             "Normal map sampler binding should exist for standard materials"
         )
+    }
+
+    @Test
+    fun meshBasicMaterialWithData3DTextureHasVolumeBindings() {
+        val texture = Data3DTexture.solidColor(Color.GREEN, width = 2, height = 2, depth = 2)
+        val material = MeshBasicMaterial().apply { map = texture }
+
+        val descriptor = MaterialDescriptorRegistry.descriptorFor(material)
+        assertNotNull(descriptor, "Descriptor should be registered for MeshBasicMaterial")
+
+        val volumeTextureBinding = descriptor.bindings.firstOrNull {
+            it.source == MaterialBindingSource.VOLUME_TEXTURE && it.type == MaterialBindingType.TEXTURE_3D
+        }
+        assertNotNull(volumeTextureBinding, "Volume texture binding should be defined")
+
+        val volumeSamplerBinding = descriptor.bindings.firstOrNull {
+            it.source == MaterialBindingSource.VOLUME_TEXTURE && it.type == MaterialBindingType.SAMPLER
+        }
+        assertNotNull(volumeSamplerBinding, "Volume sampler binding should be defined")
+
+        val resolved = MaterialDescriptorRegistry.resolve(material)
+        assertNotNull(resolved, "Material resolution should succeed for volume-textured MeshBasicMaterial")
     }
 
     @Test

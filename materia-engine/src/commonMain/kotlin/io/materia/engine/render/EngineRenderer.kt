@@ -34,6 +34,7 @@ import io.materia.gpu.GpuTextureUsage
 import io.materia.gpu.GpuTextureView
 import io.materia.gpu.createGpuInstance
 import io.materia.gpu.gpuTextureUsage
+import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.BackendType
 import io.materia.renderer.RenderSurface
 import io.materia.renderer.RendererConfig
@@ -116,6 +117,12 @@ data class EngineRendererOptions(
     val enableFxaa: Boolean = false
 )
 
+internal expect fun createPlatformEngineRendererOrNull(
+    surface: RenderSurface,
+    config: RendererConfig,
+    options: EngineRendererOptions
+): EngineRenderer?
+
 /**
  * Creates an [EngineRenderer] for the given surface.
  *
@@ -135,7 +142,8 @@ suspend fun RendererFactory.createEngineRenderer(
         preferredBackends = preferredBackends,
         powerPreference = config.powerPreference.toGpuPowerPreference()
     )
-    val renderer = EngineRendererImpl(surface, config, resolvedOptions)
+    val renderer = createPlatformEngineRendererOrNull(surface, config, resolvedOptions)
+        ?: EngineRendererImpl(surface, config, resolvedOptions)
     return renderer.initialize().map { renderer }
 }
 
@@ -203,6 +211,8 @@ private class EngineRendererImpl(
         return try {
             val preferredBackends = config.preferredBackend?.let { listOf(it.toGpuBackend()) }
                 ?: options.preferredBackends
+
+            initializeGpuContext(surface)
 
             gpuInstance = createGpuInstance(
                 GpuInstanceDescriptor(

@@ -8,6 +8,7 @@ Welcome to the Materia documentation! Materia is a Kotlin Multiplatform 3D rende
 - [Quickstart Guide](quickstart.md) - Get up and running in minutes
 - [Getting Started](guides/getting-started.md) - Detailed setup and first scene
 - [Platform-Specific Guide](guides/platform-specific.md) - JVM, JS, and Android setup
+- [Volume Textures](guides/volume-textures.md) - `Data3DTexture` usage and backend behavior
 - [Examples](examples/basic-usage.md) - Code samples and demos
 
 ### Core Concepts
@@ -181,6 +182,10 @@ cd Materia
 # Run Triangle demo
 ./gradlew :examples:triangle:runJvm          # Desktop
 ./gradlew :examples:triangle:jsBrowserRun    # Browser
+
+# Run Volume Texture demo
+./gradlew :examples:volume-texture:runJvm
+./gradlew :examples:volume-texture:jsBrowserRun
 
 # Run VoxelCraft (Minecraft-style)
 ./gradlew :examples:voxelcraft:runJvm

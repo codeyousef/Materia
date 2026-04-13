@@ -169,13 +169,12 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
     }
 
     private fun initialiseRenderer() {
-        val holder = surfaceView.holder
         bootJob?.cancel()
         bootJob = lifecycleScope.launch {
             Log.d(TAG, "initialiseRenderer coroutine started")
             val result = runCatching {
                 withContext(Dispatchers.Default) {
-                    val surface = SurfaceFactory.create(holder)
+                    val surface = SurfaceFactory.create(surfaceView)
                     Log.d(
                         TAG,
                         "Created RenderSurface (width=${surface.width}, height=${surface.height}); waiting for example boot"

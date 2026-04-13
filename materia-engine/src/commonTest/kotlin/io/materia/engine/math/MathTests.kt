@@ -51,6 +51,11 @@ class MathTests {
         assertEquals(0f, transformedOrigin.x, EPSILON)
         assertEquals(0f, transformedOrigin.y, EPSILON)
         assertEquals(-5f, transformedOrigin.z, EPSILON)
+
+        val transformedRight = transformVector(view, vec3(1f, 0f, 5f))
+        assertEquals(1f, transformedRight.x, EPSILON)
+        assertEquals(0f, transformedRight.y, EPSILON)
+        assertEquals(0f, transformedRight.z, EPSILON)
     }
 
     @Test

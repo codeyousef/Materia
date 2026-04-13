@@ -1,6 +1,9 @@
 package io.materia.gpu
 
 import android.view.SurfaceHolder
+import io.materia.renderer.androidWgpuCompatibilityException
+import io.materia.renderer.ensureAndroidWgpuRuntimeCompatible
+import io.materia.renderer.isAndroidWgpuCompatibilityFailure
 import io.materia.renderer.RenderSurface
 import io.ygdrasil.webgpu.*
 import kotlinx.coroutines.runBlocking
@@ -357,32 +360,50 @@ actual class GpuSurface actual constructor(
  * Pre-initializes the wgpu4k context from an Android SurfaceHolder.
  */
 actual suspend fun initializeGpuContext(surface: RenderSurface) {
+    ensureAndroidWgpuRuntimeCompatible()
+
     val surfaceHolder = surface.getHandle() as? SurfaceHolder
         ?: error("RenderSurface handle must be a SurfaceHolder on Android platform")
-    
-    val androidContext = androidContextRenderer(
-        surfaceHolder = surfaceHolder,
-        width = surface.width,
-        height = surface.height
-    )
-    AndroidWgpuContextHolder.androidContext = androidContext
+
+    try {
+        val androidContext = androidContextRenderer(
+            surfaceHolder = surfaceHolder,
+            width = surface.width,
+            height = surface.height
+        )
+        AndroidWgpuContextHolder.androidContext = androidContext
+    } catch (error: Throwable) {
+        if (error.isAndroidWgpuCompatibilityFailure()) {
+            throw androidWgpuCompatibilityException(error)
+        }
+        throw error
+    }
 }
 
 actual fun GpuSurface.attachRenderSurface(surface: RenderSurface) {
     // Context should already be initialized via initializeGpuContext()
     // For backwards compatibility, if not initialized, try now
     if (AndroidWgpuContextHolder.wgpuContext == null) {
+        ensureAndroidWgpuRuntimeCompatible()
+
         val surfaceHolder = surface.getHandle() as? SurfaceHolder
             ?: error("RenderSurface handle must be a SurfaceHolder on Android platform")
-        
-        val androidContext = runBlocking {
-            androidContextRenderer(
-                surfaceHolder = surfaceHolder,
-                width = surface.width,
-                height = surface.height
-            )
+
+        try {
+            val androidContext = runBlocking {
+                androidContextRenderer(
+                    surfaceHolder = surfaceHolder,
+                    width = surface.width,
+                    height = surface.height
+                )
+            }
+            AndroidWgpuContextHolder.androidContext = androidContext
+        } catch (error: Throwable) {
+            if (error.isAndroidWgpuCompatibilityFailure()) {
+                throw androidWgpuCompatibilityException(error)
+            }
+            throw error
         }
-        AndroidWgpuContextHolder.androidContext = androidContext
     }
 }
 

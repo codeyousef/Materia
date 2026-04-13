@@ -1,5 +1,6 @@
 package io.materia.examples.triangle.android
 
+import android.graphics.PixelFormat
 import android.os.Bundle
 import android.util.Log
 import android.view.Choreographer
@@ -11,13 +12,11 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import io.materia.examples.triangle.TriangleBootResult
 import io.materia.examples.triangle.TriangleExample
 import io.materia.gpu.AndroidVulkanAssets
 import io.materia.gpu.GpuBackend
 import io.materia.gpu.GpuPowerPreference
 import io.materia.io.AndroidResourceLoader
-import io.materia.renderer.SurfaceFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -39,40 +38,15 @@ class TriangleActivity : ComponentActivity() {
         powerPreference = GpuPowerPreference.HIGH_PERFORMANCE
     )
 
-    private var triangleRuntime: TriangleBootResult? = null
+    private var triangleRuntime: DirectFilamentTriangleRuntime? = null
     private var frameCallback: Choreographer.FrameCallback? = null
     private var headlessFallbackShown = false
 
     private val holderCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
-            if (!AndroidVulkanAssets.hasVulkanSupport()) {
-                val message = buildMissingSupportMessage("Triangle")
-                Log.w(TAG, "Vulkan not advertised; launching headless fallback")
-                overlayView.text = message
-                launchHeadlessFallback(message)
-                return
-            }
-            overlayView.text = "Preparing surface…"
-            Log.i(TAG, "Surface created; waiting for dimensions before initializing")
-
-            // Post initialization with a small delay to ensure the surface is fully ready
-            // This prevents race conditions where the surface exists but isn't fully initialized
-            surfaceView.post {
-                val width = surfaceView.width
-                val height = surfaceView.height
-                if (width > 0 && height > 0) {
-                    overlayView.text = "Booting Triangle example…"
-                    Log.i(TAG, "Surface ready (${width}x${height}); bootstrapping renderer")
-                    initializeRenderer()
-                } else {
-                    // If dimensions aren't ready yet, try again with a slight delay
-                    surfaceView.postDelayed({
-                        overlayView.text = "Booting Triangle example…"
-                        Log.i(TAG, "Surface ready (delayed); bootstrapping renderer")
-                        initializeRenderer()
-                    }, 100)
-                }
-            }
+            overlayView.text = "Booting Triangle example…"
+            Log.i(TAG, "Surface ready; bootstrapping direct Filament triangle")
+            initializeRenderer()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -94,6 +68,7 @@ class TriangleActivity : ComponentActivity() {
 
         surfaceView = SurfaceView(this).apply {
             holder.addCallback(holderCallback)
+            holder.setFormat(PixelFormat.OPAQUE)
             setZOrderOnTop(false)
         }
 
@@ -107,6 +82,7 @@ class TriangleActivity : ComponentActivity() {
         }
 
         val root = FrameLayout(this).apply {
+            setBackgroundColor(0xFF121212.toInt())
             addView(
                 surfaceView, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -133,36 +109,24 @@ class TriangleActivity : ComponentActivity() {
     }
 
     private fun initializeRenderer() {
-        lifecycleScope.launch {
-            Log.d(TAG, "initializeRenderer coroutine started")
-            val holder = surfaceView.holder
-            val renderSurface = SurfaceFactory.create(holder)
+        if (triangleRuntime != null) {
+            return
+        }
 
-            val result = runCatching {
-                withContext(Dispatchers.Default) {
-                    withTimeout(10_000L) { // Increased from 5s to 10s to accommodate slower devices/emulators
-                        triangleExample.boot(
-                            renderSurface = renderSurface,
-                            widthOverride = surfaceView.width.takeIf { it > 0 },
-                            heightOverride = surfaceView.height.takeIf { it > 0 }
-                        )
-                    }
-                }
-            }
-
-            result.onSuccess { bootResult ->
-                Log.i(TAG, "Renderer boot succeeded: backend=${bootResult.log.backend}, device=${bootResult.log.deviceName}")
-                triangleRuntime = bootResult
-                overlayView.text = bootResult.log.pretty()
+        runCatching {
+            DirectFilamentTriangleRuntime(surfaceView).also { runtime ->
+                runtime.initialize()
+                triangleRuntime = runtime
+                overlayView.text = runtime.buildOverlayText()
+                Log.i(TAG, "Renderer boot succeeded: backend=${runtime.backendName}, device=${runtime.deviceName}")
                 startRenderLoop()
-            }.onFailure { error ->
-                Log.e(TAG, "Renderer bootstrap failed", error)
-                if (error is CancellationException && error !is TimeoutCancellationException) throw error
-                val failureMessage = buildFailureMessage("Triangle", error)
-                overlayView.text = failureMessage
-                launchHeadlessFallback(failureMessage)
             }
-            Log.d(TAG, "initializeRenderer coroutine finished")
+        }.onFailure { error ->
+            Log.e(TAG, "Renderer bootstrap failed", error)
+            if (error is CancellationException && error !is TimeoutCancellationException) throw error
+            val failureMessage = buildFailureMessage("Triangle", error)
+            overlayView.text = failureMessage
+            launchHeadlessFallback(failureMessage)
         }
     }
 
@@ -171,7 +135,7 @@ class TriangleActivity : ComponentActivity() {
         val choreographer = Choreographer.getInstance()
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
-                triangleRuntime?.renderFrame()
+                triangleRuntime?.renderFrame(frameTimeNanos)
                 choreographer.postFrameCallback(this)
             }
         }

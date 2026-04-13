@@ -32,7 +32,7 @@ internal class AndroidRenderSurface(
     val holder: SurfaceHolder
         get() = surfaceHolder
 
-    override fun getHandle(): Any = surfaceHolder
+    override fun getHandle(): Any = surfaceView ?: surfaceHolder
 
     private fun SurfaceHolder.surfaceFrameOrNull(): Rect? = try {
         surfaceFrame

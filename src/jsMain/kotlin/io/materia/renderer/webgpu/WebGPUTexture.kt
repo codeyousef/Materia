@@ -43,7 +43,7 @@ class WebGPUTexture(
 
             textureDescriptor.mipLevelCount = descriptor.mipLevelCount
             textureDescriptor.sampleCount = descriptor.sampleCount
-            textureDescriptor.dimension = "2d"
+            textureDescriptor.dimension = if (descriptor.depth > 1) "3d" else "2d"
             textureDescriptor.format = when (descriptor.format) {
                 TextureFormat.RGBA8_UNORM -> "rgba8unorm"
                 TextureFormat.RGBA8_SRGB -> "rgba8unorm-srgb"
@@ -70,7 +70,12 @@ class WebGPUTexture(
      * @param width Width in pixels
      * @param height Height in pixels
      */
-    fun upload(data: ByteArray, width: Int, height: Int): io.materia.core.Result<Unit> {
+    fun upload(
+        data: ByteArray,
+        width: Int,
+        height: Int,
+        depth: Int = descriptor.depth
+    ): io.materia.core.Result<Unit> {
         return try {
             texture?.let { tex ->
                 val destination = js("({})").unsafeCast<dynamic>()
@@ -90,7 +95,7 @@ class WebGPUTexture(
                 val writeSize = js("({})").unsafeCast<dynamic>()
                 writeSize.width = width
                 writeSize.height = height
-                writeSize.depthOrArrayLayers = 1
+                writeSize.depthOrArrayLayers = depth
 
                 val uint8Array = Uint8Array(data.size)
                 val uint8ArrayDynamic = uint8Array.asDynamic()

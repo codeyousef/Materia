@@ -31,10 +31,10 @@ actual object RendererFactory {
             )
         }
 
-        val stubRenderer = AndroidStubRenderer(androidSurface)
-        val initResult = stubRenderer.initialize(config)
+        val renderer = AndroidWgpuRenderer(androidSurface)
+        val initResult = renderer.initialize(config)
         return when (initResult) {
-            is io.materia.core.Result.Success -> io.materia.core.Result.Success(stubRenderer)
+            is io.materia.core.Result.Success -> io.materia.core.Result.Success(renderer)
             is io.materia.core.Result.Error -> io.materia.core.Result.Error(
                 initResult.message,
                 initResult.exception
@@ -43,7 +43,7 @@ actual object RendererFactory {
     }
 
     actual fun detectAvailableBackends(): List<BackendType> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             listOf(BackendType.VULKAN)
         } else {
             emptyList()

@@ -66,6 +66,7 @@ import io.materia.renderer.webgpu.VertexAttribute
 import io.materia.renderer.webgpu.VertexBufferLayout
 import io.materia.renderer.webgpu.VertexFormat
 import io.materia.renderer.webgpu.VertexStepMode
+import io.materia.texture.Data3DTexture
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import org.lwjgl.vulkan.KHRSwapchain
@@ -2038,6 +2039,7 @@ class VulkanRenderer(
 
     private data class MaterialPipelineFeatures(
         val usesAlbedoMap: Boolean,
+        val usesVolumeMap: Boolean,
         val usesNormalMap: Boolean,
         val usesRoughnessMap: Boolean,
         val usesMetalnessMap: Boolean,
@@ -2154,7 +2156,8 @@ class VulkanRenderer(
 
     private fun MaterialBinding.toVulkanDescriptorType(): Int = when (type) {
         MaterialBindingType.TEXTURE_2D,
-        MaterialBindingType.TEXTURE_CUBE -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        MaterialBindingType.TEXTURE_CUBE,
+        MaterialBindingType.TEXTURE_3D -> VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 
         MaterialBindingType.SAMPLER -> VK_DESCRIPTOR_TYPE_SAMPLER
     }
@@ -2189,6 +2192,7 @@ class VulkanRenderer(
         val ctor = when (texture.type) {
             MaterialBindingType.TEXTURE_CUBE -> "samplerCube"
             MaterialBindingType.TEXTURE_2D -> "sampler2D"
+            MaterialBindingType.TEXTURE_3D -> "sampler3D"
             MaterialBindingType.SAMPLER -> "sampler2D"
         }
         return "$ctor(${texture.uniformName()}, ${sampler.uniformName()})"
@@ -2200,6 +2204,7 @@ class VulkanRenderer(
     private fun MaterialBinding.glslType(): String = when (type) {
         MaterialBindingType.TEXTURE_2D -> "texture2D"
         MaterialBindingType.TEXTURE_CUBE -> "textureCube"
+        MaterialBindingType.TEXTURE_3D -> "texture3D"
         MaterialBindingType.SAMPLER -> "sampler"
     }
 
@@ -2309,6 +2314,9 @@ class VulkanRenderer(
             if (features.usesSecondaryUv) {
                 appendLine("layout(location = 6) out vec2 vUV2;")
             }
+            if (features.usesVolumeMap) {
+                appendLine("layout(location = 7) out vec3 vVolumeCoord;")
+            }
 
             appendLine("void main() {")
             if (features.usesInstancing) {
@@ -2384,6 +2392,9 @@ class VulkanRenderer(
             appendLine("    worldPosition = modelMatrix * localPosition;")
             appendLine("    gl_Position = ubo.uProjection * ubo.uView * worldPosition;")
             appendLine("    vWorldPos = worldPosition.xyz;")
+            if (features.usesVolumeMap) {
+                appendLine("    vVolumeCoord = clamp(localPosition.xyz * 0.5 + vec3(0.5), vec3(0.0), vec3(1.0));")
+            }
             appendLine("}")
         }
     }
@@ -2404,6 +2415,7 @@ class VulkanRenderer(
         features: MaterialPipelineFeatures,
         hasUv: Boolean,
         albedoPair: BindingPair?,
+        volumePair: BindingPair?,
         normalPair: BindingPair?,
         roughnessPair: BindingPair?,
         metalnessPair: BindingPair?,
@@ -2421,6 +2433,9 @@ class VulkanRenderer(
         sb.appendLine("layout(location = 5) in vec3 vWorldPos;")
         if (features.usesSecondaryUv) {
             sb.appendLine("layout(location = 6) in vec2 vUV2;")
+        }
+        if (features.usesVolumeMap) {
+            sb.appendLine("layout(location = 7) in vec3 vVolumeCoord;")
         }
         sb.appendLine()
         sb.appendLine("layout(location = 0) out vec4 outColor;")
@@ -2469,6 +2484,7 @@ class VulkanRenderer(
         val uvCoord = if (hasUv) "vUV" else "vec2(0.0, 0.0)"
         val secondaryUvCoord = if (features.usesSecondaryUv) "vUV2" else uvCoord
         val albedoSampleExpr = albedoPair?.textureSample(uvCoord)
+        val volumeSampleExpr = volumePair?.textureSample("vVolumeCoord")
         val roughnessSampleExpr = roughnessPair?.textureSample(uvCoord)?.let { "$it.r" }
         val metalnessSampleExpr = metalnessPair?.textureSample(uvCoord)?.let { "$it.r" }
         val aoSampleExpr = aoPair?.textureSample(secondaryUvCoord)?.let { "$it.r" }
@@ -2477,6 +2493,9 @@ class VulkanRenderer(
         sb.appendLine("    vec4 albedoSample = vec4(1.0);")
         if (features.usesAlbedoMap && albedoSampleExpr != null) {
             sb.appendLine("    albedoSample = $albedoSampleExpr;")
+        }
+        if (features.usesVolumeMap && volumeSampleExpr != null) {
+            sb.appendLine("    albedoSample = $volumeSampleExpr;")
         }
         sb.appendLine("    vec3 baseColor = clamp(ubo.uBaseColor.rgb * vColor * albedoSample.rgb, 0.0, 1.0);")
         sb.appendLine("    float alpha = clamp(ubo.uBaseColor.a * albedoSample.a, 0.0, 1.0);")
@@ -2551,10 +2570,16 @@ class VulkanRenderer(
             MaterialBindingSource.ALBEDO_MAP,
             MaterialBindingType.TEXTURE_2D
         ) && hasUv && when (material) {
-            is MeshBasicMaterial -> material.map != null
+            is MeshBasicMaterial -> material.map != null && material.map !is Data3DTexture
             is MeshStandardMaterial -> material.map != null
             else -> false
         }
+
+        val volumePair = bindingPair(materialBindingLookup, MaterialBindingSource.VOLUME_TEXTURE)
+        val usesVolumeMap = volumePair != null && descriptorHas(
+            MaterialBindingSource.VOLUME_TEXTURE,
+            MaterialBindingType.TEXTURE_3D
+        ) && material is MeshBasicMaterial && material.map is Data3DTexture
 
         val normalPair = bindingPair(materialBindingLookup, MaterialBindingSource.NORMAL_MAP)
         val usesNormalMap = normalPair != null && descriptorHas(
@@ -2592,6 +2617,7 @@ class VulkanRenderer(
 
         val features = MaterialPipelineFeatures(
             usesAlbedoMap = usesAlbedoMap,
+            usesVolumeMap = usesVolumeMap,
             usesNormalMap = usesNormalMap,
             usesRoughnessMap = usesRoughnessMap,
             usesMetalnessMap = usesMetalnessMap,
@@ -2614,6 +2640,7 @@ class VulkanRenderer(
             features = features,
             hasUv = hasUv,
             albedoPair = albedoPair,
+            volumePair = volumePair,
             normalPair = normalPair,
             roughnessPair = roughnessPair,
             metalnessPair = metalnessPair,

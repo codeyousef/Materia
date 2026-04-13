@@ -120,28 +120,45 @@ value class Mat4 @PublishedApi internal constructor(internal val data: FloatArra
      * @return This matrix configured as a view transformation.
      */
     fun setLookAt(eye: Vec3, target: Vec3, up: Vec3 = Vec3.Up): Mat4 {
-        // Compute forward direction (from eye to target)
-        val forwardX = target.x - eye.x
-        val forwardY = target.y - eye.y
-        val forwardZ = target.z - eye.z
-        val forwardLen = kotlin.math.sqrt(forwardX * forwardX + forwardY * forwardY + forwardZ * forwardZ)
-        val fwdX = forwardX / forwardLen
-        val fwdY = forwardY / forwardLen
-        val fwdZ = forwardZ / forwardLen
+        var backX = eye.x - target.x
+        var backY = eye.y - target.y
+        var backZ = eye.z - target.z
+        var backLen = kotlin.math.sqrt(backX * backX + backY * backY + backZ * backZ)
+        if (backLen < 0.000001f) {
+            backZ = 1f
+            backLen = 1f
+        }
+        backX /= backLen
+        backY /= backLen
+        backZ /= backLen
 
-        // Right = up × forward (for right-handed coords)
-        var rightX = up.y * fwdZ - up.z * fwdY
-        var rightY = up.z * fwdX - up.x * fwdZ
-        var rightZ = up.x * fwdY - up.y * fwdX
-        val rightLen = kotlin.math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ)
+        var rightX = up.y * backZ - up.z * backY
+        var rightY = up.z * backX - up.x * backZ
+        var rightZ = up.x * backY - up.y * backX
+        var rightLen = kotlin.math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ)
+        if (rightLen < 0.000001f) {
+            if (kotlin.math.abs(kotlin.math.abs(up.z) - 1f) < 0.000001f) {
+                backX += 0.0001f
+            } else {
+                backZ += 0.0001f
+            }
+            backLen = kotlin.math.sqrt(backX * backX + backY * backY + backZ * backZ)
+            backX /= backLen
+            backY /= backLen
+            backZ /= backLen
+
+            rightX = up.y * backZ - up.z * backY
+            rightY = up.z * backX - up.x * backZ
+            rightZ = up.x * backY - up.y * backX
+            rightLen = kotlin.math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ)
+        }
         rightX /= rightLen
         rightY /= rightLen
         rightZ /= rightLen
 
-        // Recompute up = forward × right
-        val upX = fwdY * rightZ - fwdZ * rightY
-        val upY = fwdZ * rightX - fwdX * rightZ
-        val upZ = fwdX * rightY - fwdY * rightX
+        val upX = backY * rightZ - backZ * rightY
+        val upY = backZ * rightX - backX * rightZ
+        val upZ = backX * rightY - backY * rightX
 
         // Build view matrix (camera looks along -Z in view space)
         // Row 0: right
@@ -156,11 +173,11 @@ value class Mat4 @PublishedApi internal constructor(internal val data: FloatArra
         data[9] = upZ
         data[13] = -(upX * eye.x + upY * eye.y + upZ * eye.z)
 
-        // Row 2: -forward (camera looks along -Z)
-        data[2] = -fwdX
-        data[6] = -fwdY
-        data[10] = -fwdZ
-        data[14] = fwdX * eye.x + fwdY * eye.y + fwdZ * eye.z
+        // Row 2: back (camera looks along -Z)
+        data[2] = backX
+        data[6] = backY
+        data[10] = backZ
+        data[14] = -(backX * eye.x + backY * eye.y + backZ * eye.z)
 
         data[3] = 0f
         data[7] = 0f
