@@ -642,6 +642,157 @@ tasks.register("quickStart") {
     }
 }
 
+val benchmarkModuleTasks = listOf(
+    ":examples:triangle:benchmarkJvm",
+    ":examples:triangle:benchmarkWeb",
+    ":examples:triangle-android:benchmarkAndroid",
+    ":examples:embedding-galaxy:benchmarkJvm",
+    ":examples:embedding-galaxy:benchmarkWeb",
+    ":examples:embedding-galaxy-android:benchmarkAndroid",
+    ":examples:force-graph:benchmarkJvm",
+    ":examples:force-graph:benchmarkWeb",
+    ":examples:force-graph-android:benchmarkAndroid"
+)
+
+tasks.register("cleanBenchmarkData") {
+    group = "benchmark"
+    description = "Remove previously captured benchmark JSON artifacts"
+    notCompatibleWithConfigurationCache("Deletes hardware-generated benchmark artifacts")
+    doLast {
+        delete(fileTree("docs/benchmarks/data/raw") { include("*.json") })
+        delete(file("docs/benchmarks/data/latest.json"))
+    }
+}
+
+tasks.register("benchmarkTriangleJvm") {
+    group = "benchmark"
+    description = "Run the Triangle JVM benchmark"
+    dependsOn(":examples:triangle:benchmarkJvm")
+}
+
+tasks.register("benchmarkTriangleWeb") {
+    group = "benchmark"
+    description = "Run the Triangle Web benchmark"
+    dependsOn(":examples:triangle:benchmarkWeb")
+}
+
+tasks.register("benchmarkTriangleAndroid") {
+    group = "benchmark"
+    description = "Run the Triangle Android benchmark"
+    dependsOn(":examples:triangle-android:benchmarkAndroid")
+}
+
+tasks.register("benchmarkEmbeddingGalaxyJvm") {
+    group = "benchmark"
+    description = "Run the Embedding Galaxy JVM benchmark"
+    dependsOn(":examples:embedding-galaxy:benchmarkJvm")
+}
+
+tasks.register("benchmarkEmbeddingGalaxyWeb") {
+    group = "benchmark"
+    description = "Run the Embedding Galaxy Web benchmark"
+    dependsOn(":examples:embedding-galaxy:benchmarkWeb")
+}
+
+tasks.register("benchmarkEmbeddingGalaxyAndroid") {
+    group = "benchmark"
+    description = "Run the Embedding Galaxy Android benchmark"
+    dependsOn(":examples:embedding-galaxy-android:benchmarkAndroid")
+}
+
+tasks.register("benchmarkForceGraphJvm") {
+    group = "benchmark"
+    description = "Run the Force Graph JVM benchmark"
+    dependsOn(":examples:force-graph:benchmarkJvm")
+}
+
+tasks.register("benchmarkForceGraphWeb") {
+    group = "benchmark"
+    description = "Run the Force Graph Web benchmark"
+    dependsOn(":examples:force-graph:benchmarkWeb")
+}
+
+tasks.register("benchmarkForceGraphAndroid") {
+    group = "benchmark"
+    description = "Run the Force Graph Android benchmark"
+    dependsOn(":examples:force-graph-android:benchmarkAndroid")
+}
+
+tasks.register("benchmarkWebSmoke") {
+    group = "verification"
+    description = "Smoke-test Chrome benchmark automation"
+    dependsOn(":examples:triangle:benchmarkWebSmoke")
+}
+
+tasks.register("benchmarkAndroidSmoke") {
+    group = "verification"
+    description = "Smoke-test Android benchmark automation"
+    dependsOn(":examples:triangle-android:benchmarkAndroidSmoke")
+}
+
+tasks.register("generateBenchmarkSnapshot") {
+    group = "benchmark"
+    description = "Aggregate raw benchmark captures and refresh the README benchmark table"
+    dependsOn(":materia-examples-common:jvmJar")
+    notCompatibleWithConfigurationCache("Aggregates generated benchmark files and rewrites the README")
+
+    doLast {
+        val benchmarkCommonProject = project(":materia-examples-common")
+        val kotlinExtension = benchmarkCommonProject.extensions.getByType(
+            org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension::class.java
+        )
+        val jvmMainCompilation = kotlinExtension.jvm().compilations.getByName("main")
+
+        javaexec {
+            mainClass.set("io.materia.examples.benchmarks.BenchmarkSnapshotTool")
+            classpath = benchmarkCommonProject.files(
+                jvmMainCompilation.output.allOutputs,
+                jvmMainCompilation.runtimeDependencyFiles
+            )
+            args(
+                file("docs/benchmarks/data/raw").absolutePath,
+                file("docs/benchmarks/data/latest.json").absolutePath,
+                file("README.md").absolutePath
+            )
+        }
+    }
+}
+
+listOf(
+    "benchmarkTriangleJvm",
+    "benchmarkTriangleWeb",
+    "benchmarkTriangleAndroid",
+    "benchmarkEmbeddingGalaxyJvm",
+    "benchmarkEmbeddingGalaxyWeb",
+    "benchmarkEmbeddingGalaxyAndroid",
+    "benchmarkForceGraphJvm",
+    "benchmarkForceGraphWeb",
+    "benchmarkForceGraphAndroid"
+).forEach { taskName ->
+    tasks.named(taskName) {
+        mustRunAfter("cleanBenchmarkData")
+    }
+}
+
+tasks.register("benchmarkReadmeMatrix") {
+    group = "benchmark"
+    description = "Run the full 9-run benchmark matrix and publish the measured README table"
+    notCompatibleWithConfigurationCache("Coordinates hardware-bound benchmark tasks and snapshot publication")
+    dependsOn("cleanBenchmarkData")
+    dependsOn(
+        "benchmarkTriangleJvm",
+        "benchmarkTriangleWeb",
+        "benchmarkTriangleAndroid",
+        "benchmarkEmbeddingGalaxyJvm",
+        "benchmarkEmbeddingGalaxyWeb",
+        "benchmarkEmbeddingGalaxyAndroid",
+        "benchmarkForceGraphJvm",
+        "benchmarkForceGraphWeb",
+        "benchmarkForceGraphAndroid"
+    )
+    finalizedBy("generateBenchmarkSnapshot")
+}
+
 // Native tests disabled since native targets are not compiled
 // tasks.named("linuxX64Test") {
 //     enabled = false

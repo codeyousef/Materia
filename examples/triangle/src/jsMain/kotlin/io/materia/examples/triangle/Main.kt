@@ -1,5 +1,18 @@
 package io.materia.examples.triangle
 
+import io.materia.examples.benchmarks.BenchmarkCapture
+import io.materia.examples.benchmarks.BenchmarkDefaults
+import io.materia.examples.benchmarks.BenchmarkMemoryMetricKind
+import io.materia.examples.benchmarks.BenchmarkRecorder
+import io.materia.examples.benchmarks.BrowserBenchmarkParams
+import io.materia.examples.benchmarks.BrowserBenchmarkWatchdog
+import io.materia.examples.benchmarks.buildWebBenchmarkEnvironment
+import io.materia.examples.benchmarks.configureBenchmarkCanvas
+import io.materia.examples.benchmarks.currentJsHeapUsageSample
+import io.materia.examples.benchmarks.postBenchmarkCapture
+import io.materia.examples.benchmarks.postBenchmarkFailure
+import io.materia.examples.benchmarks.readBrowserBenchmarkParams
+import io.materia.examples.benchmarks.yieldBrowserFrame
 import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
@@ -13,6 +26,12 @@ private val console = js("console")
 fun main() {
     val scope = MainScope()
     scope.launch {
+        val benchmarkParams = readBrowserBenchmarkParams()
+        if (benchmarkParams != null) {
+            runTriangleBenchmark(benchmarkParams)
+            return@launch
+        }
+
         val canvas = ensureCanvas()
         
         // Ensure canvas has proper render dimensions (not just CSS size)
@@ -67,6 +86,85 @@ fun main() {
             result.renderFrame()
             null
         }
+    }
+}
+
+private suspend fun runTriangleBenchmark(params: BrowserBenchmarkParams) {
+    val canvas = ensureCanvas()
+    configureBenchmarkCanvas(canvas, params.runConfig)
+
+    runCatching {
+        val watchdog = BrowserBenchmarkWatchdog(
+            reportUrl = params.reportUrl,
+            scene = "Triangle",
+            maxDurationMs = params.maxDurationMs
+        )
+        watchdog.markStage("baseline_heap")
+        val (baselineHeapMb, memoryMetricKind) = currentJsHeapUsageSample()
+        val recorder = BenchmarkRecorder(
+            repeatIndex = params.repeatIndex,
+            baselineHeapMb = baselineHeapMb,
+            memoryMetricKind = memoryMetricKind,
+            notes = listOf("Direct render-loop timing")
+        )
+
+        val surface = WebGPUSurface(canvas)
+        watchdog.markStage("initialize_gpu_context")
+        val bootStart = window.performance.now()
+        initializeGpuContext(surface)
+        watchdog.markStage("boot_example")
+        val result = TriangleExample().boot(
+            renderSurface = surface,
+            widthOverride = params.runConfig.width,
+            heightOverride = params.runConfig.height
+        )
+        val bootToFirstFrameMs = window.performance.now() - bootStart
+
+        try {
+            watchdog.markStage("warmup_frames")
+            repeat(params.runConfig.warmupFrames) {
+                result.renderFrame()
+                recorder.observeHeapUsage(currentJsHeapUsageSample().first)
+                if ((it + 1) % 30 == 0) {
+                    yieldBrowserFrame()
+                }
+            }
+
+            watchdog.markStage("measured_frames")
+            repeat(params.runConfig.measuredFrames) {
+                val frameStart = window.performance.now()
+                result.renderFrame()
+                val frameTimeMs = window.performance.now() - frameStart
+                recorder.recordFrame(frameTimeMs, currentJsHeapUsageSample().first)
+                if ((it + 1) % 30 == 0) {
+                    yieldBrowserFrame()
+                }
+            }
+
+            watchdog.markStage("posting_results")
+            postBenchmarkCapture(
+                params.reportUrl,
+                BenchmarkCapture(
+                    workload = BenchmarkDefaults.triangleWorkload(params.runConfig),
+                    environment = buildWebBenchmarkEnvironment(
+                        backend = result.log.backend.name,
+                        deviceName = result.log.deviceName,
+                        driverVersion = result.log.driverVersion
+                    ),
+                    sample = recorder.build(bootToFirstFrameMs)
+                )
+            )
+            watchdog.complete()
+        } finally {
+            result.dispose()
+        }
+    }.onFailure { error ->
+        postBenchmarkFailure(
+            params.reportUrl,
+            scene = "Triangle",
+            message = error.message ?: error::class.simpleName ?: "Unknown benchmark failure"
+        )
+        throw error
     }
 }
 

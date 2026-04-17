@@ -1,5 +1,17 @@
 package io.materia.examples.embeddinggalaxy
 
+import io.materia.examples.benchmarks.BenchmarkCapture
+import io.materia.examples.benchmarks.BenchmarkDefaults
+import io.materia.examples.benchmarks.BenchmarkRecorder
+import io.materia.examples.benchmarks.BrowserBenchmarkParams
+import io.materia.examples.benchmarks.BrowserBenchmarkWatchdog
+import io.materia.examples.benchmarks.buildWebBenchmarkEnvironment
+import io.materia.examples.benchmarks.configureBenchmarkCanvas
+import io.materia.examples.benchmarks.currentJsHeapUsageSample
+import io.materia.examples.benchmarks.postBenchmarkCapture
+import io.materia.examples.benchmarks.postBenchmarkFailure
+import io.materia.examples.benchmarks.readBrowserBenchmarkParams
+import io.materia.examples.benchmarks.yieldBrowserFrame
 import io.materia.gpu.initializeGpuContext
 import io.materia.renderer.webgpu.WebGPUSurface
 import kotlinx.browser.document
@@ -18,6 +30,12 @@ private val scope = MainScope()
 
 fun main() {
     scope.launch {
+        val benchmarkParams = readBrowserBenchmarkParams()
+        if (benchmarkParams != null) {
+            runEmbeddingGalaxyBenchmark(benchmarkParams)
+            return@launch
+        }
+
         val canvas = ensureCanvas()
         
         // Use the canvas size as configured in ensureCanvas (DPR handled by canvas setup)
@@ -163,6 +181,90 @@ fun main() {
                 "f" -> runtime.toggleFxaa()
             }
         })
+    }
+}
+
+private suspend fun runEmbeddingGalaxyBenchmark(params: BrowserBenchmarkParams) {
+    val canvas = ensureCanvas()
+    configureBenchmarkCanvas(canvas, params.runConfig)
+
+    runCatching {
+        val watchdog = BrowserBenchmarkWatchdog(
+            reportUrl = params.reportUrl,
+            scene = "Embedding Galaxy",
+            maxDurationMs = params.maxDurationMs
+        )
+        watchdog.markStage("baseline_heap")
+        val (baselineHeapMb, memoryMetricKind) = currentJsHeapUsageSample()
+        val recorder = BenchmarkRecorder(
+            repeatIndex = params.repeatIndex,
+            baselineHeapMb = baselineHeapMb,
+            memoryMetricKind = memoryMetricKind,
+            notes = listOf("Direct render-loop timing", "Balanced quality locked", "Fixed 60 Hz simulation step")
+        )
+
+        val surface = WebGPUSurface(canvas)
+        watchdog.markStage("initialize_gpu_context")
+        val bootStart = window.performance.now()
+        initializeGpuContext(surface)
+        watchdog.markStage("boot_example")
+        val boot = EmbeddingGalaxyExample(
+            sceneConfig = EmbeddingGalaxyScene.Config(basePointCount = 20_000),
+            performanceProfile = PerformanceProfile.Web,
+            enableAutomaticQualityAdjustment = false
+        ).boot(
+            renderSurface = surface,
+            widthOverride = params.runConfig.width,
+            heightOverride = params.runConfig.height
+        )
+        val bootToFirstFrameMs = window.performance.now() - bootStart
+        boot.runtime.setQuality(EmbeddingGalaxyScene.Quality.Balanced)
+
+        try {
+            watchdog.markStage("warmup_frames")
+            repeat(params.runConfig.warmupFrames) {
+                boot.runtime.frame(1f / 60f)
+                recorder.observeHeapUsage(currentJsHeapUsageSample().first)
+                if ((it + 1) % 30 == 0) {
+                    yieldBrowserFrame()
+                }
+            }
+
+            watchdog.markStage("measured_frames")
+            repeat(params.runConfig.measuredFrames) {
+                val frameStart = window.performance.now()
+                boot.runtime.frame(1f / 60f)
+                val frameTimeMs = window.performance.now() - frameStart
+                recorder.recordFrame(frameTimeMs, currentJsHeapUsageSample().first)
+                if ((it + 1) % 30 == 0) {
+                    yieldBrowserFrame()
+                }
+            }
+
+            watchdog.markStage("posting_results")
+            postBenchmarkCapture(
+                params.reportUrl,
+                BenchmarkCapture(
+                    workload = BenchmarkDefaults.embeddingGalaxyWorkload(params.runConfig),
+                    environment = buildWebBenchmarkEnvironment(
+                        backend = boot.log.backend.name,
+                        deviceName = boot.log.deviceName,
+                        driverVersion = boot.log.driverVersion
+                    ),
+                    sample = recorder.build(bootToFirstFrameMs)
+                )
+            )
+            watchdog.complete()
+        } finally {
+            boot.runtime.dispose()
+        }
+    }.onFailure { error ->
+        postBenchmarkFailure(
+            params.reportUrl,
+            scene = "Embedding Galaxy",
+            message = error.message ?: error::class.simpleName ?: "Unknown benchmark failure"
+        )
+        throw error
     }
 }
 

@@ -56,6 +56,13 @@ kotlin {
             }
         }
 
+        val jsMain by getting {
+            dependencies {
+                implementation(libs.kotlinx.browser)
+                implementation(libs.kotlinx.coroutines.core)
+            }
+        }
+
         val androidMain by getting {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)

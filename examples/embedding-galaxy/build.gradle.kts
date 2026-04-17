@@ -49,6 +49,7 @@ kotlin {
             dependencies {
                 implementation(project(":materia-gpu"))
                 implementation(project(":materia-engine"))
+                implementation(project(":materia-examples-common"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(project(":"))
@@ -182,6 +183,56 @@ tasks.register<JavaExec>("runJvm") {
         println("🚀 Launching Embedding Galaxy on JVM")
         println("Bootstrapping EngineRenderer + instanced galaxy scene…")
     }
+}
+
+tasks.register<JavaExec>("benchmarkJvm") {
+    group = "benchmark"
+    description = "Run measured JVM benchmark captures for the Embedding Galaxy example"
+
+    val jvmMain = kotlin.targets.getByName("jvm").compilations.getByName("main")
+    dependsOn(jvmMain.compileKotlinTaskName)
+
+    mainClass.set("io.materia.examples.embeddinggalaxy.EmbeddingGalaxyBenchmarkKt")
+    classpath = files(
+        jvmMain.output.allOutputs,
+        configurations.named("jvmRuntimeClasspath")
+    )
+    args(rootProject.file("docs/benchmarks/data/raw").absolutePath)
+    jvmArgs(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx2G",
+        "-XX:+UseG1GC"
+    )
+
+    val java22Home = file("/usr/lib/jvm/java-22-openjdk")
+    if (java22Home.exists()) {
+        executable = file("$java22Home/bin/java").absolutePath
+    }
+
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("linux")) {
+        val jemallocPath = "/usr/lib/libjemalloc.so"
+        if (file(jemallocPath).exists()) {
+            environment("LD_PRELOAD", jemallocPath)
+        }
+    }
+}
+
+tasks.register<Exec>("benchmarkWeb") {
+    group = "benchmark"
+    description = "Run measured Web benchmark captures for the Embedding Galaxy example"
+    dependsOn("jsBrowserProductionWebpack")
+    notCompatibleWithConfigurationCache("Launches Chrome and a local benchmark server")
+    doNotTrackState("Hardware-bound benchmark automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_web_benchmark.mjs").absolutePath,
+        "--dist-dir", layout.buildDirectory.get().asFile.absolutePath,
+        "--raw-dir", rootProject.file("docs/benchmarks/data/raw").absolutePath,
+        "--scene", "embedding-galaxy",
+        "--page", "benchmark.html"
+    )
 }
 
 tasks.register("run") {

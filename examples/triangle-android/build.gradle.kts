@@ -151,6 +151,48 @@ tasks.register("runAndroid") {
     }
 }
 
+tasks.register<Exec>("benchmarkAndroid") {
+    group = "benchmark"
+    description = "Run measured Android benchmark captures for the Triangle example"
+    dependsOn("assembleDebug")
+    notCompatibleWithConfigurationCache("Launches adb/emulator automation")
+    doNotTrackState("Hardware-bound benchmark automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_android_benchmark.mjs").absolutePath,
+        "--adb", "/home/yousef/Android/Sdk/platform-tools/adb",
+        "--emulator", "/home/yousef/Android/Sdk/emulator/emulator",
+        "--avd", "Pixel_9_Pro",
+        "--apk", layout.buildDirectory.file("outputs/apk/debug/${project.name}-debug.apk").get().asFile.absolutePath,
+        "--package", "io.materia.examples.triangle.android",
+        "--component", "io.materia.examples.triangle.android/.TriangleActivity",
+        "--raw-dir", rootProject.file("docs/benchmarks/data/raw").absolutePath,
+        "--scene", "triangle"
+    )
+}
+
+tasks.register<Exec>("benchmarkAndroidSmoke") {
+    group = "verification"
+    description = "Smoke-test Android benchmark automation for the Triangle example"
+    dependsOn("assembleDebug")
+    notCompatibleWithConfigurationCache("Launches adb/emulator automation")
+    doNotTrackState("Hardware-bound smoke automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_android_benchmark.mjs").absolutePath,
+        "--adb", "/home/yousef/Android/Sdk/platform-tools/adb",
+        "--emulator", "/home/yousef/Android/Sdk/emulator/emulator",
+        "--avd", "Pixel_9_Pro",
+        "--apk", layout.buildDirectory.file("outputs/apk/debug/${project.name}-debug.apk").get().asFile.absolutePath,
+        "--package", "io.materia.examples.triangle.android",
+        "--component", "io.materia.examples.triangle.android/.TriangleActivity",
+        "--raw-dir", rootProject.file("build/tmp/benchmark-smoke").absolutePath,
+        "--scene", "triangle-smoke",
+        "--repeat-count", "1",
+        "--timeout-ms", "180000"
+    )
+}
+
 tasks.register("smokeAndroid") {
     group = "verification"
     description = "Install, launch, and verify the Triangle Android demo boot log on a connected device or emulator"

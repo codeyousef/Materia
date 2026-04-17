@@ -10,8 +10,16 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import io.materia.examples.benchmarks.AndroidBenchmarkSession
+import io.materia.examples.benchmarks.BenchmarkDefaults
+import io.materia.examples.benchmarks.buildAndroidBenchmarkEnvironment
+import io.materia.examples.benchmarks.currentAndroidAppHeapEstimateMb
+import io.materia.examples.benchmarks.emitAndroidBenchmarkCapture
+import io.materia.examples.benchmarks.emitAndroidBenchmarkFailure
+import io.materia.examples.benchmarks.readAndroidBenchmarkLaunch
 import io.materia.examples.forcegraph.ForceGraphBootResult
 import io.materia.examples.forcegraph.ForceGraphExample
+import io.materia.examples.forcegraph.ForceGraphScene
 import io.materia.gpu.AndroidVulkanAssets
 import io.materia.gpu.GpuBackend
 import io.materia.io.AndroidResourceLoader
@@ -32,21 +40,35 @@ class ForceGraphActivity : ComponentActivity() {
     private lateinit var surfaceView: SurfaceView
     private lateinit var overlayView: TextView
 
-    private val example = ForceGraphExample(
-        preferredBackends = listOf(GpuBackend.VULKAN)
-    )
+    private val benchmarkLaunch by lazy(LazyThreadSafetyMode.NONE) {
+        readAndroidBenchmarkLaunch(intent)
+    }
+    private val example by lazy(LazyThreadSafetyMode.NONE) {
+        ForceGraphExample(
+            sceneConfig = ForceGraphScene.Config(nodeCount = 2_500, edgeCount = 7_500),
+            preferredBackends = listOf(GpuBackend.VULKAN)
+        )
+    }
 
     private var bootResult: ForceGraphBootResult? = null
     private var frameCallback: Choreographer.FrameCallback? = null
     private var lastFrameTimeNs: Long = 0L
     private var overlayFrameCounter = 0
     private var headlessFallbackShown = false
+    private var benchmarkBootStartNanos: Long = 0L
+    private var benchmarkBaselineHeapMb: Double? = null
+    private var benchmarkSession: AndroidBenchmarkSession? = null
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             if (!AndroidVulkanAssets.hasVulkanSupport()) {
                 val message = buildMissingSupportMessage("Force Graph")
-                Log.w(TAG, "Vulkan not advertised; falling back headless")
+                Log.w(TAG, "Vulkan not advertised; renderer unavailable")
+                if (benchmarkLaunch != null) {
+                    emitAndroidBenchmarkFailure("Force Graph", message)
+                    finish()
+                    return
+                }
                 overlayView.text = message
                 launchHeadlessFallback(message)
                 return
@@ -82,11 +104,16 @@ class ForceGraphActivity : ComponentActivity() {
             stopRenderLoop()
             bootResult?.runtime?.dispose()
             bootResult = null
+            benchmarkSession = null
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (benchmarkLaunch != null) {
+            benchmarkBootStartNanos = System.nanoTime()
+            benchmarkBaselineHeapMb = currentAndroidAppHeapEstimateMb()
+        }
         AndroidVulkanAssets.initialise(applicationContext)
         AndroidResourceLoader.initialise(assets)
 
@@ -128,6 +155,7 @@ class ForceGraphActivity : ComponentActivity() {
         stopRenderLoop()
         bootResult?.runtime?.dispose()
         bootResult = null
+        benchmarkSession = null
         super.onDestroy()
     }
 
@@ -150,16 +178,28 @@ class ForceGraphActivity : ComponentActivity() {
             result.onSuccess { boot ->
                 Log.i(TAG, "Renderer boot succeeded: backend=${boot.log.backend}, device=${boot.log.deviceName}")
                 bootResult = boot
-                overlayView.text = boot.log.pretty()
+                overlayView.text = if (benchmarkLaunch == null) {
+                    boot.log.pretty()
+                } else {
+                    "Running Force Graph benchmark…"
+                }
                 boot.runtime.resize(
                     surfaceView.width.takeIf { it > 0 } ?: 1280,
                     surfaceView.height.takeIf { it > 0 } ?: 720
                 )
+                if (benchmarkLaunch != null) {
+                    boot.runtime.setMode(ForceGraphScene.Mode.TfIdf)
+                }
                 startRenderLoop()
             }.onFailure { error ->
                 Log.e(TAG, "Renderer bootstrap failed", error)
                 if (error is CancellationException && error !is TimeoutCancellationException) throw error
                 val failureMessage = buildFailureMessage("Force Graph", error)
+                if (benchmarkLaunch != null) {
+                    emitAndroidBenchmarkFailure("Force Graph", failureMessage, error)
+                    finish()
+                    return@launch
+                }
                 overlayView.text = failureMessage
                 launchHeadlessFallback(failureMessage)
             }
@@ -187,9 +227,43 @@ class ForceGraphActivity : ComponentActivity() {
                 lastFrameTimeNs = frameTimeNanos
 
                 boot.runtime.frame(deltaSeconds)
-                overlayFrameCounter++
-                if (overlayFrameCounter % 20 == 0) {
-                    updateOverlay(boot)
+                val benchmark = benchmarkLaunch
+                if (benchmark != null) {
+                    val activeSession = benchmarkSession
+                    if (activeSession == null) {
+                        benchmarkSession = AndroidBenchmarkSession(
+                            repeatIndex = benchmark.repeatIndex,
+                            workload = BenchmarkDefaults.forceGraphWorkload(benchmark.runConfig),
+                            environment = buildAndroidBenchmarkEnvironment(
+                                backend = boot.log.backend.name,
+                                deviceName = boot.log.deviceName,
+                                driverVersion = boot.log.driverVersion,
+                                avdName = benchmark.avdName,
+                                notes = listOf("Vulkan path", "Default mode is TF-IDF")
+                            ),
+                            baselineHeapMb = benchmarkBaselineHeapMb,
+                            bootToFirstFrameMs = (System.nanoTime() - benchmarkBootStartNanos) / 1_000_000.0,
+                            sampleNotes = listOf("Choreographer cadence", "Default mode is TF-IDF")
+                        )
+                        lastFrameTimeNs = frameTimeNanos
+                        choreographer.postFrameCallback(this)
+                        return
+                    }
+
+                    val capture = activeSession.onFrame(deltaSeconds * 1000.0)
+                    if (capture != null) {
+                        emitAndroidBenchmarkCapture(capture)
+                        stopRenderLoop()
+                        boot.runtime.dispose()
+                        bootResult = null
+                        finish()
+                        return
+                    }
+                } else {
+                    overlayFrameCounter++
+                    if (overlayFrameCounter % 20 == 0) {
+                        updateOverlay(boot)
+                    }
                 }
 
                 choreographer.postFrameCallback(this)

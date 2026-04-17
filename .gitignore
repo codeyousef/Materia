@@ -70,6 +70,11 @@ local.properties
 build_output.log
 log.md
 
+# ----- Benchmark Artifacts -----
+# Published benchmark captures under docs/benchmarks/data/ are intentionally versioned.
+# Local smoke outputs stay under build/, but this keeps the benchmark scratch path explicit.
+build/tmp/benchmark-smoke/
+
 # ----- Debug Artifacts -----
 debug_*.png
 *.hprof

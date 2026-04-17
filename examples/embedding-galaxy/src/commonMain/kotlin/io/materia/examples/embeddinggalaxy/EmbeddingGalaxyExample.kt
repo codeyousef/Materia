@@ -112,7 +112,8 @@ class EmbeddingGalaxyExample(
     private val preferredBackends: List<GpuBackend> = listOf(GpuBackend.WEBGPU, GpuBackend.VULKAN),
     private val powerPreference: GpuPowerPreference = GpuPowerPreference.HIGH_PERFORMANCE,
     private val enableFxaa: Boolean = false,  // Disabled to debug viewport issue
-    private val performanceProfile: PerformanceProfile = PerformanceProfile.Desktop
+    private val performanceProfile: PerformanceProfile = PerformanceProfile.Desktop,
+    private val enableAutomaticQualityAdjustment: Boolean = true
 ) {
 
     suspend fun boot(
@@ -137,7 +138,13 @@ class EmbeddingGalaxyExample(
             )
             return EmbeddingGalaxyBootResult(
                 log,
-                EmbeddingGalaxyRuntime(null, scene, enableFxaa, performanceProfile)
+                EmbeddingGalaxyRuntime(
+                    renderer = null,
+                    scene = scene,
+                    fxaaDefault = enableFxaa,
+                    performanceProfile = performanceProfile,
+                    enableAutomaticQualityAdjustment = enableAutomaticQualityAdjustment
+                )
             )
         }
 
@@ -185,7 +192,13 @@ class EmbeddingGalaxyExample(
         )
         return EmbeddingGalaxyBootResult(
             log,
-            EmbeddingGalaxyRuntime(renderer, scene, renderer.fxaaEnabled, performanceProfile)
+            EmbeddingGalaxyRuntime(
+                renderer = renderer,
+                scene = scene,
+                fxaaDefault = renderer.fxaaEnabled,
+                performanceProfile = performanceProfile,
+                enableAutomaticQualityAdjustment = enableAutomaticQualityAdjustment
+            )
         )
     }
 }
@@ -244,7 +257,8 @@ class EmbeddingGalaxyRuntime(
     private val renderer: EngineRenderer?,
     val scene: EmbeddingGalaxyScene,
     fxaaDefault: Boolean,
-    private val performanceProfile: PerformanceProfile
+    private val performanceProfile: PerformanceProfile,
+    private val enableAutomaticQualityAdjustment: Boolean
 ) {
     private var headlessFxaaEnabled = fxaaDefault
     private val performanceGovernor = PerformanceGovernor(performanceProfile)
@@ -308,6 +322,7 @@ class EmbeddingGalaxyRuntime(
     val quality: EmbeddingGalaxyScene.Quality get() = scene.quality
 
     private fun handlePerformance(frameTime: Double) {
+        if (!enableAutomaticQualityAdjustment) return
         val adjustment = performanceGovernor.record(frameTime, scene.quality) ?: return
         scene.setQuality(adjustment)
     }

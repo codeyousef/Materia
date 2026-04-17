@@ -12,6 +12,13 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import io.materia.examples.benchmarks.AndroidBenchmarkSession
+import io.materia.examples.benchmarks.BenchmarkDefaults
+import io.materia.examples.benchmarks.buildAndroidBenchmarkEnvironment
+import io.materia.examples.benchmarks.currentAndroidAppHeapEstimateMb
+import io.materia.examples.benchmarks.emitAndroidBenchmarkCapture
+import io.materia.examples.benchmarks.emitAndroidBenchmarkFailure
+import io.materia.examples.benchmarks.readAndroidBenchmarkLaunch
 import io.materia.examples.triangle.TriangleExample
 import io.materia.gpu.AndroidVulkanAssets
 import io.materia.gpu.GpuBackend
@@ -37,10 +44,18 @@ class TriangleActivity : ComponentActivity() {
         preferredBackends = listOf(GpuBackend.VULKAN),
         powerPreference = GpuPowerPreference.HIGH_PERFORMANCE
     )
+    private var benchmarkBootStartNanos: Long = 0L
+    private var benchmarkBaselineHeapMb: Double? = null
+    private var benchmarkSession: AndroidBenchmarkSession? = null
 
     private var triangleRuntime: DirectFilamentTriangleRuntime? = null
     private var frameCallback: Choreographer.FrameCallback? = null
+    private var lastFrameTimeNs: Long = 0L
     private var headlessFallbackShown = false
+
+    private val benchmarkLaunch by lazy(LazyThreadSafetyMode.NONE) {
+        readAndroidBenchmarkLaunch(intent)
+    }
 
     private val holderCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
@@ -57,11 +72,17 @@ class TriangleActivity : ComponentActivity() {
             stopRenderLoop()
             triangleRuntime?.dispose()
             triangleRuntime = null
+            benchmarkSession = null
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (benchmarkLaunch != null) {
+            benchmarkBootStartNanos = System.nanoTime()
+            benchmarkBaselineHeapMb = currentAndroidAppHeapEstimateMb()
+        }
 
         AndroidVulkanAssets.initialise(applicationContext)
         AndroidResourceLoader.initialise(assets)
@@ -105,6 +126,7 @@ class TriangleActivity : ComponentActivity() {
         stopRenderLoop()
         triangleRuntime?.dispose()
         triangleRuntime = null
+        benchmarkSession = null
         super.onDestroy()
     }
 
@@ -117,7 +139,11 @@ class TriangleActivity : ComponentActivity() {
             DirectFilamentTriangleRuntime(surfaceView).also { runtime ->
                 runtime.initialize()
                 triangleRuntime = runtime
-                overlayView.text = runtime.buildOverlayText()
+                overlayView.text = if (benchmarkLaunch == null) {
+                    runtime.buildOverlayText()
+                } else {
+                    "Running Triangle benchmark…"
+                }
                 Log.i(TAG, "Renderer boot succeeded: backend=${runtime.backendName}, device=${runtime.deviceName}")
                 startRenderLoop()
             }
@@ -125,6 +151,11 @@ class TriangleActivity : ComponentActivity() {
             Log.e(TAG, "Renderer bootstrap failed", error)
             if (error is CancellationException && error !is TimeoutCancellationException) throw error
             val failureMessage = buildFailureMessage("Triangle", error)
+            if (benchmarkLaunch != null) {
+                emitAndroidBenchmarkFailure("Triangle", failureMessage, error)
+                finish()
+                return
+            }
             overlayView.text = failureMessage
             launchHeadlessFallback(failureMessage)
         }
@@ -133,9 +164,52 @@ class TriangleActivity : ComponentActivity() {
     private fun startRenderLoop() {
         if (frameCallback != null) return
         val choreographer = Choreographer.getInstance()
+        lastFrameTimeNs = System.nanoTime()
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
-                triangleRuntime?.renderFrame(frameTimeNanos)
+                val runtime = triangleRuntime ?: return
+                runtime.renderFrame(frameTimeNanos)
+
+                val benchmark = benchmarkLaunch
+                if (benchmark != null) {
+                    if (!runtime.isReadyToRender) {
+                        choreographer.postFrameCallback(this)
+                        return
+                    }
+
+                    val activeSession = benchmarkSession
+                    if (activeSession == null) {
+                        benchmarkSession = AndroidBenchmarkSession(
+                            repeatIndex = benchmark.repeatIndex,
+                            workload = BenchmarkDefaults.triangleWorkload(benchmark.runConfig),
+                            environment = buildAndroidBenchmarkEnvironment(
+                                backend = runtime.backendName,
+                                deviceName = runtime.deviceName,
+                                driverVersion = runtime.driverVersion,
+                                avdName = benchmark.avdName,
+                                notes = listOf("Filament OpenGL path", "Host-GPU-assisted")
+                            ),
+                            baselineHeapMb = benchmarkBaselineHeapMb,
+                            bootToFirstFrameMs = (System.nanoTime() - benchmarkBootStartNanos) / 1_000_000.0,
+                            sampleNotes = listOf("Choreographer cadence")
+                        )
+                        lastFrameTimeNs = frameTimeNanos
+                        choreographer.postFrameCallback(this)
+                        return
+                    }
+
+                    val frameTimeMs = ((frameTimeNanos - lastFrameTimeNs) / 1_000_000.0).coerceAtLeast(0.0)
+                    lastFrameTimeNs = frameTimeNanos
+                    val capture = activeSession.onFrame(frameTimeMs)
+                    if (capture != null) {
+                        emitAndroidBenchmarkCapture(capture)
+                        stopRenderLoop()
+                        runtime.dispose()
+                        triangleRuntime = null
+                        finish()
+                        return
+                    }
+                }
                 choreographer.postFrameCallback(this)
             }
         }

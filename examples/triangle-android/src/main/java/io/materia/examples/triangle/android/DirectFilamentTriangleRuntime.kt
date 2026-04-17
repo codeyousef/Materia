@@ -69,6 +69,9 @@ internal class DirectFilamentTriangleRuntime(
     val driverVersion: String
         get() = "Filament ${backend.name}"
 
+    val isReadyToRender: Boolean
+        get() = initialized && uiHelper.isReadyToRender && swapChain != null
+
     fun initialize() {
         if (initialized) return
 

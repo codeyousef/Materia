@@ -11,8 +11,16 @@ import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import io.materia.engine.render.UnlitPipelineFactory
+import io.materia.examples.benchmarks.AndroidBenchmarkSession
+import io.materia.examples.benchmarks.BenchmarkDefaults
+import io.materia.examples.benchmarks.buildAndroidBenchmarkEnvironment
+import io.materia.examples.benchmarks.currentAndroidAppHeapEstimateMb
+import io.materia.examples.benchmarks.emitAndroidBenchmarkCapture
+import io.materia.examples.benchmarks.emitAndroidBenchmarkFailure
+import io.materia.examples.benchmarks.readAndroidBenchmarkLaunch
 import io.materia.examples.embeddinggalaxy.EmbeddingGalaxyBootResult
 import io.materia.examples.embeddinggalaxy.EmbeddingGalaxyExample
+import io.materia.examples.embeddinggalaxy.EmbeddingGalaxyScene
 import io.materia.examples.embeddinggalaxy.PerformanceProfile
 import io.materia.gpu.AndroidVulkanAssets
 import io.materia.gpu.GpuBackend
@@ -38,10 +46,17 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
     private lateinit var surfaceView: SurfaceView
     private lateinit var overlayView: TextView
 
-    private val example = EmbeddingGalaxyExample(
-        preferredBackends = listOf(GpuBackend.VULKAN),
-        performanceProfile = PerformanceProfile.Mobile
-    )
+    private val benchmarkLaunch by lazy(LazyThreadSafetyMode.NONE) {
+        readAndroidBenchmarkLaunch(intent)
+    }
+    private val example by lazy(LazyThreadSafetyMode.NONE) {
+        EmbeddingGalaxyExample(
+            sceneConfig = EmbeddingGalaxyScene.Config(basePointCount = 20_000),
+            preferredBackends = listOf(GpuBackend.VULKAN),
+            performanceProfile = PerformanceProfile.Mobile,
+            enableAutomaticQualityAdjustment = benchmarkLaunch == null
+        )
+    }
 
     private var bootResult: EmbeddingGalaxyBootResult? = null
     private var bootJob: Job? = null
@@ -51,12 +66,20 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
     private var lastFrameTimeNs: Long = 0L
     private var overlayFrameCounter = 0
     private var headlessFallbackShown = false
+    private var benchmarkBootStartNanos: Long = 0L
+    private var benchmarkBaselineHeapMb: Double? = null
+    private var benchmarkSession: AndroidBenchmarkSession? = null
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             if (!AndroidVulkanAssets.hasVulkanSupport()) {
                 val message = buildMissingSupportMessage("Embedding Galaxy")
-                Log.w(TAG, "Vulkan not advertised; falling back headless")
+                Log.w(TAG, "Vulkan not advertised; renderer unavailable")
+                if (benchmarkLaunch != null) {
+                    emitAndroidBenchmarkFailure("Embedding Galaxy", message)
+                    finish()
+                    return
+                }
                 overlayView.text = message
                 launchHeadlessFallback(message)
                 return
@@ -109,11 +132,17 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
             bootJob = null
             bootTimeoutJob?.cancel()
             bootTimeoutJob = null
+            benchmarkSession = null
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (benchmarkLaunch != null) {
+            benchmarkBootStartNanos = System.nanoTime()
+            benchmarkBaselineHeapMb = currentAndroidAppHeapEstimateMb()
+        }
         
         // Enable quad-based point rendering fallback for Android
         // This is needed because some Android devices/emulators don't support
@@ -165,6 +194,7 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
         bootJob = null
         bootTimeoutJob?.cancel()
         bootTimeoutJob = null
+        benchmarkSession = null
         super.onDestroy()
     }
 
@@ -200,11 +230,18 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
                 bootTimeoutJob?.cancel()
                 Log.i(TAG, "Renderer boot succeeded: backend=${boot.log.backend}, device=${boot.log.deviceName}")
                 bootResult = boot
-                overlayView.text = boot.log.pretty()
+                overlayView.text = if (benchmarkLaunch == null) {
+                    boot.log.pretty()
+                } else {
+                    "Running Embedding Galaxy benchmark…"
+                }
                 boot.runtime.resize(
                     surfaceView.width.takeIf { it > 0 } ?: 1280,
                     surfaceView.height.takeIf { it > 0 } ?: 720
                 )
+                if (benchmarkLaunch != null) {
+                    boot.runtime.setQuality(EmbeddingGalaxyScene.Quality.Balanced)
+                }
                 Log.d(
                     TAG,
                     "Renderer resized to ${surfaceView.width}x${surfaceView.height}; starting render loop"
@@ -219,6 +256,11 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
                 Log.e(TAG, "Renderer bootstrap failed", error)
                 if (error is CancellationException && error !is TimeoutCancellationException) throw error
                 val failureMessage = buildFailureMessage("Embedding Galaxy", error)
+                if (benchmarkLaunch != null) {
+                    emitAndroidBenchmarkFailure("Embedding Galaxy", failureMessage, error)
+                    finish()
+                    return@launch
+                }
                 overlayView.text = failureMessage
                 launchHeadlessFallback(failureMessage)
             }
@@ -233,6 +275,13 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
             if (bootResult == null && !headlessFallbackShown) {
                 bootAbandoned = true
                 val timeoutMessage = buildTimeoutMessage("Embedding Galaxy")
+                if (benchmarkLaunch != null) {
+                    Log.w(TAG, "Renderer boot timed out during benchmark mode")
+                    emitAndroidBenchmarkFailure("Embedding Galaxy", timeoutMessage)
+                    bootJob?.cancel()
+                    finish()
+                    return@launch
+                }
                 Log.w(TAG, "Renderer boot timed out; switching to headless fallback")
                 overlayView.text = timeoutMessage
                 stopRenderLoop()
@@ -266,9 +315,43 @@ class EmbeddingGalaxyActivity : ComponentActivity() {
                 lastFrameTimeNs = frameTimeNanos
 
                 boot.runtime.frame(deltaSeconds)
-                overlayFrameCounter++
-                if (overlayFrameCounter % 20 == 0) {
-                    updateOverlay(boot)
+                val benchmark = benchmarkLaunch
+                if (benchmark != null) {
+                    val activeSession = benchmarkSession
+                    if (activeSession == null) {
+                        benchmarkSession = AndroidBenchmarkSession(
+                            repeatIndex = benchmark.repeatIndex,
+                            workload = BenchmarkDefaults.embeddingGalaxyWorkload(benchmark.runConfig),
+                            environment = buildAndroidBenchmarkEnvironment(
+                                backend = boot.log.backend.name,
+                                deviceName = boot.log.deviceName,
+                                driverVersion = boot.log.driverVersion,
+                                avdName = benchmark.avdName,
+                                notes = listOf("Vulkan path", "Balanced quality locked")
+                            ),
+                            baselineHeapMb = benchmarkBaselineHeapMb,
+                            bootToFirstFrameMs = (System.nanoTime() - benchmarkBootStartNanos) / 1_000_000.0,
+                            sampleNotes = listOf("Choreographer cadence", "Balanced quality locked")
+                        )
+                        lastFrameTimeNs = frameTimeNanos
+                        choreographer.postFrameCallback(this)
+                        return
+                    }
+
+                    val capture = activeSession.onFrame(deltaSeconds * 1000.0)
+                    if (capture != null) {
+                        emitAndroidBenchmarkCapture(capture)
+                        stopRenderLoop()
+                        boot.runtime.dispose()
+                        bootResult = null
+                        finish()
+                        return
+                    }
+                } else {
+                    overlayFrameCounter++
+                    if (overlayFrameCounter % 20 == 0) {
+                        updateOverlay(boot)
+                    }
                 }
 
                 choreographer.postFrameCallback(this)

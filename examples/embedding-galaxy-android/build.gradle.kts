@@ -120,3 +120,23 @@ tasks.register("runAndroid") {
         }
     }
 }
+
+tasks.register<Exec>("benchmarkAndroid") {
+    group = "benchmark"
+    description = "Run measured Android benchmark captures for the Embedding Galaxy example"
+    dependsOn("assembleDebug")
+    notCompatibleWithConfigurationCache("Launches adb/emulator automation")
+    doNotTrackState("Hardware-bound benchmark automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_android_benchmark.mjs").absolutePath,
+        "--adb", "/home/yousef/Android/Sdk/platform-tools/adb",
+        "--emulator", "/home/yousef/Android/Sdk/emulator/emulator",
+        "--avd", "Pixel_9_Pro",
+        "--apk", layout.buildDirectory.file("outputs/apk/debug/${project.name}-debug.apk").get().asFile.absolutePath,
+        "--package", "io.materia.examples.embeddinggalaxy.android",
+        "--component", "io.materia.examples.embeddinggalaxy.android/.EmbeddingGalaxyActivity",
+        "--raw-dir", rootProject.file("docs/benchmarks/data/raw").absolutePath,
+        "--scene", "embedding-galaxy"
+    )
+}

@@ -73,6 +73,7 @@ kotlin {
             dependencies {
                 api(project(":materia-gpu"))
                 api(project(":materia-engine"))
+                implementation(project(":materia-examples-common"))
                 implementation(libs.kotlinx.coroutines.core)
                 api(project(":"))
             }
@@ -232,6 +233,74 @@ tasks.register<JavaExec>("runJvm") {
         println("🎮 Starting Materia Triangle Example (JVM)")
         println("Bootstrapping GPU abstraction for MVP triangle")
     }
+}
+
+tasks.register<JavaExec>("benchmarkJvm") {
+    group = "benchmark"
+    description = "Run measured JVM benchmark captures for the Triangle example"
+
+    val jvmMainCompilation = kotlin.jvm().compilations.getByName("main")
+    dependsOn("jvmMainClasses")
+
+    mainClass.set("io.materia.examples.triangle.TriangleBenchmarkKt")
+    classpath = files(
+        jvmMainCompilation.output.allOutputs,
+        jvmMainCompilation.runtimeDependencyFiles
+    )
+    args(rootProject.file("docs/benchmarks/data/raw").absolutePath)
+    jvmArgs(
+        "-Dorg.lwjgl.system.stackSize=8192",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xmx2G",
+        "-XX:+UseG1GC"
+    )
+
+    val java22Home = file("/usr/lib/jvm/java-22-openjdk")
+    if (java22Home.exists()) {
+        executable = file("$java22Home/bin/java").absolutePath
+    }
+
+    val osName = System.getProperty("os.name").lowercase()
+    if (osName.contains("linux")) {
+        val jemallocPath = "/usr/lib/libjemalloc.so"
+        if (file(jemallocPath).exists()) {
+            environment("LD_PRELOAD", jemallocPath)
+        }
+    }
+}
+
+tasks.register<Exec>("benchmarkWeb") {
+    group = "benchmark"
+    description = "Run measured Web benchmark captures for the Triangle example"
+    dependsOn("jsBrowserProductionWebpack")
+    notCompatibleWithConfigurationCache("Launches Chrome and a local benchmark server")
+    doNotTrackState("Hardware-bound benchmark automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_web_benchmark.mjs").absolutePath,
+        "--dist-dir", layout.buildDirectory.get().asFile.absolutePath,
+        "--raw-dir", rootProject.file("docs/benchmarks/data/raw").absolutePath,
+        "--scene", "triangle",
+        "--page", "benchmark.html"
+    )
+}
+
+tasks.register<Exec>("benchmarkWebSmoke") {
+    group = "verification"
+    description = "Smoke-test Chrome benchmark automation for the Triangle example"
+    dependsOn("jsBrowserProductionWebpack")
+    notCompatibleWithConfigurationCache("Launches Chrome and a local benchmark server")
+    doNotTrackState("Hardware-bound smoke automation")
+    commandLine(
+        "node",
+        rootProject.file("scripts/benchmarks/run_web_benchmark.mjs").absolutePath,
+        "--dist-dir", layout.buildDirectory.get().asFile.absolutePath,
+        "--raw-dir", rootProject.file("build/tmp/benchmark-smoke").absolutePath,
+        "--scene", "triangle-smoke",
+        "--repeat-count", "1",
+        "--timeout-ms", "120000",
+        "--page", "benchmark.html"
+    )
 }
 
 tasks.register("run") {
