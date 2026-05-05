@@ -15,10 +15,13 @@ import io.materia.points.Points
 import io.materia.points.PointsMaterial
 import io.materia.renderer.*
 import io.materia.texture.Data3DTexture
+import io.materia.texture.Texture2D
 import io.materia.texture.VolumeTextureSampler
 import kotlinx.browser.window
 import org.khronos.webgl.*
 import org.khronos.webgl.WebGLRenderingContext.Companion.ARRAY_BUFFER
+import org.khronos.webgl.WebGLRenderingContext.Companion.BLEND
+import org.khronos.webgl.WebGLRenderingContext.Companion.CLAMP_TO_EDGE
 import org.khronos.webgl.WebGLRenderingContext.Companion.COLOR_BUFFER_BIT
 import org.khronos.webgl.WebGLRenderingContext.Companion.COMPILE_STATUS
 import org.khronos.webgl.WebGLRenderingContext.Companion.DEPTH_BUFFER_BIT
@@ -26,15 +29,35 @@ import org.khronos.webgl.WebGLRenderingContext.Companion.DEPTH_TEST
 import org.khronos.webgl.WebGLRenderingContext.Companion.ELEMENT_ARRAY_BUFFER
 import org.khronos.webgl.WebGLRenderingContext.Companion.FLOAT
 import org.khronos.webgl.WebGLRenderingContext.Companion.FRAGMENT_SHADER
+import org.khronos.webgl.WebGLRenderingContext.Companion.LINEAR
+import org.khronos.webgl.WebGLRenderingContext.Companion.LINEAR_MIPMAP_LINEAR
+import org.khronos.webgl.WebGLRenderingContext.Companion.LINEAR_MIPMAP_NEAREST
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINES
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINE_LOOP
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINE_STRIP
 import org.khronos.webgl.WebGLRenderingContext.Companion.LINK_STATUS
+import org.khronos.webgl.WebGLRenderingContext.Companion.MIRRORED_REPEAT
+import org.khronos.webgl.WebGLRenderingContext.Companion.NEAREST
+import org.khronos.webgl.WebGLRenderingContext.Companion.NEAREST_MIPMAP_LINEAR
+import org.khronos.webgl.WebGLRenderingContext.Companion.NEAREST_MIPMAP_NEAREST
+import org.khronos.webgl.WebGLRenderingContext.Companion.ONE_MINUS_SRC_ALPHA
 import org.khronos.webgl.WebGLRenderingContext.Companion.POINTS
+import org.khronos.webgl.WebGLRenderingContext.Companion.REPEAT
+import org.khronos.webgl.WebGLRenderingContext.Companion.RGBA
+import org.khronos.webgl.WebGLRenderingContext.Companion.SRC_ALPHA
 import org.khronos.webgl.WebGLRenderingContext.Companion.STATIC_DRAW
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE0
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE_2D
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE_MAG_FILTER
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE_MIN_FILTER
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE_WRAP_S
+import org.khronos.webgl.WebGLRenderingContext.Companion.TEXTURE_WRAP_T
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLES
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLE_FAN
 import org.khronos.webgl.WebGLRenderingContext.Companion.TRIANGLE_STRIP
+import org.khronos.webgl.WebGLRenderingContext.Companion.UNPACK_FLIP_Y_WEBGL
+import org.khronos.webgl.WebGLRenderingContext.Companion.UNPACK_PREMULTIPLY_ALPHA_WEBGL
+import org.khronos.webgl.WebGLRenderingContext.Companion.UNSIGNED_BYTE
 import org.khronos.webgl.WebGLRenderingContext.Companion.VERTEX_SHADER
 import org.w3c.dom.HTMLCanvasElement
 import kotlin.math.max
@@ -66,8 +89,13 @@ class WebGLRenderer(
     private var fragmentShader: org.khronos.webgl.WebGLShader? = null
     private var positionLocation: Int = -1
     private var colorLocation: Int = -1
+    private var uvLocation: Int = -1
     private var sizeLocation: Int = -1
     private var mvpLocation: WebGLUniformLocation? = null
+    private var textureLocation: WebGLUniformLocation? = null
+    private var useTextureLocation: WebGLUniformLocation? = null
+    private var opacityLocation: WebGLUniformLocation? = null
+    private var alphaTestLocation: WebGLUniformLocation? = null
 
     private var rendererCapabilities: RendererCapabilities =
         RendererCapabilities(backend = BackendType.WEBGL)
@@ -77,7 +105,9 @@ class WebGLRenderer(
     private var initialised = false
 
     private val meshBuffers: MutableMap<Int, MeshBuffers> = mutableMapOf()
+    private val textureCache: MutableMap<Int, CachedTexture> = mutableMapOf()
     private val visitedIds: MutableSet<Int> = mutableSetOf()
+    private val visitedTextureIds: MutableSet<Int> = mutableSetOf()
 
     private val viewProjectionMatrix = Matrix4()
     private val modelViewProjectionMatrix = Matrix4()
@@ -129,6 +159,7 @@ class WebGLRenderer(
         var drawCalls = 0
         var triangles = 0
         visitedIds.clear()
+        visitedTextureIds.clear()
 
         scene.traverseVisible { node ->
             when {
@@ -149,6 +180,7 @@ class WebGLRenderer(
         }
 
         releaseUnusedBuffers()
+        releaseUnusedTextures()
 
         val endTime = window.performance.now()
         updateStats(drawCalls, triangles, endTime - startTime, endTime)
@@ -176,6 +208,10 @@ class WebGLRenderer(
             buffers.indexBuffer?.let { gl.deleteBuffer(it) }
         }
         meshBuffers.clear()
+        textureCache.values.forEach { cached ->
+            gl.deleteTexture(cached.texture)
+        }
+        textureCache.clear()
 
         program?.let { gl.deleteProgram(it) }
         vertexShader?.let { gl.deleteShader(it) }
@@ -240,11 +276,14 @@ class WebGLRenderer(
         val vertexSource = """
             attribute vec3 aPosition;
             attribute vec3 aColor;
+            attribute vec2 aUV;
             attribute float aSize;
             uniform mat4 uMVP;
             varying vec3 vColor;
+            varying vec2 vUV;
             void main() {
                 vColor = aColor;
+                vUV = aUV;
                 gl_Position = uMVP * vec4(aPosition, 1.0);
                 gl_PointSize = aSize;
             }
@@ -253,8 +292,20 @@ class WebGLRenderer(
         val fragmentSource = """
             precision mediump float;
             varying vec3 vColor;
+            varying vec2 vUV;
+            uniform sampler2D uTexture;
+            uniform bool uUseTexture;
+            uniform float uOpacity;
+            uniform float uAlphaTest;
             void main() {
-                gl_FragColor = vec4(vColor, 1.0);
+                vec4 color = vec4(vColor, uOpacity);
+                if (uUseTexture) {
+                    color *= texture2D(uTexture, vUV);
+                }
+                if (color.a <= uAlphaTest) {
+                    discard;
+                }
+                gl_FragColor = color;
             }
         """.trimIndent()
 
@@ -283,8 +334,13 @@ class WebGLRenderer(
 
         positionLocation = gl.getAttribLocation(linkedProgram, "aPosition")
         colorLocation = gl.getAttribLocation(linkedProgram, "aColor")
+        uvLocation = gl.getAttribLocation(linkedProgram, "aUV")
         sizeLocation = gl.getAttribLocation(linkedProgram, "aSize")
         mvpLocation = gl.getUniformLocation(linkedProgram, "uMVP")
+        textureLocation = gl.getUniformLocation(linkedProgram, "uTexture")
+        useTextureLocation = gl.getUniformLocation(linkedProgram, "uUseTexture")
+        opacityLocation = gl.getUniformLocation(linkedProgram, "uOpacity")
+        alphaTestLocation = gl.getUniformLocation(linkedProgram, "uAlphaTest")
     }
 
     private fun compileShader(
@@ -312,9 +368,16 @@ class WebGLRenderer(
         gl.useProgram(program)
         gl.enableVertexAttribArray(positionLocation)
         gl.enableVertexAttribArray(colorLocation)
+        if (uvLocation >= 0) {
+            gl.enableVertexAttribArray(uvLocation)
+        }
         if (sizeLocation >= 0) {
             gl.enableVertexAttribArray(sizeLocation)
         }
+        textureLocation?.let { gl.uniform1i(it, 0) }
+        useTextureLocation?.let { gl.uniform1i(it, 0) }
+        opacityLocation?.let { gl.uniform1f(it, 1f) }
+        alphaTestLocation?.let { gl.uniform1f(it, 0f) }
     }
 
     private fun queryCapabilities(): RendererCapabilities {
@@ -428,16 +491,22 @@ class WebGLRenderer(
         if (vertexCount == 0) return null
 
         val colorAttribute = geometry.getAttribute("color")
-        val materialColor = when (val mat = mesh.material) {
-            is MeshBasicMaterial -> mat.color
-            is MeshStandardMaterial -> mat.color
-            else -> Color.WHITE
-        }
+        val uvAttribute = geometry.getAttribute("uv")
+        val materialInfo = resolveMaterialInfo(mesh.material)
         val volumeTexture = (mesh.material as? MeshBasicMaterial)?.map as? Data3DTexture
+        val texture = resolveBaseColorTexture(mesh.material)
+        val cachedTexture =
+            if (texture != null && uvAttribute != null && uvAttribute.itemSize >= UV_COMPONENTS) {
+                acquireTexture(texture)?.also { visitedTextureIds.add(texture.id) }
+            } else {
+                null
+            }
         val vertexData = buildVertexData(
             position = positionAttribute,
             color = colorAttribute,
-            materialColor = materialColor,
+            uv = uvAttribute,
+            materialColor = materialInfo.color,
+            useVertexColors = materialInfo.useVertexColors,
             volumeTexture = volumeTexture
         )
 
@@ -485,6 +554,7 @@ class WebGLRenderer(
 
         positionAttribute.needsUpdate = false
         colorAttribute?.needsUpdate = false
+        uvAttribute?.needsUpdate = false
         geometry.index?.needsUpdate = false
 
         val drawMode = mapDrawMode(mesh.drawMode)
@@ -499,7 +569,11 @@ class WebGLRenderer(
             indexCount = indexCount,
             usesUint32 = usesUint32,
             drawMode = drawMode,
-            triangles = triangles
+            triangles = triangles,
+            texture = cachedTexture?.texture,
+            opacity = materialInfo.opacity,
+            alphaTest = materialInfo.alphaTest,
+            transparent = materialInfo.transparent
         )
         meshBuffers[mesh.id] = buffers
         gl.bindBuffer(ARRAY_BUFFER, null)
@@ -536,7 +610,13 @@ class WebGLRenderer(
             vertexCount = positionAttribute.count
             if (vertexCount == 0) return null
             val colorAttribute = geometry.getAttribute("color")
-            vertexData = buildVertexData(positionAttribute, colorAttribute, materialColor)
+            vertexData = buildVertexData(
+                position = positionAttribute,
+                color = colorAttribute,
+                uv = null,
+                materialColor = materialColor,
+                useVertexColors = true
+            )
         }
 
         val existing = meshBuffers[points.id]
@@ -561,7 +641,11 @@ class WebGLRenderer(
             indexCount = 0,
             usesUint32 = false,
             drawMode = POINTS,
-            triangles = vertexCount
+            triangles = vertexCount,
+            texture = null,
+            opacity = 1f,
+            alphaTest = 0f,
+            transparent = false
         )
 
         meshBuffers[points.id] = buffers
@@ -587,6 +671,16 @@ class WebGLRenderer(
             VERTEX_STRIDE_BYTES,
             COLOR_OFFSET_BYTES
         )
+        if (uvLocation >= 0) {
+            gl.vertexAttribPointer(
+                uvLocation,
+                UV_COMPONENTS,
+                FLOAT,
+                false,
+                VERTEX_STRIDE_BYTES,
+                UV_OFFSET_BYTES
+            )
+        }
         if (sizeLocation >= 0) {
             gl.vertexAttribPointer(
                 sizeLocation,
@@ -607,6 +701,7 @@ class WebGLRenderer(
         modelViewProjectionMatrix.multiplyMatrices(viewProjection, mesh.matrixWorld)
         fillMatrixBuffer(modelViewProjectionMatrix.elements, matrixBuffer)
         gl.uniformMatrix4fv(mvpLocation, false, matrixBuffer)
+        bindMeshMaterialState(buffers)
 
         mesh.onBeforeRender?.invoke(mesh)
 
@@ -645,6 +740,16 @@ class WebGLRenderer(
             VERTEX_STRIDE_BYTES,
             COLOR_OFFSET_BYTES
         )
+        if (uvLocation >= 0) {
+            gl.vertexAttribPointer(
+                uvLocation,
+                UV_COMPONENTS,
+                FLOAT,
+                false,
+                VERTEX_STRIDE_BYTES,
+                UV_OFFSET_BYTES
+            )
+        }
         if (sizeLocation >= 0) {
             gl.vertexAttribPointer(
                 sizeLocation,
@@ -661,6 +766,7 @@ class WebGLRenderer(
         modelViewProjectionMatrix.multiplyMatrices(viewProjection, points.matrixWorld)
         fillMatrixBuffer(modelViewProjectionMatrix.elements, matrixBuffer)
         gl.uniformMatrix4fv(mvpLocation, false, matrixBuffer)
+        bindMeshMaterialState(MeshMaterialState.Default)
 
         points.onBeforeRender?.invoke(points)
         gl.drawArrays(POINTS, 0, buffers.vertexCount)
@@ -681,10 +787,23 @@ class WebGLRenderer(
         }
     }
 
+    private fun releaseUnusedTextures() {
+        val iterator = textureCache.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!visitedTextureIds.contains(entry.key)) {
+                gl.deleteTexture(entry.value.texture)
+                iterator.remove()
+            }
+        }
+    }
+
     private fun buildVertexData(
         position: BufferAttribute,
         color: BufferAttribute?,
+        uv: BufferAttribute?,
         materialColor: Color,
+        useVertexColors: Boolean,
         volumeTexture: Data3DTexture? = null
     ): VertexData {
         val vertexCount = position.count
@@ -692,7 +811,8 @@ class WebGLRenderer(
         var writeIndex = 0
         val volumeSampler = volumeTexture?.let(VolumeTextureSampler::from)
 
-        val useColorAttribute = color != null && color.itemSize >= COLOR_COMPONENTS
+        val useColorAttribute = useVertexColors && color != null && color.itemSize >= COLOR_COMPONENTS
+        val useUvAttribute = uv != null && uv.itemSize >= UV_COMPONENTS
         for (i in 0 until vertexCount) {
             val positionX = position.getX(i)
             val positionY = position.getY(i)
@@ -725,6 +845,13 @@ class WebGLRenderer(
             vertexArray.put(writeIndex++, red)
             vertexArray.put(writeIndex++, green)
             vertexArray.put(writeIndex++, blue)
+            if (useUvAttribute && i < uv!!.count) {
+                vertexArray.put(writeIndex++, uv.getX(i))
+                vertexArray.put(writeIndex++, uv.getY(i))
+            } else {
+                vertexArray.put(writeIndex++, 0f)
+                vertexArray.put(writeIndex++, 0f)
+            }
             vertexArray.put(writeIndex++, 1f)
         }
 
@@ -760,6 +887,8 @@ class WebGLRenderer(
             }
 
             val sizeValue = sizes?.getX(i) ?: defaultSize
+            vertexArray.put(writeIndex++, 0f)
+            vertexArray.put(writeIndex++, 0f)
             vertexArray.put(writeIndex++, sizeValue.coerceAtLeast(1f))
         }
 
@@ -852,6 +981,267 @@ class WebGLRenderer(
         DrawMode.POINTS -> POINTS
     }
 
+    private fun resolveMaterialInfo(material: io.materia.core.scene.Material?): MeshMaterialState =
+        when (material) {
+            is MeshBasicMaterial -> MeshMaterialState(
+                color = material.color,
+                useVertexColors = material.vertexColors,
+                opacity = material.opacity.coerceIn(0f, 1f),
+                alphaTest = material.alphaTest.coerceIn(0f, 1f),
+                transparent = material.transparent || material.opacity < 1f
+            )
+
+            is MeshStandardMaterial -> MeshMaterialState(
+                color = material.color,
+                useVertexColors = material.vertexColors,
+                opacity = material.opacity.coerceIn(0f, 1f),
+                alphaTest = material.alphaTest.coerceIn(0f, 1f),
+                transparent = material.transparent || material.opacity < 1f
+            )
+
+            else -> MeshMaterialState.Default
+        }
+
+    private fun resolveBaseColorTexture(material: io.materia.core.scene.Material?): Texture2D? =
+        when (material) {
+            is MeshBasicMaterial -> material.map as? Texture2D
+            is MeshStandardMaterial -> material.map
+            else -> null
+        }
+
+    private fun bindMeshMaterialState(buffers: MeshBuffers) {
+        bindMeshMaterialState(
+            MeshMaterialState(
+                color = Color.WHITE,
+                useVertexColors = false,
+                opacity = buffers.opacity,
+                alphaTest = buffers.alphaTest,
+                transparent = buffers.transparent,
+                texture = buffers.texture
+            )
+        )
+    }
+
+    private fun bindMeshMaterialState(state: MeshMaterialState) {
+        if (state.transparent) {
+            gl.enable(BLEND)
+            gl.blendFunc(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
+        } else {
+            gl.disable(BLEND)
+        }
+
+        opacityLocation?.let { gl.uniform1f(it, state.opacity) }
+        alphaTestLocation?.let { gl.uniform1f(it, state.alphaTest) }
+
+        val texture = state.texture
+        if (texture != null) {
+            gl.activeTexture(TEXTURE0)
+            gl.bindTexture(TEXTURE_2D, texture)
+            useTextureLocation?.let { gl.uniform1i(it, 1) }
+        } else {
+            gl.bindTexture(TEXTURE_2D, null)
+            useTextureLocation?.let { gl.uniform1i(it, 0) }
+        }
+    }
+
+    private fun acquireTexture(texture: Texture2D): CachedTexture? {
+        val upload = textureRgbaData(texture) ?: return null
+        val cached = textureCache[texture.id]
+        if (cached != null &&
+            !texture.needsUpdate &&
+            cached.version == texture.version &&
+            cached.width == texture.width &&
+            cached.height == texture.height
+        ) {
+            return cached
+        }
+
+        cached?.let { gl.deleteTexture(it.texture) }
+
+        val webglTexture = gl.createTexture() ?: return null
+        gl.bindTexture(TEXTURE_2D, webglTexture)
+        gl.pixelStorei(UNPACK_FLIP_Y_WEBGL, if (texture.flipY) 1 else 0)
+        gl.pixelStorei(UNPACK_PREMULTIPLY_ALPHA_WEBGL, if (texture.premultiplyAlpha) 1 else 0)
+        gl.texImage2D(
+            TEXTURE_2D,
+            0,
+            RGBA,
+            texture.width,
+            texture.height,
+            0,
+            RGBA,
+            UNSIGNED_BYTE,
+            upload.typedArray
+        )
+
+        val isPowerOfTwoTexture = isPowerOfTwo(texture.width) && isPowerOfTwo(texture.height)
+        val canUseMipmaps = texture.generateMipmaps && (isWebGL2Context || isPowerOfTwoTexture)
+        val canRepeat = isWebGL2Context || isPowerOfTwoTexture
+        gl.texParameteri(TEXTURE_2D, TEXTURE_MIN_FILTER, mapMinFilter(texture.minFilter, canUseMipmaps))
+        gl.texParameteri(TEXTURE_2D, TEXTURE_MAG_FILTER, mapMagFilter(texture.magFilter))
+        gl.texParameteri(TEXTURE_2D, TEXTURE_WRAP_S, mapWrap(texture.wrapS, canRepeat))
+        gl.texParameteri(TEXTURE_2D, TEXTURE_WRAP_T, mapWrap(texture.wrapT, canRepeat))
+        if (canUseMipmaps) {
+            gl.generateMipmap(TEXTURE_2D)
+        }
+        gl.bindTexture(TEXTURE_2D, null)
+
+        val cachedTexture = CachedTexture(
+            texture = webglTexture,
+            version = texture.version,
+            width = texture.width,
+            height = texture.height,
+            byteSize = upload.byteSize.toLong()
+        )
+        textureCache[texture.id] = cachedTexture
+        texture.needsUpdate = false
+        return cachedTexture
+    }
+
+    private fun textureRgbaData(texture: Texture2D): TextureUpload? {
+        val pixelCount = texture.width * texture.height
+        if (pixelCount <= 0) return null
+
+        val byteData = texture.getData()
+        val floatData = texture.getFloatData()
+        val rgba = when {
+            byteData != null ->
+                expandByteData(byteData, pixelCount, componentCountFor(texture.format))
+
+            floatData != null ->
+                expandFloatData(floatData, pixelCount, componentCountFor(texture.format))
+
+            else -> null
+        } ?: return null
+
+        val typed = Uint8Array(rgba.size)
+        val dyn = typed.asDynamic()
+        for (i in rgba.indices) {
+            dyn[i] = rgba[i].toInt() and 0xFF
+        }
+        return TextureUpload(typed, rgba.size)
+    }
+
+    private fun expandByteData(data: ByteArray, pixelCount: Int, preferredComponents: Int): ByteArray? {
+        val components = componentCountFromSize(data.size, pixelCount) ?: preferredComponents
+        if (data.size < pixelCount * components) return null
+        if (components == 4) return data.copyOf(pixelCount * 4)
+
+        return ByteArray(pixelCount * 4) { index ->
+            val pixel = index / 4
+            val channel = index % 4
+            val sourceOffset = pixel * components
+            when {
+                channel < components -> data[sourceOffset + channel]
+                channel == 3 -> 255.toByte()
+                else -> 0
+            }
+        }
+    }
+
+    private fun expandFloatData(data: FloatArray, pixelCount: Int, preferredComponents: Int): ByteArray? {
+        val components = componentCountFromSize(data.size, pixelCount) ?: preferredComponents
+        if (data.size < pixelCount * components) return null
+
+        return ByteArray(pixelCount * 4) { index ->
+            val pixel = index / 4
+            val channel = index % 4
+            val sourceOffset = pixel * components
+            val value = when {
+                channel < components -> data[sourceOffset + channel]
+                channel == 3 -> 1f
+                else -> 0f
+            }
+            (value.coerceIn(0f, 1f) * 255f).roundToInt().coerceIn(0, 255).toByte()
+        }
+    }
+
+    private fun componentCountFromSize(size: Int, pixelCount: Int): Int? =
+        when {
+            pixelCount <= 0 -> null
+            size == pixelCount * 4 -> 4
+            size == pixelCount * 3 -> 3
+            size == pixelCount * 2 -> 2
+            size == pixelCount -> 1
+            else -> null
+        }
+
+    private fun componentCountFor(format: TextureFormat): Int =
+        when (format) {
+            TextureFormat.RGBA8,
+            TextureFormat.RGBA16F,
+            TextureFormat.RGBA32F,
+            TextureFormat.RGBA8UI,
+            TextureFormat.RGBA16UI,
+            TextureFormat.RGBA32UI,
+            TextureFormat.SRGB8_ALPHA8 -> 4
+
+            TextureFormat.RGB8,
+            TextureFormat.RGB16F,
+            TextureFormat.RGB32F,
+            TextureFormat.RGB8UI,
+            TextureFormat.RGB16UI,
+            TextureFormat.RGB32UI,
+            TextureFormat.SRGB8 -> 3
+
+            TextureFormat.RG8,
+            TextureFormat.RG16F,
+            TextureFormat.RG32F,
+            TextureFormat.RG8UI,
+            TextureFormat.RG16UI,
+            TextureFormat.RG32UI -> 2
+
+            TextureFormat.R8,
+            TextureFormat.R16F,
+            TextureFormat.R32F,
+            TextureFormat.R8UI,
+            TextureFormat.R16UI,
+            TextureFormat.R32UI -> 1
+        }
+
+    private fun mapMinFilter(filter: TextureFilter, allowMipmaps: Boolean): Int =
+        if (!allowMipmaps) {
+            when (filter) {
+                TextureFilter.NEAREST,
+                TextureFilter.NEAREST_MIPMAP_NEAREST,
+                TextureFilter.NEAREST_MIPMAP_LINEAR -> NEAREST
+
+                else -> LINEAR
+            }
+        } else {
+            when (filter) {
+                TextureFilter.NEAREST -> NEAREST
+                TextureFilter.LINEAR -> LINEAR
+                TextureFilter.NEAREST_MIPMAP_NEAREST -> NEAREST_MIPMAP_NEAREST
+                TextureFilter.LINEAR_MIPMAP_NEAREST -> LINEAR_MIPMAP_NEAREST
+                TextureFilter.NEAREST_MIPMAP_LINEAR -> NEAREST_MIPMAP_LINEAR
+                TextureFilter.LINEAR_MIPMAP_LINEAR -> LINEAR_MIPMAP_LINEAR
+            }
+        }
+
+    private fun mapMagFilter(filter: TextureFilter): Int =
+        when (filter) {
+            TextureFilter.NEAREST,
+            TextureFilter.NEAREST_MIPMAP_NEAREST,
+            TextureFilter.NEAREST_MIPMAP_LINEAR -> NEAREST
+
+            else -> LINEAR
+        }
+
+    private fun mapWrap(wrap: TextureWrap, allowRepeat: Boolean): Int =
+        if (!allowRepeat) {
+            CLAMP_TO_EDGE
+        } else {
+            when (wrap) {
+                TextureWrap.REPEAT -> REPEAT
+                TextureWrap.CLAMP_TO_EDGE -> CLAMP_TO_EDGE
+                TextureWrap.MIRRORED_REPEAT -> MIRRORED_REPEAT
+            }
+        }
+
+    private fun isPowerOfTwo(value: Int): Boolean =
+        value > 0 && (value and (value - 1)) == 0
+
     private fun updateStats(
         drawCalls: Int,
         triangles: Int,
@@ -861,13 +1251,14 @@ class WebGLRenderer(
         val fps = if (frameDurationMs > 0.0) 1000.0 / frameDurationMs else stats.fps
         val bufferMemory =
             meshBuffers.values.sumOf { it.vertexByteSize.toLong() + it.indexByteSize.toLong() }
+        val textureMemory = textureCache.values.sumOf { it.byteSize }
 
         stats = RenderStats(
             fps = fps,
             frameTime = frameDurationMs,
             triangles = triangles,
             drawCalls = drawCalls,
-            textureMemory = 0L,
+            textureMemory = textureMemory,
             bufferMemory = bufferMemory,
             timestamp = timestamp.toLong()
         )
@@ -942,6 +1333,38 @@ class WebGLRenderer(
         val usesUint32: Boolean
     )
 
+    private data class TextureUpload(
+        val typedArray: Uint8Array,
+        val byteSize: Int
+    )
+
+    private data class CachedTexture(
+        val texture: WebGLTexture,
+        val version: Int,
+        val width: Int,
+        val height: Int,
+        val byteSize: Long
+    )
+
+    private data class MeshMaterialState(
+        val color: Color,
+        val useVertexColors: Boolean,
+        val opacity: Float,
+        val alphaTest: Float,
+        val transparent: Boolean,
+        val texture: WebGLTexture? = null
+    ) {
+        companion object {
+            val Default = MeshMaterialState(
+                color = Color.WHITE,
+                useVertexColors = false,
+                opacity = 1f,
+                alphaTest = 0f,
+                transparent = false
+            )
+        }
+    }
+
     private data class MeshBuffers(
         val vertexBuffer: WebGLBuffer,
         var indexBuffer: WebGLBuffer?,
@@ -951,20 +1374,27 @@ class WebGLRenderer(
         var indexCount: Int,
         var usesUint32: Boolean,
         var drawMode: Int,
-        var triangles: Int
+        var triangles: Int,
+        var texture: WebGLTexture?,
+        var opacity: Float,
+        var alphaTest: Float,
+        var transparent: Boolean
     )
 
     companion object {
         private const val POSITION_COMPONENTS = 3
         private const val COLOR_COMPONENTS = 3
+        private const val UV_COMPONENTS = 2
         private const val SIZE_COMPONENTS = 1
         private const val COMPONENTS_PER_VERTEX =
-            POSITION_COMPONENTS + COLOR_COMPONENTS + SIZE_COMPONENTS
+            POSITION_COMPONENTS + COLOR_COMPONENTS + UV_COMPONENTS + SIZE_COMPONENTS
         private const val BYTES_PER_FLOAT = 4
         private const val VERTEX_STRIDE_BYTES = COMPONENTS_PER_VERTEX * BYTES_PER_FLOAT
         private const val COLOR_OFFSET_BYTES = POSITION_COMPONENTS * BYTES_PER_FLOAT
-        private const val SIZE_OFFSET_BYTES =
+        private const val UV_OFFSET_BYTES =
             (POSITION_COMPONENTS + COLOR_COMPONENTS) * BYTES_PER_FLOAT
+        private const val SIZE_OFFSET_BYTES =
+            (POSITION_COMPONENTS + COLOR_COMPONENTS + UV_COMPONENTS) * BYTES_PER_FLOAT
         private const val MAX_UNSIGNED_SHORT = 65535
         private const val UNSIGNED_INT = 0x1405
         private const val MAX_SAMPLES_CONST = 0x8D57
