@@ -5,17 +5,25 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0.3] - 2026-05-05
+
+### Fixed
+
+- **WebGPU standard-material fallback fidelity**: The WebGPU fallback from `MeshStandardMaterial` to `MeshBasicMaterial` now preserves base-color textures and render state when no environment map is available, preventing textured GLB scenes from rendering flat white.
+
+### Tests
+
+- Added JS regression coverage for preserving base-color texture maps and material state during the WebGPU standard-material fallback.
+
 ## [0.4.0.2] - 2026-05-05
 
 ### Fixed
 
 - **Forced scene matrix updates**: `Object3D.updateMatrixWorld(force = true)` now recomposes the local matrix before propagating world matrices, so direct `position` and `scale` vector mutations are reflected immediately.
-- **WebGPU standard-material fallback fidelity**: The WebGPU fallback from `MeshStandardMaterial` to `MeshBasicMaterial` now preserves base-color textures and render state when no environment map is available, preventing textured GLB scenes from rendering flat white.
 
 ### Tests
 
 - Added scene graph regression coverage for forced world-matrix updates after direct position and scale changes.
-- Added JS regression coverage for preserving base-color texture maps and material state during the WebGPU standard-material fallback.
 
 ## [0.4.0.1] - 2026-05-05
 
