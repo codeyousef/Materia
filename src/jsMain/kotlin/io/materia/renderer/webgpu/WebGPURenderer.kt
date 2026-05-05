@@ -10,8 +10,12 @@ import io.materia.core.scene.Mesh
 import io.materia.core.scene.Scene
 import io.materia.lighting.ibl.IBLConvolutionProfiler
 import io.materia.lighting.ibl.PrefilterMipSelector
+import io.materia.material.BlendMode as StandardBlendMode
+import io.materia.material.Blending as BasicBlending
+import io.materia.material.MaterialSide as StandardMaterialSide
 import io.materia.material.MeshBasicMaterial
 import io.materia.material.MeshStandardMaterial
+import io.materia.material.Side as BasicSide
 import io.materia.optimization.Frustum
 import io.materia.renderer.*
 import io.materia.renderer.geometry.GeometryAttribute
@@ -777,7 +781,7 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
         // When no environment map is available, downgrade MeshStandardMaterial to
         // MeshBasicMaterial so the pipeline can be created without IBL bindings.
         val material = if (!hasEnvironment && originalMaterial is MeshStandardMaterial) {
-            MeshBasicMaterial().apply { color = originalMaterial.color }
+            originalMaterial.toWebGpuBasicFallback()
         } else {
             originalMaterial
         }
@@ -977,6 +981,38 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
                 renderPass.setBindGroup(group, rawGroup)
             }
         }
+    }
+
+    internal fun MeshStandardMaterial.toWebGpuBasicFallback(): MeshBasicMaterial =
+        MeshBasicMaterial().apply {
+            name = this@toWebGpuBasicFallback.name
+            color = this@toWebGpuBasicFallback.color.clone()
+            map = this@toWebGpuBasicFallback.map
+            transparent = this@toWebGpuBasicFallback.transparent
+            opacity = this@toWebGpuBasicFallback.opacity
+            vertexColors = this@toWebGpuBasicFallback.vertexColors
+            depthTest = this@toWebGpuBasicFallback.depthTest
+            depthWrite = this@toWebGpuBasicFallback.depthWrite
+            colorWrite = this@toWebGpuBasicFallback.colorWrite
+            side = this@toWebGpuBasicFallback.side.toBasicSide()
+            blending = this@toWebGpuBasicFallback.blending.toBasicBlending()
+            wireframe = this@toWebGpuBasicFallback.wireframe
+            wireframeLinewidth = this@toWebGpuBasicFallback.wireframeLinewidth
+            needsUpdate = true
+        }
+
+    private fun StandardMaterialSide.toBasicSide(): BasicSide = when (this) {
+        StandardMaterialSide.FRONT -> BasicSide.FrontSide
+        StandardMaterialSide.BACK -> BasicSide.BackSide
+        StandardMaterialSide.DOUBLE -> BasicSide.DoubleSide
+    }
+
+    private fun StandardBlendMode.toBasicBlending(): BasicBlending = when (this) {
+        StandardBlendMode.NORMAL -> BasicBlending.NormalBlending
+        StandardBlendMode.ADDITIVE -> BasicBlending.AdditiveBlending
+        StandardBlendMode.SUBTRACTIVE -> BasicBlending.SubtractiveBlending
+        StandardBlendMode.MULTIPLY -> BasicBlending.MultiplyBlending
+        StandardBlendMode.CUSTOM -> BasicBlending.CustomBlending
     }
 
     private data class MaterialOverrideResult(
