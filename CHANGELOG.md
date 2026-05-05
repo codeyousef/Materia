@@ -5,6 +5,18 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0.1] - 2026-05-05
+
+### Fixed
+
+- **WebGL base-color texture fallback**: The WebGL fallback renderer now uploads and samples `Texture2D` maps from `MeshBasicMaterial.map` and `MeshStandardMaterial.map`, so glTF base-color textures render when WebGPU is unavailable.
+- **WebGL vertex-color tinting**: Mesh `COLOR_0` data is now applied only when material vertex colors are enabled, preventing unrequested vertex colors from darkening or tinting textured materials.
+- **WebGL texture accounting**: Texture upload caching now updates renderer texture memory stats for fallback-rendered scenes.
+
+### Added
+
+- **WebGL texture fallback regression coverage**: Added JS regression coverage for textured fallback rendering with UVs and disabled vertex colors.
+
 ## [0.4.0.0] - 2026-04-14
 
 ### Added
