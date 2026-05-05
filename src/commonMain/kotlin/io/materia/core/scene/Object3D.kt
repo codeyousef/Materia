@@ -268,7 +268,7 @@ abstract class Object3D {
             return
         }
 
-        if (matrixAutoUpdate && matrixNeedsUpdate) {
+        if (matrixAutoUpdate && (matrixNeedsUpdate || force)) {
             updateMatrix()
             matrixNeedsUpdate = false
             localMatrixVersion++
