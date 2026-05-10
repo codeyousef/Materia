@@ -45,112 +45,111 @@ fun setRequestHeader(headers: Map<String, String>): Loader
 
 ## GLTFLoader
 
-Loads glTF 2.0 and GLB files (industry standard format).
+Loads glTF 2.0 JSON files and GLB 2.0 binary containers into Materia scene objects.
 
 ### Constructor
 
 ```kotlin
-class GLTFLoader(manager: LoadingManager = DefaultLoadingManager)
+class GLTFLoader(
+    resolver: AssetResolver = AssetResolver.default(),
+    json: Json = Json { ignoreUnknownKeys = true; isLenient = true },
+    cache: GLTFAssetCache? = GLTFAssetCache.shared,
+    cacheScope: String? = resolver.cacheKeyScope
+)
 ```
+
+By default, loaders using the platform default `AssetResolver` share `GLTFAssetCache.shared`.
+Repeated loads for the same normalized URL reuse completed and in-flight source assets, then return
+an independent instance to the caller. Custom resolvers are isolated by default unless a shared
+`cacheScope` is supplied.
 
 ### Methods
 
 ```kotlin
-// Load glTF/GLB file
-fun load(
+suspend fun load(
     url: String,
-    onLoad: (GLTF) -> Unit,
-    onProgress: ((ProgressEvent) -> Unit)? = null,
-    onError: ((Exception) -> Unit)? = null
+    progress: ((LoadingProgress) -> Unit)? = null
+): GLTFAsset
+
+suspend fun load(
+    url: String,
+    onLoad: (GLTFAsset) -> Unit,
+    onProgress: ((LoadingProgress) -> Unit)? = null,
+    onError: ((Throwable) -> Unit)? = null
 )
-
-// Load with coroutines
-suspend fun loadAsync(url: String): GLTF
-
-// Parse from ArrayBuffer
-fun parse(
-    data: ArrayBuffer,
-    path: String,
-    onLoad: (GLTF) -> Unit,
-    onError: ((Exception) -> Unit)? = null
-)
-
-// Register extension
-fun register(callback: (GLTFParser) -> GLTFLoaderPlugin): GLTFLoader
-
-// Unregister extension
-fun unregister(callback: (GLTFParser) -> GLTFLoaderPlugin): GLTFLoader
-
-// Set Draco decoder path
-fun setDRACOLoader(dracoLoader: DRACOLoader): GLTFLoader
-
-// Set KTX2 loader
-fun setKTX2Loader(ktx2Loader: KTX2Loader): GLTFLoader
-
-// Set mesh optimizer decoder
-fun setMeshoptDecoder(decoder: MeshoptDecoder): GLTFLoader
 ```
 
-### GLTF Result
+### GLTFAsset
 
 ```kotlin
-data class GLTF(
-    val scene: Group,                    // Root scene
-    val scenes: List<Group>,             // All scenes
-    val animations: List<AnimationClip>, // Animations
-    val cameras: List<Camera>,           // Cameras
-    val asset: GLTFAsset,                // Asset metadata
-    val parser: GLTFParser,              // Parser instance
-    val userData: Map<String, Any>       // Custom data
-)
-
 data class GLTFAsset(
-    val version: String,
-    val generator: String?,
-    val copyright: String?,
-    val minVersion: String?
-)
+    val scene: Scene,
+    val scenes: List<Scene>,
+    val nodes: List<Object3D>,
+    val materials: List<Material>,
+    val animations: List<AnimationClip>
+) {
+    fun instantiate(): GLTFAsset
+}
 ```
 
-### Example
+`instantiate()` creates a new scene graph with independent object transforms and parent/child
+relationships. Geometry, materials, textures, and animations are shared intentionally so renderers
+can reuse CPU and GPU resources for repeated model instances.
+
+### GLTFAssetCache
 
 ```kotlin
-val loader = GLTFLoader()
+class GLTFAssetCache {
+    suspend fun getOrLoad(scope: String, url: String, load: suspend () -> GLTFAsset): GLTFAsset
+    suspend fun remove(scope: String, url: String)
+    suspend fun clear()
 
-// Basic loading
-loader.load("models/robot.glb") { gltf ->
-    scene.add(gltf.scene)
-    
-    // Play animations
-    if (gltf.animations.isNotEmpty()) {
-        val mixer = AnimationMixer(gltf.scene)
-        val action = mixer.clipAction(gltf.animations[0])
-        action.play()
+    companion object {
+        val shared: GLTFAssetCache
     }
 }
-
-// With Draco compression
-val dracoLoader = DRACOLoader()
-dracoLoader.setDecoderPath("libs/draco/")
-loader.setDRACOLoader(dracoLoader)
-
-loader.load("models/compressed.glb") { gltf ->
-    scene.add(gltf.scene)
-}
-
-// With progress
-loader.load(
-    url = "models/large.glb",
-    onLoad = { gltf -> scene.add(gltf.scene) },
-    onProgress = { event ->
-        val percent = (event.loaded / event.total) * 100
-        println("Loading: $percent%")
-    },
-    onError = { error ->
-        println("Error: ${error.message}")
-    }
-)
 ```
+
+Use a custom cache for bounded lifetimes such as level loads, tests, or editor previews:
+
+```kotlin
+val cache = GLTFAssetCache()
+val loader = GLTFLoader(cache = cache, cacheScope = "warehouse-level")
+
+val crateA = loader.load("models/crate.glb")
+val crateB = loader.load("models/crate.glb")
+
+scene.add(crateA.scene)
+scene.add(crateB.scene)
+
+// Safe: object transforms are not shared between instances.
+crateA.scene.position.x = -2f
+crateB.scene.position.x = 2f
+
+// Optional cleanup when the scope is no longer useful.
+cache.clear()
+```
+
+### Progress
+
+```kotlin
+data class LoadingProgress(
+    val loaded: Long,
+    val total: Long
+) {
+    val percentage: Float
+}
+```
+
+Progress currently reports dependent buffer byte loading. Cached source hits may not replay the
+original progress sequence because no new network/decode work is performed.
+
+### Format Notes
+
+- `.gltf` JSON documents are supported with embedded data URIs and external buffers.
+- `.glb` binary containers are supported for glTF 2.0 JSON plus embedded binary buffer chunks.
+- Repeated same-URL `.gltf` and `.glb` loads share source asset work when cache scope and URL match.
 
 ---
 

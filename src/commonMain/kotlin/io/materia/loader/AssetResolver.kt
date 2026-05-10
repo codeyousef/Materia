@@ -10,6 +10,16 @@ import io.materia.core.scene.Scene
  */
 interface AssetResolver {
     /**
+     * Optional namespace used by shared loader caches.
+     *
+     * Platform default resolvers return a stable value so separate loader
+     * instances can share same-URL results. Custom resolvers default to null,
+     * which makes loaders use an isolated namespace unless callers explicitly
+     * provide one.
+     */
+    val cacheKeyScope: String? get() = null
+
+    /**
      * Load an asset located at [uri], optionally resolving against [basePath].
      */
     suspend fun load(uri: String, basePath: String? = null): ByteArray

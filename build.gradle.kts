@@ -157,7 +157,7 @@ kotlin {
         }
         browser {
             testTask {
-                enabled = false // Disabled: CI environment lacks Chrome/Chromium for headless testing
+                enabled = (project.findProperty("enableJsBrowserTests") as String?)?.toBoolean() == true
             }
         }
         nodejs {

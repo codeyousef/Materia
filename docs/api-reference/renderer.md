@@ -150,6 +150,20 @@ val renderer = WebGPURenderer()
 renderer.initialize(surface)
 ```
 
+### JavaScript WebGL Fallback
+
+When WebGPU is unavailable, the JS renderer can fall back to `WebGLRenderer`. The fallback render
+path is designed for steady-frame rendering without synchronous GPU readback. Calls such as
+`readPixels`, `toDataURL`, and 2D-canvas `getImageData` should remain explicit screenshot,
+validation, picking, or image-decode operations rather than work performed by every render frame.
+
+The browser test suite includes a guard for this behavior. Run it in an environment with Chrome
+available:
+
+```bash
+CHROME_BIN=/path/to/chrome ./gradlew :jsBrowserTest -PenableJsBrowserTests=true
+```
+
 ### JVM (Vulkan via LWJGL)
 
 ```kotlin

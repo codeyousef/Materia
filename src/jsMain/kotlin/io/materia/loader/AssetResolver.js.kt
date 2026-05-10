@@ -6,6 +6,7 @@ import org.khronos.webgl.Uint8Array
 import kotlin.js.Promise
 
 internal class DefaultAssetResolver : AssetResolver {
+    override val cacheKeyScope: String = "io.materia.loader.default"
 
     override suspend fun load(uri: String, basePath: String?): ByteArray {
         return when {

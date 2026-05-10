@@ -11,7 +11,14 @@ import io.materia.geometry.BufferAttribute
 import io.materia.geometry.BufferGeometry
 import io.materia.material.MaterialSide
 import io.materia.material.MeshStandardMaterial
+import kotlinx.atomicfu.atomic
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -34,7 +41,130 @@ data class GLTFAsset(
     val nodes: List<Object3D>,
     val materials: List<Material>,
     val animations: List<AnimationClip>
-)
+) {
+    /**
+     * Creates an independent scene graph instance from this asset.
+     *
+     * Geometry, materials, textures, and animations are intentionally shared so
+     * renderers can reuse GPU uploads. Object transforms and hierarchy are cloned
+     * so consumers can place multiple instances without shared mutable transforms.
+     */
+    fun instantiate(): GLTFAsset {
+        val cloneMap = mutableMapOf<Int, Object3D>()
+        val clonedScenes = scenes.map { cloneObjectTree(it, cloneMap) as Scene }
+        val primarySceneIndex = scenes.indexOfFirst { it === scene }
+        val clonedPrimaryScene = if (primarySceneIndex >= 0) {
+            clonedScenes[primarySceneIndex]
+        } else {
+            cloneObjectTree(scene, cloneMap) as Scene
+        }
+
+        return GLTFAsset(
+            scene = clonedPrimaryScene,
+            scenes = clonedScenes,
+            nodes = nodes.mapNotNull { cloneMap[it.id] },
+            materials = materials,
+            animations = animations
+        )
+    }
+}
+
+/**
+ * Shared cache for parsed glTF source assets.
+ *
+ * The cache stores pristine source assets and returns them to [GLTFLoader], which
+ * then exposes cloned instances to callers. In-flight entries are shared so
+ * concurrent same-URL loads perform one fetch/decode pass.
+ */
+class GLTFAssetCache {
+    private val mutex = Mutex()
+    private val completed = mutableMapOf<CacheKey, GLTFAsset>()
+    private val inFlight = mutableMapOf<CacheKey, Deferred<GLTFAsset>>()
+
+    suspend fun getOrLoad(
+        scope: String,
+        url: String,
+        load: suspend () -> GLTFAsset
+    ): GLTFAsset = coroutineScope {
+        val key = CacheKey(scope, url)
+        val lookup = mutex.withLock {
+            completed[key]?.let { CacheLookup.Cached(it) }
+                ?: CacheLookup.Loading(
+                    inFlight[key] ?: async(start = CoroutineStart.LAZY) {
+                        load()
+                    }.also { inFlight[key] = it }
+                )
+        }
+        if (lookup is CacheLookup.Cached) return@coroutineScope lookup.asset
+
+        val deferred = (lookup as CacheLookup.Loading).deferred
+        deferred.start()
+
+        try {
+            val asset = deferred.await()
+            mutex.withLock {
+                if (inFlight[key] === deferred) {
+                    inFlight.remove(key)
+                    completed[key] = asset
+                }
+            }
+            asset
+        } catch (t: Throwable) {
+            mutex.withLock {
+                if (inFlight[key] === deferred) {
+                    inFlight.remove(key)
+                }
+            }
+            throw t
+        }
+    }
+
+    suspend fun remove(scope: String, url: String) {
+        val key = CacheKey(scope, url)
+        mutex.withLock {
+            completed.remove(key)
+            inFlight.remove(key)
+        }
+    }
+
+    suspend fun clear() {
+        mutex.withLock {
+            completed.clear()
+            inFlight.clear()
+        }
+    }
+
+    private data class CacheKey(val scope: String, val url: String)
+
+    private sealed interface CacheLookup {
+        data class Cached(val asset: GLTFAsset) : CacheLookup
+        data class Loading(val deferred: Deferred<GLTFAsset>) : CacheLookup
+    }
+
+    companion object {
+        val shared: GLTFAssetCache = GLTFAssetCache()
+
+        private val nextPrivateScope = atomic(1)
+
+        internal fun privateScope(): String =
+            "io.materia.loader.gltf.private.${nextPrivateScope.getAndIncrement()}"
+    }
+}
+
+private fun cloneObjectTree(source: Object3D, clones: MutableMap<Int, Object3D>): Object3D {
+    val clone = when (source) {
+        is Scene -> Scene().copy(source, recursive = false)
+        is Mesh -> Mesh(source.geometry, source.material).copy(source, recursive = false)
+        is Group -> Group().copy(source, recursive = false)
+        else -> source.clone(recursive = false)
+    }
+
+    clones[source.id] = clone
+    source.children.forEach { child ->
+        clone.add(cloneObjectTree(child, clones))
+    }
+    return clone
+}
 
 /**
  * Progress information for asset loading operations.
@@ -79,8 +209,11 @@ class GLTFLoader(
     private val json: Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
-    }
+    },
+    private val cache: GLTFAssetCache? = GLTFAssetCache.shared,
+    cacheScope: String? = resolver.cacheKeyScope
 ) {
+    private val cacheScope: String = cacheScope ?: GLTFAssetCache.privateScope()
 
     suspend fun load(
         url: String,
@@ -100,12 +233,24 @@ class GLTFLoader(
         progress: ((LoadingProgress) -> Unit)? = null
     ): GLTFAsset = withContext(Dispatchers.Default) {
         val normalizedUrl = url.replace('\\', '/')
+        val sourceAsset = cache?.getOrLoad(cacheScope, normalizedUrl) {
+            loadUncached(normalizedUrl, progress)
+        } ?: loadUncached(normalizedUrl, progress)
+
+        if (cache != null) sourceAsset.instantiate() else sourceAsset
+    }
+
+    private suspend fun loadUncached(
+        normalizedUrl: String,
+        progress: ((LoadingProgress) -> Unit)?
+    ): GLTFAsset {
         val basePath = normalizedUrl.substringBeforeLast('/', missingDelimiterValue = "")
             .takeIf { it.isNotEmpty() }
         val documentBytes = loadDocumentBytes(normalizedUrl)
-        val document = json.decodeFromString<GltfDocument>(documentBytes.decodeToString())
+        val parsedDocument = parseDocument(documentBytes)
+        val document = parsedDocument.document
 
-        val buffers = loadBuffers(document.buffers, basePath, progress)
+        val buffers = loadBuffers(document.buffers, basePath, parsedDocument.binaryChunk, progress)
         val reader = AccessorReader(document, buffers)
         val materialFactory = MaterialFactory()
         val meshCache = HashMap<Int, Object3D>()
@@ -162,7 +307,7 @@ class GLTFLoader(
         val allNodes = nodeCache.keys.sorted().mapNotNull { nodeCache[it] }
         val materials = materialFactory.materials.toList()
 
-        GLTFAsset(
+        return GLTFAsset(
             scene = primaryScene,
             scenes = scenes,
             nodes = allNodes,
@@ -178,9 +323,56 @@ class GLTFLoader(
         }
     }
 
+    private fun parseDocument(bytes: ByteArray): ParsedDocument {
+        if (!isBinaryGltf(bytes)) {
+            return ParsedDocument(
+                document = json.decodeFromString<GltfDocument>(bytes.decodeToString()),
+                binaryChunk = null
+            )
+        }
+
+        val version = bytes.readUInt32Le(GLB_VERSION_OFFSET)
+        require(version == GLB_VERSION_2) { "Unsupported GLB version $version" }
+
+        val declaredLength = bytes.readUInt32Le(GLB_LENGTH_OFFSET)
+        require(declaredLength <= bytes.size) {
+            "GLB declares $declaredLength bytes but payload has ${bytes.size}"
+        }
+
+        var offset = GLB_HEADER_SIZE
+        var jsonChunk: ByteArray? = null
+        var binaryChunk: ByteArray? = null
+
+        while (offset + GLB_CHUNK_HEADER_SIZE <= declaredLength) {
+            val chunkLength = bytes.readUInt32Le(offset)
+            val chunkType = bytes.readUInt32Le(offset + 4)
+            val chunkStart = offset + GLB_CHUNK_HEADER_SIZE
+            val chunkEnd = chunkStart + chunkLength
+            require(chunkEnd <= declaredLength) { "GLB chunk extends past declared asset length" }
+
+            val chunk = bytes.copyOfRange(chunkStart, chunkEnd)
+            when (chunkType) {
+                GLB_CHUNK_TYPE_JSON -> jsonChunk = chunk
+                GLB_CHUNK_TYPE_BIN -> if (binaryChunk == null) binaryChunk = chunk
+            }
+
+            offset = chunkEnd
+        }
+
+        val jsonBytes = jsonChunk ?: error("GLB is missing a JSON chunk")
+        val jsonText = jsonBytes.decodeToString()
+            .trimEnd { it == '\u0000' || it == ' ' || it == '\n' || it == '\r' || it == '\t' }
+
+        return ParsedDocument(
+            document = json.decodeFromString<GltfDocument>(jsonText),
+            binaryChunk = binaryChunk
+        )
+    }
+
     private suspend fun loadBuffers(
         buffers: List<GltfBuffer>,
         basePath: String?,
+        binaryChunk: ByteArray?,
         progress: ((LoadingProgress) -> Unit)?
     ): List<ByteArray> {
         if (buffers.isEmpty()) return emptyList()
@@ -189,7 +381,12 @@ class GLTFLoader(
 
         return buffers.map { buffer ->
             val data = when (val uri = buffer.uri) {
-                null -> ByteArray(buffer.byteLength)
+                null -> binaryChunk?.let { chunk ->
+                    require(buffer.byteLength <= chunk.size) {
+                        "GLB buffer declares ${buffer.byteLength} bytes but binary chunk has ${chunk.size}"
+                    }
+                    chunk.copyOf(buffer.byteLength)
+                } ?: ByteArray(buffer.byteLength)
                 else -> {
                     if (uri.startsWith("data:", ignoreCase = true)) {
                         DataUriDecoder.decode(uri)
@@ -396,6 +593,22 @@ class GLTFLoader(
         }
     }
 
+    private data class ParsedDocument(
+        val document: GltfDocument,
+        val binaryChunk: ByteArray?
+    )
+
+    private fun isBinaryGltf(bytes: ByteArray): Boolean =
+        bytes.size >= GLB_HEADER_SIZE && bytes.readUInt32Le(0) == GLB_MAGIC
+
+    private fun ByteArray.readUInt32Le(offset: Int): Int {
+        require(offset >= 0 && offset + 4 <= size) { "Cannot read UInt32 at byte offset $offset" }
+        return (this[offset].toInt() and 0xFF) or
+            ((this[offset + 1].toInt() and 0xFF) shl 8) or
+            ((this[offset + 2].toInt() and 0xFF) shl 16) or
+            ((this[offset + 3].toInt() and 0xFF) shl 24)
+    }
+
     private object DataUriDecoder {
         fun decode(uri: String): ByteArray {
             val commaIndex = uri.indexOf(',')
@@ -534,4 +747,15 @@ class GLTFLoader(
     private data class GltfTextureInfo(
         val index: Int
     )
+
+    private companion object {
+        private const val GLB_MAGIC = 0x46546C67
+        private const val GLB_VERSION_2 = 2
+        private const val GLB_VERSION_OFFSET = 4
+        private const val GLB_LENGTH_OFFSET = 8
+        private const val GLB_HEADER_SIZE = 12
+        private const val GLB_CHUNK_HEADER_SIZE = 8
+        private const val GLB_CHUNK_TYPE_JSON = 0x4E4F534A
+        private const val GLB_CHUNK_TYPE_BIN = 0x004E4942
+    }
 }

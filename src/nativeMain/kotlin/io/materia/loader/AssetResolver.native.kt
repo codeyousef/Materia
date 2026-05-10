@@ -5,6 +5,8 @@ import okio.FileSystem
 import okio.Path.Companion.toPath
 
 internal class DefaultAssetResolver : AssetResolver {
+    override val cacheKeyScope: String = "io.materia.loader.default"
+
     override suspend fun load(uri: String, basePath: String?): ByteArray {
         return when {
             uri.startsWith("data:", ignoreCase = true) -> decodeDataUri(uri)
