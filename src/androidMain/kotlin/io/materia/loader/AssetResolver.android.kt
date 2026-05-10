@@ -9,6 +9,7 @@ import java.io.InputStream
 import java.net.URL
 
 internal class DefaultAssetResolver : AssetResolver {
+    override val cacheKeyScope: String = "io.materia.loader.default"
 
     override suspend fun load(uri: String, basePath: String?): ByteArray =
         withContext(Dispatchers.IO) {

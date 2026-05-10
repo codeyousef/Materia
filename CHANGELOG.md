@@ -5,6 +5,31 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1.0] - 2026-05-10
+
+### Added
+
+- **Shared GLTF/GLB asset cache**: `GLTFLoader` now uses a shared same-URL `GLTFAssetCache` by default, including in-flight load deduplication so repeated loader instances can reuse one fetch/decode pass.
+- **Safe GLTF instancing API**: `GLTFAsset.instantiate()` creates independent scene graphs with separate object transforms and hierarchy while intentionally sharing geometry, material, texture, and animation resources for renderer reuse.
+- **Minimal GLB binary parsing**: `GLTFLoader` can now parse GLB 2.0 containers with embedded binary buffer chunks, enabling direct repeated `.glb` cache coverage.
+- **WebGL readback regression guard**: Added JS browser coverage that asserts steady `WebGLRenderer.render()` frames do not call `readPixels`.
+
+### Changed
+
+- **Asset resolver cache scoping**: `AssetResolver` now exposes an optional `cacheKeyScope`; platform default resolvers share a stable scope, while custom resolvers remain isolated unless callers opt into a shared scope.
+- **JS browser test opt-in**: Root `jsBrowserTest` can now be enabled with `-PenableJsBrowserTests=true` instead of being permanently disabled in the Gradle configuration.
+- **Packaging version metadata**: Linux, macOS, and Windows packaging scripts now target `0.4.1.0`.
+
+### Fixed
+
+- **Repeated GLTF/GLB loads**: Loading the same model URL through separate `GLTFLoader` instances no longer repeats top-level model fetch/decode work when the cache scope matches.
+- **Cached scene mutation safety**: Cached GLTF source assets are not returned directly to callers, preventing repeated instances from sharing mutable transform state.
+
+### Tests
+
+- Added common loader tests for same-URL cache reuse, concurrent in-flight deduplication, transient failure eviction, cloned instance independence, shared render resources, and GLB embedded-buffer loading.
+- Added JS compile/browser coverage for WebGL steady-frame readback behavior.
+
 ## [0.4.0.3] - 2026-05-05
 
 ### Fixed

@@ -10,6 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 internal class DefaultAssetResolver : AssetResolver {
+    override val cacheKeyScope: String = "io.materia.loader.default"
 
     override suspend fun load(uri: String, basePath: String?): ByteArray =
         withContext(Dispatchers.IO) {
