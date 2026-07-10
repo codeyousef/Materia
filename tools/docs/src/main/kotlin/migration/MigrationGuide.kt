@@ -848,8 +848,8 @@ class MigrationGuideGenerator {
                         description = "Add Materia dependencies to build.gradle.kts",
                         code = """
                             dependencies {
-                                implementation("io.github.materia:materia-core:0.4.0.1")
-                                implementation("io.github.materia:materia-renderer:0.4.0.1")
+                                implementation("io.github.materia:materia-core:0.4.2.0")
+                                implementation("io.github.materia:materia-renderer:0.4.2.0")
                             }
                         """.trimIndent(),
                         automated = false

@@ -92,6 +92,12 @@ data class ControlsConfig(
     val enableKeys: Boolean = true,
     val enableDamping: Boolean = true,
     val dampingFactor: Float = 0.05f,
+    /** Time, in seconds, for orbit motion to converge toward its requested pose. */
+    val dampingTime: Float = 0.04f,
+    /** Angular/radial threshold below which the camera snaps exactly to its target pose. */
+    val settleEpsilon: Float = 0.0001f,
+    /** Maximum frame delta accepted by the controls after a stall or hidden tab. */
+    val maxDeltaTime: Float = 0.05f,
 
     // Auto-rotation
     val autoRotate: Boolean = false,
@@ -103,13 +109,13 @@ data class ControlsConfig(
  */
 data class ControlsState(
     var spherical: SphericalCoordinate = SphericalCoordinate(),
-    var panOffset: Vector3 = Vector3.ZERO,
+    var panOffset: Vector3 = Vector3(),
     var scale: Float = 1f,
 
     // Input state
     var isPointerDown: Boolean = false,
     var pointerButton: PointerButton = PointerButton.PRIMARY,
-    var lastPointerPosition: Vector2 = Vector2.ZERO,
+    var lastPointerPosition: Vector2 = Vector2(),
 
     // Keyboard state
     var keysDown: MutableSet<Key> = mutableSetOf(),
@@ -117,7 +123,11 @@ data class ControlsState(
     // Animation state
     var targetPosition: Vector3? = null,
     var animationStartTime: Float = 0f,
-    var animationDuration: Float = 0f
+    var animationDuration: Float = 0f,
+    var animationElapsed: Float = 0f,
+    var animationStartPosition: Vector3? = null,
+    var animationStartTarget: Vector3? = null,
+    var targetLookAt: Vector3? = null
 )
 
 /**
@@ -168,7 +178,7 @@ abstract class BaseCameraControls(
 ) : CameraControls {
 
     override var enabled: Boolean = true
-    override var target: Vector3 = Vector3.ZERO
+    override var target: Vector3 = Vector3()
 
     protected val state = ControlsState()
     protected val listeners = mutableListOf<ControlsEventListener>()

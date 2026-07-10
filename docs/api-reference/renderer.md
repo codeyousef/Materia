@@ -76,6 +76,26 @@ renderLoop.start { deltaTime ->
 renderer.dispose()
 ```
 
+### Browser Layered Rendering
+
+The JS WebGPU and WebGL renderers implement `LayeredRenderer`. A world scene and
+one or more orthographic HUD scenes are submitted in the same frame. Later
+passes preserve color and can clear depth, so the HUD is canvas-rendered without
+DOM overlays.
+
+```kotlin
+val hudCamera = OrthographicCamera(0f, 1440f, 900f, 0f, 0.1f, 10f)
+
+renderer.renderWithOverlays(
+    scene,
+    camera,
+    listOf(RenderOverlayLayer(hudScene, hudCamera, clearDepth = true))
+)
+```
+
+`OverlayFirstPicker` applies the application's existing hit-test function to
+topmost overlays before falling back to the world scene.
+
 ### Properties
 
 | Property | Type | Description |
@@ -98,6 +118,23 @@ data class WebGPURenderStats(
 // Usage
 println("Draw calls: ${renderer.stats.drawCalls}")
 println("Triangles: ${renderer.stats.triangles}")
+```
+
+### Stable Frame Metrics And Resolution
+
+`FrameStatsSmoother` produces a moving frame-time average suitable for a HUD.
+`AdaptiveResolutionController` applies hysteresis and returns a new bounded
+render scale only after a sustained trend; the application remains responsible
+for resizing its canvas.
+
+```kotlin
+val smoother = FrameStatsSmoother(windowSize = 60)
+val resolution = AdaptiveResolutionController(
+    AdaptiveResolutionConfig(targetFps = 55.0, minimumScale = 0.75f, maximumScale = 1.25f)
+)
+
+val stable = smoother.recordFrame(deltaSeconds, renderer.stats)
+resolution.record(stable.fps)?.let(::resizeForRenderScale)
 ```
 
 ### Resource Management

@@ -33,7 +33,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation("io.materia:materia-jvm:0.4.0.1")
+                implementation("io.materia:materia-jvm:0.4.2.0")
                 implementation("org.lwjgl:lwjgl:3.3.3")
                 implementation("org.lwjgl:lwjgl-vulkan:3.3.3")
 
@@ -122,7 +122,7 @@ kotlin {
     sourceSets {
         val jsMain by getting {
             dependencies {
-                implementation("io.materia:materia-js:0.4.0.1")
+                implementation("io.materia:materia-js:0.4.2.0")
             }
         }
     }
@@ -267,7 +267,7 @@ kotlin {
     sourceSets {
         val androidMain by getting {
             dependencies {
-                implementation("io.materia:materia-android:0.4.0.1")
+                implementation("io.materia:materia-android:0.4.2.0")
                 implementation("androidx.core:core-ktx:1.12.0")
                 implementation("androidx.appcompat:appcompat:1.6.1")
             }
@@ -517,7 +517,7 @@ kotlin {
         val nativeMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.materia:materia-native:0.4.0.1")
+                implementation("io.materia:materia-native:0.4.2.0")
             }
         }
 

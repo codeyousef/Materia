@@ -43,6 +43,21 @@ class WebGPURenderPassManager(
      * @throws RenderPassException if render pass already active
      */
     override fun beginRenderPass(clearColor: Color, framebuffer: FramebufferHandle) {
+        beginRenderPass(
+            clearColor = clearColor,
+            framebuffer = framebuffer,
+            loadColor = false,
+            clearDepth = true
+        )
+    }
+
+    /** Begin a later pass while optionally preserving color and resetting depth. */
+    fun beginRenderPass(
+        clearColor: Color,
+        framebuffer: FramebufferHandle,
+        loadColor: Boolean,
+        clearDepth: Boolean
+    ) {
         if (renderPassActive) {
             throw RenderPassException("Render pass already active. Call endRenderPass() first.")
         }
@@ -76,7 +91,7 @@ class WebGPURenderPassManager(
 
             val colorAttachment = js("{}")
             colorAttachment.view = colorView
-            colorAttachment.loadOp = "clear"
+            colorAttachment.loadOp = if (loadColor) "load" else "clear"
             colorAttachment.storeOp = "store"
             colorAttachment.clearValue = clearValue
 
@@ -89,7 +104,7 @@ class WebGPURenderPassManager(
                 val depthAttachment = js("{}")
                 depthAttachment.view = depthTextureView
                 depthAttachment.depthClearValue = 1.0
-                depthAttachment.depthLoadOp = "clear"
+                depthAttachment.depthLoadOp = if (clearDepth) "clear" else "load"
                 depthAttachment.depthStoreOp = "store"
                 descriptor.depthStencilAttachment = depthAttachment
             }

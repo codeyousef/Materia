@@ -36,7 +36,8 @@
 - **Comprehensive Loaders** – GLTF 2.0, OBJ, FBX, Collada, PLY, STL, DRACO, KTX2, HDR/EXR textures, fonts
 - **Full Controls Suite** – OrbitControls, FlyControls, PointerLockControls, TrackballControls, DragControls, TransformControls
 - **Debug Helpers** – AxesHelper, GridHelper, BoxHelper, ArrowHelper, CameraHelper, light helpers
-- **Cross-Platform Audio** – Positional audio and analyser abstractions aligned with the camera system
+- **Browser Audio Runtime** – Cached Web Audio clips, procedural cues, gain buses, positional sound, and listener tracking
+- **Layered Canvas Rendering** – World and orthographic HUD passes with overlay-first interaction ordering
 - **Production Ready** – Built-in validation, Kover coverage, and dependency scanning pipelines
 
 ---
