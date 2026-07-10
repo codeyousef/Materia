@@ -41,7 +41,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            implementation("io.materia:materia-engine:0.4.2.1")
+            implementation("io.materia:materia-engine:0.4.2.2")
         }
     }
 }
@@ -57,7 +57,7 @@ plugins {
 }
 
 dependencies {
-    implementation("io.materia:materia-engine:0.4.2.1")
+    implementation("io.materia:materia-engine:0.4.2.2")
 }
 
 application {

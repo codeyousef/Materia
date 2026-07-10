@@ -110,7 +110,7 @@ class GeometryGeneratorTest {
     @Test
     fun testCreateFromExtrusion() {
         val shape = createTestShape()
-        val options = ExtrudeOptions(
+        val options = GeneratorExtrudeOptions(
             depth = 2f,
             bevelEnabled = true,
             bevelThickness = 0.5f,
@@ -261,7 +261,7 @@ private class MockGeometryGenerator : GeometryGenerator {
         return MockBufferGeometry(vertexCount, triangleCount)
     }
 
-    override fun createFromExtrusion(shape: Shape, options: ExtrudeOptions): BufferGeometry {
+    override fun createFromExtrusion(shape: Shape, options: GeneratorExtrudeOptions): BufferGeometry {
         return MockBufferGeometry()
     }
 
@@ -333,7 +333,7 @@ private interface GeometryGenerator {
         heightSegments: Int
     ): BufferGeometry
 
-    fun createFromExtrusion(shape: Shape, options: ExtrudeOptions): BufferGeometry
+    fun createFromExtrusion(shape: Shape, options: GeneratorExtrudeOptions): BufferGeometry
     fun createFromLathe(
         points: List<Vector2>,
         segments: Int,
@@ -349,7 +349,7 @@ private interface GeometryGenerator {
 private interface Shape
 private interface GeneratorFont
 
-private data class ExtrudeOptions(
+private data class GeneratorExtrudeOptions(
     val depth: Float,
     val bevelEnabled: Boolean,
     val bevelThickness: Float,

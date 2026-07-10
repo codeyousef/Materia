@@ -5,6 +5,17 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2.2] - 2026-07-11
+
+### Fixed
+
+- **Vector text contours**: Glyph paths now group inner contours as holes instead of rendering them as overlapping solids.
+- **Text triangulation**: Flat and extruded text now use Materia's earcut path for concave glyphs, emit the hole vertices referenced by cap indices, and build hole sidewalls from the matching layer contours.
+
+### Tests
+
+- Added exact-area regressions for concave, compound, and extruded glyph caps plus direct contour-grouping coverage.
+
 ## [0.4.2.1] - 2026-07-10
 
 ### Fixed
