@@ -72,7 +72,7 @@ import kotlin.math.roundToInt
  */
 class WebGLRenderer(
     private val canvas: HTMLCanvasElement
-) : Renderer {
+) : Renderer, LayeredRenderer {
 
     override val backend: BackendType = BackendType.WEBGL
 
@@ -141,26 +141,54 @@ class WebGLRenderer(
     }
 
     override fun render(scene: Scene, camera: Camera) {
+        renderLayers(scene, camera)
+    }
+
+    override fun renderLayers(
+        scene: Scene,
+        camera: Camera,
+        overlays: List<RenderOverlayLayer>
+    ) {
         ensureInitialised()
 
         updateClearColor(scene)
         gl.viewport(0, 0, canvas.width, canvas.height)
         gl.clear(COLOR_BUFFER_BIT or DEPTH_BUFFER_BIT)
 
-        scene.updateMatrixWorld(true)
-        camera.updateMatrixWorld(false)
-        camera.updateProjectionMatrix()
-
-        viewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-
         gl.useProgram(program)
 
         val startTime = window.performance.now()
-        var drawCalls = 0
-        var triangles = 0
         visitedIds.clear()
         visitedTextureIds.clear()
+        var drawCalls = 0
+        var triangles = 0
 
+        val worldCounts = renderLayer(scene, camera)
+        drawCalls += worldCounts.first
+        triangles += worldCounts.second
+
+        overlays.forEach { overlay ->
+            if (overlay.clearDepth) gl.clear(DEPTH_BUFFER_BIT)
+            val overlayCounts = renderLayer(overlay.scene, overlay.camera)
+            drawCalls += overlayCounts.first
+            triangles += overlayCounts.second
+        }
+
+        releaseUnusedBuffers()
+        releaseUnusedTextures()
+
+        val endTime = window.performance.now()
+        updateStats(drawCalls, triangles, endTime - startTime, endTime)
+    }
+
+    private fun renderLayer(scene: Scene, camera: Camera): Pair<Int, Int> {
+        scene.updateMatrixWorld(true)
+        camera.updateMatrixWorld(false)
+        camera.updateProjectionMatrix()
+        viewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+
+        var drawCalls = 0
+        var triangles = 0
         scene.traverseVisible { node ->
             when {
                 node is Mesh && node.visible -> {
@@ -178,12 +206,7 @@ class WebGLRenderer(
                 }
             }
         }
-
-        releaseUnusedBuffers()
-        releaseUnusedTextures()
-
-        val endTime = window.performance.now()
-        updateStats(drawCalls, triangles, endTime - startTime, endTime)
+        return drawCalls to triangles
     }
 
     override fun resize(width: Int, height: Int) {

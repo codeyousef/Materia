@@ -11,7 +11,7 @@ echo "========================================"
 # Configuration
 APP_NAME="Materia Tools"
 APP_BUNDLE_NAME="Materia-Tools.app"
-APP_VERSION="0.4.1.0"
+APP_VERSION="0.4.2.0"
 BUNDLE_ID="dev.materia.tools"
 JAVA_VERSION="17"
 BUILD_DIR="$(pwd)/build"

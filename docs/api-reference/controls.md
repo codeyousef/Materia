@@ -19,129 +19,89 @@ Orbiting camera controls for rotating around a target.
 ```kotlin
 class OrbitControls(
     camera: Camera,
-    domElement: HTMLElement  // or Window on JVM
+    config: ControlsConfig = ControlsConfig()
 )
 ```
 
-### Properties
+Input adapters call `onPointerDown`, `onPointerMove`, `onPointerUp`, `onWheel`,
+and the keyboard handlers. Call `update(deltaSeconds)` exactly once before each
+render.
+
+### Configuration
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `enabled` | `Boolean` | `true` | Enable controls |
-| `target` | `Vector3` | `(0,0,0)` | Orbit target point |
-| `minDistance` | `Float` | `0` | Minimum zoom distance |
-| `maxDistance` | `Float` | `Infinity` | Maximum zoom distance |
-| `minZoom` | `Float` | `0` | Minimum zoom (ortho) |
-| `maxZoom` | `Float` | `Infinity` | Maximum zoom (ortho) |
+| `minDistance` | `Float` | `1` | Minimum zoom distance |
+| `maxDistance` | `Float` | `1000` | Maximum zoom distance |
 | `minPolarAngle` | `Float` | `0` | Minimum vertical angle |
 | `maxPolarAngle` | `Float` | `PI` | Maximum vertical angle |
 | `minAzimuthAngle` | `Float` | `-Infinity` | Minimum horizontal angle |
 | `maxAzimuthAngle` | `Float` | `Infinity` | Maximum horizontal angle |
-| `enableDamping` | `Boolean` | `false` | Enable smooth motion |
-| `dampingFactor` | `Float` | `0.05` | Damping amount |
+| `enableDamping` | `Boolean` | `true` | Smoothly converge to requested poses |
+| `dampingTime` | `Float` | `0.04` | Frame-rate-independent convergence time in seconds |
+| `settleEpsilon` | `Float` | `0.0001` | Threshold for snapping to a stable pose |
+| `maxDeltaTime` | `Float` | `0.05` | Clamp used after stalls or hidden tabs |
 | `enableZoom` | `Boolean` | `true` | Enable zooming |
 | `zoomSpeed` | `Float` | `1.0` | Zoom sensitivity |
 | `enableRotate` | `Boolean` | `true` | Enable rotation |
 | `rotateSpeed` | `Float` | `1.0` | Rotation sensitivity |
 | `enablePan` | `Boolean` | `true` | Enable panning |
 | `panSpeed` | `Float` | `1.0` | Pan sensitivity |
-| `screenSpacePanning` | `Boolean` | `true` | Pan in screen space |
-| `keyPanSpeed` | `Float` | `7.0` | Keyboard pan speed |
 | `autoRotate` | `Boolean` | `false` | Auto-rotate |
 | `autoRotateSpeed` | `Float` | `2.0` | Auto-rotate speed |
 | `enableKeys` | `Boolean` | `true` | Enable keyboard |
-| `keys` | `Keys` | default | Key bindings |
-| `mouseButtons` | `MouseButtons` | default | Mouse bindings |
-| `touches` | `Touches` | default | Touch bindings |
-
-### Key Bindings
-
-```kotlin
-data class Keys(
-    val left: String = "ArrowLeft",
-    val up: String = "ArrowUp",
-    val right: String = "ArrowRight",
-    val bottom: String = "ArrowDown"
-)
-```
-
-### Mouse Bindings
-
-```kotlin
-data class MouseButtons(
-    val left: MouseAction = MouseAction.ROTATE,
-    val middle: MouseAction = MouseAction.DOLLY,
-    val right: MouseAction = MouseAction.PAN
-)
-
-enum class MouseAction {
-    ROTATE, DOLLY, PAN, NONE
-}
-```
 
 ### Methods
 
 ```kotlin
-// Update controls (call each frame)
-fun update(): Boolean
-
-// Reset to initial state
+fun update(deltaTime: Float)
 fun reset()
-
-// Save current state
-fun saveState()
-
-// Get polar angle
+fun moveTo(position: Vector3, target: Vector3, duration: Float = 1f)
+fun setPose(position: Vector3, target: Vector3)
+fun cancelAnimation()
+fun cancelMomentum()
+fun isSettled(): Boolean
+fun saveState(): ControlsState
+fun restoreState(savedState: ControlsState)
 fun getPolarAngle(): Float
-
-// Get azimuthal angle
 fun getAzimuthalAngle(): Float
-
-// Get distance to target
 fun getDistance(): Float
-
-// Listen to target changes
-fun listenToKeyEvents(element: HTMLElement)
-
-// Dispose event listeners
-fun dispose()
 ```
 
 ### Events
 
 ```kotlin
-controls.addEventListener("change") {
-    renderer.render(scene, camera)
-}
-
-controls.addEventListener("start") {
-    // Interaction started
-}
-
-controls.addEventListener("end") {
-    // Interaction ended
-}
+controls.addEventListener(object : ControlsEventListener {
+    override fun onControlsChange() = requestRender()
+    override fun onControlsStart() = capturePointer()
+    override fun onControlsEnd() = releasePointer()
+})
 ```
 
 ### Example
 
 ```kotlin
-val controls = OrbitControls(camera, renderer.domElement)
-controls.enableDamping = true
-controls.dampingFactor = 0.05f
-controls.minDistance = 2f
-controls.maxDistance = 50f
-controls.maxPolarAngle = PI / 2  // Don't go below ground
+val controls = OrbitControls(
+    camera,
+    ControlsConfig(
+        minDistance = 2f,
+        maxDistance = 50f,
+        maxPolarAngle = PI / 2,
+        enablePan = false,
+        dampingTime = 0.04f
+    )
+)
 
-// Animate
-fun animate() {
-    controls.update()  // Required for damping
+fun frame(deltaSeconds: Float) {
+    controls.update(deltaSeconds)
     renderer.render(scene, camera)
 }
 
-// Focus on object
-controls.target.copy(mesh.position)
-controls.update()
+controls.moveTo(
+    position = Vector3(8f, 6f, 10f),
+    target = mesh.position,
+    duration = 0.6f
+)
 ```
 
 ---

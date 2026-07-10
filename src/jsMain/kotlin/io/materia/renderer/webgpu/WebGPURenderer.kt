@@ -43,7 +43,7 @@ import org.w3c.dom.HTMLCanvasElement
  * FR-011: Context loss recovery
  * FR-013: Pipeline caching
  */
-class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
+class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer, LayeredRenderer {
     // Actual WebGPU render target — equals canvas unless Firefox+Linux blit workaround is active
     private var renderCanvas: HTMLCanvasElement = canvas
 
@@ -590,6 +590,14 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
     }
 
     override fun render(scene: Scene, camera: Camera) {
+        renderLayers(scene, camera)
+    }
+
+    override fun renderLayers(
+        scene: Scene,
+        camera: Camera,
+        overlays: List<RenderOverlayLayer>
+    ) {
         if (!isInitialized || device == null || context == null || contextDynamic == null) {
             console.error("T033: Renderer not initialized, cannot render")
             return
@@ -700,6 +708,42 @@ class WebGPURenderer(private val canvas: HTMLCanvasElement) : Renderer {
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Ending render pass...")
             renderPassManager!!.endRenderPass()
             if (diag) console.log("RENDER[$frameCount]: endRenderPass OK")
+
+            overlays.forEachIndexed { index, overlay ->
+                overlay.scene.updateMatrixWorld(true)
+                overlay.camera.updateMatrixWorld()
+                overlay.camera.updateProjectionMatrix()
+
+                renderPassManager!!.beginRenderPass(
+                    clearColor = clearColorFeature020,
+                    framebuffer = framebufferHandle,
+                    loadColor = true,
+                    clearDepth = overlay.clearDepth
+                )
+                val overlayPass = renderPassManager!!.getPassEncoder()
+                    .unsafeCast<GPURenderPassEncoder>()
+                val overlayBrdf = overlay.scene.environmentBrdfLut as? Texture2D
+                val overlayLighting = collectSceneLightingUniforms(overlay.scene)
+                val overlayEnvironment = environmentManager.prepare(
+                    overlay.scene.environment,
+                    overlayBrdf
+                )
+                overlay.scene.traverse { obj ->
+                    if (obj is Mesh) {
+                        renderMesh(
+                            obj,
+                            overlay.camera,
+                            overlayPass,
+                            overlayEnvironment,
+                            overlayLighting
+                        )
+                    }
+                }
+                renderPassManager!!.endRenderPass()
+                if (diag) console.log(
+                    "RENDER[$frameCount]: overlay[$index] complete, clearDepth=${overlay.clearDepth}"
+                )
+            }
 
             // Submit commands
             if (enableFrameLogging) console.log("T033: [Frame $frameCount] - Finishing command encoder...")

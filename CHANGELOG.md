@@ -5,6 +5,29 @@ All notable changes to the Materia library will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2.0] - 2026-07-10
+
+### Added
+
+- **Layered browser rendering**: Added `LayeredRenderer`, `RenderOverlayLayer`, and `renderWithOverlays` so WebGL and WebGPU can render orthographic HUD scenes after the world scene without a DOM overlay. Later passes can preserve color while clearing depth.
+- **Overlay-first interaction ordering**: Added `OverlayFirstPicker` so browser integrations can apply their existing hit testing to the topmost canvas layer before the world.
+- **Browser audio runtime**: Implemented decoded and cached Web Audio playback, gain buses, master volume, gesture unlock, hidden-tab suspension, positional HRTF panning, camera listener tracking, and analyser data.
+- **Procedural audio**: Added oscillator/noise cue descriptions and browser playback with envelopes, frequency ramps, filters, looping, and normal Materia audio controls.
+- **Stable frame metrics**: Added `FrameStatsSmoother` and `AdaptiveResolutionController` for HUD-safe FPS reporting and bounded, hysteresis-based render-scale changes.
+
+### Changed
+
+- **Orbit controls**: Reworked damping around requested camera poses using clamped frame deltas, added interruptible `moveTo`/`setPose` transitions, explicit momentum and animation cancellation, and deterministic settling.
+
+### Fixed
+
+- **Camera tween timing**: Removed the zero-elapsed monotonic-time calculation that prevented guided camera transitions from progressing correctly.
+- **Shared control vectors**: Control instances no longer mutate shared `Vector2.ZERO` or `Vector3.ZERO` values.
+
+### Tests
+
+- Added common camera and frame-pacing regression suites plus browser tests for audio graphs and caching, layered picking/render capability, and WebGPU overlay load/clear operations.
+
 ## [0.4.1.0] - 2026-05-10
 
 ### Added
