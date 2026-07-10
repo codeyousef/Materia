@@ -146,7 +146,7 @@ class GeometryGeneratorTest {
     @Test
     fun testCreateFromText() {
         val font = createTestFont()
-        val options = TextOptions(
+        val options = GeneratorTextOptions(
             size = 24f,
             height = 2f,
             curveSegments = 12,
@@ -191,7 +191,7 @@ class GeometryGeneratorTest {
         return MockShape()
     }
 
-    private fun createTestFont(): Font {
+    private fun createTestFont(): GeneratorFont {
         return MockFont()
     }
 }
@@ -274,7 +274,7 @@ private class MockGeometryGenerator : GeometryGenerator {
         return MockBufferGeometry()
     }
 
-    override fun createFromText(text: String, font: Font, options: TextOptions): BufferGeometry {
+    override fun createFromText(text: String, font: GeneratorFont, options: GeneratorTextOptions): BufferGeometry {
         return MockBufferGeometry()
     }
 }
@@ -297,7 +297,7 @@ private class MockBufferGeometry(
 
 private class MockShape : Shape
 
-private class MockFont : Font
+private class MockFont : GeneratorFont
 
 // BufferAttribute is already defined in io.materia.geometry package
 
@@ -341,13 +341,13 @@ private interface GeometryGenerator {
         phiLength: Float
     ): BufferGeometry
 
-    fun createFromText(text: String, font: Font, options: TextOptions): BufferGeometry
+    fun createFromText(text: String, font: GeneratorFont, options: GeneratorTextOptions): BufferGeometry
 }
 
 // Note: Using real BufferGeometry from io.materia.geometry.BufferGeometry
 
 private interface Shape
-private interface Font
+private interface GeneratorFont
 
 private data class ExtrudeOptions(
     val depth: Float,
@@ -357,7 +357,7 @@ private data class ExtrudeOptions(
     val bevelSegments: Int
 )
 
-private data class TextOptions(
+private data class GeneratorTextOptions(
     val size: Float,
     val height: Float,
     val curveSegments: Int,

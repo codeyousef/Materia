@@ -263,9 +263,13 @@ class TextGeometry(
     ) {
         val glyph = positionedGlyph.glyph
         val path = glyph.path
+        val inverseScale = 1f / positionedGlyph.scale
         val transform = TransformMatrix3()
             .scale(positionedGlyph.scale, positionedGlyph.scale)
-            .translate(positionedGlyph.x + lineOffsetX, positionedGlyph.y + lineOffsetY)
+            .translate(
+                (positionedGlyph.x + lineOffsetX) * inverseScale,
+                (positionedGlyph.y + lineOffsetY + textLayout.baseline) * inverseScale
+            )
 
         // Convert glyph path to 2D shape
         val shapes = PathConverter.convert(path, transform)
