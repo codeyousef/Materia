@@ -8,31 +8,31 @@ import kotlin.test.assertTrue
 class ShapeContractTest {
     @Test
     fun testClosedShapes() {
-        val shape = Shape()
+        val shape = ContractShape()
         assertTrue(shape.isClosed())
     }
 
     @Test
     fun testAddHoles() {
-        val shape = Shape()
-        val hole = Shape()
+        val shape = ContractShape()
+        val hole = ContractShape()
         assertTrue(shape.addHole(hole))
     }
 
     @Test
     fun testTriangulate() {
-        val shape = Shape()
+        val shape = ContractShape()
         val triangulation = shape.triangulate()
         assertNotNull(triangulation)
     }
 }
 
-private class Shape {
-    private val holes = mutableListOf<Shape>()
+private class ContractShape {
+    private val holes = mutableListOf<ContractShape>()
 
     fun isClosed(): Boolean = holes.isEmpty()
 
-    fun addHole(hole: Shape): Boolean {
+    fun addHole(hole: ContractShape): Boolean {
         holes.add(hole)
         return holes.contains(hole)
     }

@@ -10,7 +10,7 @@ echo ========================================
 
 REM Configuration
 set APP_NAME=Materia-Tools
-set APP_VERSION=0.4.2.0
+set APP_VERSION=0.4.2.1
 set JAVA_VERSION=17
 set BUILD_DIR=%cd%\build
 set DIST_DIR=%cd%\dist
