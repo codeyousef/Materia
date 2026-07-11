@@ -162,14 +162,14 @@ class ShapePath {
         if (shapes.isEmpty()) return emptyList()
 
         // Sort by area (largest first)
-        val sortedShapes = shapes.sortedByDescending { it.getArea() }
+        val sortedShapes = shapes.sortedByDescending { kotlin.math.abs(ShapeUtils.area(it.getPoints())) }
 
         val holesFirst = mutableListOf<Shape>()
         val shapesWithHoles = mutableListOf<Shape>()
 
         // Determine which shapes are holes
         for (shape in sortedShapes) {
-            val solid = shape.getArea() < 0 != isCCW
+            val solid = ShapeUtils.area(shape.getPoints()) < 0 != isCCW
 
             if (solid) {
                 shapesWithHoles.add(shape)

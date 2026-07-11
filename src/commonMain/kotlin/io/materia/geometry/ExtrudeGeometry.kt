@@ -7,6 +7,7 @@ package io.materia.geometry
 import io.materia.core.math.Vector2
 import io.materia.core.math.Vector3
 import io.materia.shape.Shape
+import io.materia.shape.ShapeUtils
 import kotlin.math.*
 
 /**
@@ -218,8 +219,17 @@ class ExtrudeGeometry(
             vertexCounter = vertices.size
 
             // Generate hole faces
-            for (hole in holes) {
-                generateSideFaces(hole, layers, vertices, normals, uvs, indices, vertexCounter)
+            for ((holeIndex, hole) in holes.withIndex()) {
+                generateSideFaces(
+                    hole,
+                    layers,
+                    vertices,
+                    normals,
+                    uvs,
+                    indices,
+                    vertexCounter,
+                    holeIndex
+                )
                 vertexCounter = vertices.size
             }
         }
@@ -422,20 +432,22 @@ class ExtrudeGeometry(
         normals: MutableList<Vector3>,
         uvs: MutableList<Vector2>,
         indices: MutableList<Int>,
-        vertexOffset: Int
+        vertexOffset: Int,
+        holeIndex: Int? = null
     ) {
         val contourLength = contour.size
         var currentVertexIndex = vertexOffset
 
         // Generate vertices for all layers
         for (layer in layers) {
-            val layerPoints = if (layer.points.size == contourLength) {
-                layer.points
+            val sourcePoints = holeIndex?.let { layer.holes.getOrNull(it) } ?: layer.points
+            val layerPoints = if (sourcePoints.size == contourLength) {
+                sourcePoints
             } else {
                 // Scale contour points if layer doesn't match
                 contour.mapIndexed { index, point ->
                     val scaledPoint =
-                        layer.points.getOrElse(index % layer.points.size) { layer.points.last() }
+                        sourcePoints.getOrElse(index % sourcePoints.size) { sourcePoints.last() }
                     Vector3(point.x * layer.scaleFactor, point.y * layer.scaleFactor, scaledPoint.z)
                 }
             }
@@ -500,10 +512,16 @@ class ExtrudeGeometry(
         val layer = layers[layerIndex]
         val normal = Vector3(0f, 0f, if (isTop) 1f else -1f)
 
-        var currentVertexIndex = vertexOffset
+        val currentVertexIndex = vertexOffset
 
         // Add vertices for cap
-        vertices.addAll(layer.points)
+        val capPoints = buildList {
+            addAll(layer.points)
+            layer.holes.forEach(::addAll)
+        }
+        vertices.addAll(capPoints)
+        repeat(capPoints.size) { normals.add(normal.clone()) }
+        capPoints.forEach { point -> uvs.add(Vector2(point.x, point.y)) }
 
         // Generate triangles for cap
         for (triangle in triangulatedShape) {
@@ -517,114 +535,13 @@ class ExtrudeGeometry(
                 indices.addAll(listOf(a, c, b)) // Reverse winding for bottom
             }
 
-            // Add normals
-            repeat(3) { normals.add(normal.clone()) }
-
-            // Generate UVs for cap
-            val capUVs = if (isTop) {
-                uvGenerator.generateTopUV(
-                    this,
-                    vertices,
-                    a - vertexOffset,
-                    b - vertexOffset,
-                    c - vertexOffset
-                )
-            } else {
-                uvGenerator.generateBottomUV(
-                    this,
-                    vertices,
-                    a - vertexOffset,
-                    b - vertexOffset,
-                    c - vertexOffset
-                )
-            }
-            uvs.addAll(capUVs)
         }
     }
 
     private fun triangulateShape(
         shapePoints: List<Vector2>,
         holes: List<List<Vector2>>
-    ): List<List<Int>> {
-        // Simple triangulation using ear clipping algorithm
-        // This is a simplified implementation - in practice, you'd use a robust triangulation library
-
-        val vertices = shapePoints.toMutableList()
-        val triangles = mutableListOf<List<Int>>()
-
-        // Add hole vertices (this is simplified - proper hole handling requires more complex logic)
-        var indexOffset = vertices.size
-        for (hole in holes) {
-            vertices.addAll(hole)
-            indexOffset = indexOffset + hole.size
-        }
-
-        // Simple triangulation for convex polygons (simplified)
-        val indices = (0 until vertices.size).toMutableList()
-        val maxIterations = vertices.size * 2 // Safety limit
-        var iterations = 0
-
-        while (indices.size > 2 && iterations < maxIterations) {
-            iterations++
-            var earFound = false
-
-            for (i in indices.indices) {
-                val prev = indices[(i - 1 + indices.size) % indices.size]
-                val current = indices[i]
-                val next = indices[(i + 1) % indices.size]
-
-                if (isEar(vertices, indices, prev, current, next)) {
-                    triangles.add(listOf(prev, current, next))
-                    indices.removeAt(i)
-                    earFound = true
-                    break
-                }
-            }
-
-            if (!earFound) break // Prevent infinite loop
-        }
-
-        return triangles
-    }
-
-    private fun isEar(
-        vertices: List<Vector2>,
-        indices: List<Int>,
-        prev: Int,
-        current: Int,
-        next: Int
-    ): Boolean {
-        val a = vertices[prev]
-        val b = vertices[current]
-        val c = vertices[next]
-
-        // Check if triangle is oriented counter-clockwise
-        val cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-        if (cross <= 0) return false
-
-        // Check if any other vertex is inside the triangle
-        for (i in indices) {
-            if (i == prev || i == current || i == next) continue
-
-            val p = vertices[i]
-            if (isPointInTriangle(p, a, b, c)) {
-                return false
-            }
-        }
-
-        return true
-    }
-
-    private fun isPointInTriangle(p: Vector2, a: Vector2, b: Vector2, c: Vector2): Boolean {
-        val denom = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
-        if (abs(denom) < 1e-10f) return false
-
-        val alpha = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / denom
-        val beta = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / denom
-        val gamma = 1 - alpha - beta
-
-        return alpha >= 0 && beta >= 0 && gamma >= 0
-    }
+    ): List<List<Int>> = ShapeUtils.triangulateShape(shapePoints, holes)
 }
 
 /**

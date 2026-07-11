@@ -3,6 +3,7 @@ package io.materia.geometry.text
 import io.materia.core.math.Vector2
 import io.materia.geometry.*
 import io.materia.shape.Shape
+import io.materia.shape.ShapePath
 
 /**
  * Converts glyph paths to 2D shapes
@@ -13,62 +14,40 @@ object PathConverter {
      * Convert glyph path to shapes
      */
     fun convert(path: GlyphPath, transform: TransformMatrix3): List<Shape> {
-        val shapes = mutableListOf<Shape>()
-        val currentContour = mutableListOf<Vector2>()
-        var currentPoint = Vector2()
+        val shapePath = ShapePath()
 
         for (command in path.commands) {
             when (command) {
                 is PathCommand.MoveTo -> {
-                    if (currentContour.isNotEmpty()) {
-                        shapes.add(Shape(currentContour.toList()))
-                        currentContour.clear()
-                    }
-                    currentPoint = transform.transformPoint(Vector2(command.x, command.y))
-                    currentContour.add(currentPoint)
+                    val point = transform.transformPoint(Vector2(command.x, command.y))
+                    shapePath.moveTo(point.x, point.y)
                 }
 
                 is PathCommand.LineTo -> {
-                    currentPoint = transform.transformPoint(Vector2(command.x, command.y))
-                    currentContour.add(currentPoint)
+                    val point = transform.transformPoint(Vector2(command.x, command.y))
+                    shapePath.lineTo(point.x, point.y)
                 }
 
                 is PathCommand.QuadraticCurveTo -> {
                     val cp = transform.transformPoint(Vector2(command.cpx, command.cpy))
                     val end = transform.transformPoint(Vector2(command.x, command.y))
-
-                    // Subdivide quadratic curve
-                    val curvePoints = CurveSubdivider.subdivideQuadratic(currentPoint, cp, end, 12)
-                    currentContour.addAll(curvePoints.drop(1)) // Skip first point (already added)
-                    currentPoint = end
+                    shapePath.quadraticCurveTo(cp.x, cp.y, end.x, end.y)
                 }
 
                 is PathCommand.BezierCurveTo -> {
                     val cp1 = transform.transformPoint(Vector2(command.cp1x, command.cp1y))
                     val cp2 = transform.transformPoint(Vector2(command.cp2x, command.cp2y))
                     val end = transform.transformPoint(Vector2(command.x, command.y))
-
-                    // Subdivide bezier curve
-                    val curvePoints =
-                        CurveSubdivider.subdivideBezier(currentPoint, cp1, cp2, end, 12)
-                    currentContour.addAll(curvePoints.drop(1)) // Skip first point (already added)
-                    currentPoint = end
+                    shapePath.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y)
                 }
 
                 is PathCommand.ClosePath -> {
-                    if (currentContour.isNotEmpty()) {
-                        shapes.add(Shape(currentContour.toList()))
-                        currentContour.clear()
-                    }
+                    shapePath.currentPath?.autoClose = true
                 }
             }
         }
 
-        if (currentContour.isNotEmpty()) {
-            shapes.add(Shape(currentContour.toList()))
-        }
-
-        return shapes
+        return shapePath.toShapes()
     }
 }
 
