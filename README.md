@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://x.com/deepissuemassaj">Follow development on X: @deepissuemassaj</a></strong>
+  <strong><a href="https://x.com/Yousefenius">Follow development on X: @Yousefenius</a></strong>
 </p>
 
 ---
